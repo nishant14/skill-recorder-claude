@@ -11,9 +11,11 @@ Branch: `claude/gpt-5.6-codex-foundry-migration-u1csnc`
 2. **Auth**: endpoint + API key (+ deployment name), entered in an in-app connection form or
    via environment variables. No Entra ID flow in this phase.
 3. **Output targets**: built skills/automations target **(a) Copilot Studio agents** and
-   **(b) the app's own library** ("app" architecture). For the app target this phase is
-   **library-only** — skills/automations are saved into the app's own folders and shown in
-   the UI; an in-app execution runtime is a later phase.
+   **(b) the app's own library** ("app" architecture). Phase 1 (Workstreams A–F) ships the
+   app target as **library-only**; Phase 2 then makes the app itself the execution engine
+   for its skills, reusing the same Foundry Codex deployment (Workstream H), and upgrades
+   the Copilot Studio export from repurposed `SKILL.md` to a **declarative agent** bundle
+   (Workstream G).
 
 ## Current state (what we're replacing)
 
@@ -185,9 +187,71 @@ packaging, asarUnpack, and the compliance pipeline simple.
 4. Live smoke against a real deployment (run by a human with credentials):
    `AZURE_OPENAI_ENDPOINT=… AZURE_OPENAI_API_KEY=… npm run eval -- --only=<one-scenario>`.
 
+## Workstream G (Phase 2) — Copilot Studio declarative agent export
+
+Rationale: pasting a `SKILL.md` body into an agent's Instructions can't grant tools and
+loses determinism; Copilot Studio's native import formats close part of that gap. The
+recorded workflow becomes an **agent definition**, not just instruction prose.
+
+- **New export format** for the `copilot-studio` architecture: a declarative agent bundle
+  alongside (not replacing) the readable `SKILL.md`:
+  - `declarativeAgent.json` — the Microsoft 365 declarative agent manifest (current schema
+    version at implementation time): `name`, `description`, `instructions` (rendered from
+    the plan's generalization + ordered steps, values substituted; respect the schema's
+    instruction length limit), `conversation_starters` (derived from the skill description /
+    trigger phrasing), and `capabilities` the plan actually needs (e.g. web search,
+    SharePoint/OneDrive knowledge) — chosen by the builder from the step→capability
+    mapping in the Copilot Studio catalog.
+  - `connectors.md` — the explicit "actions to configure" manifest: one entry per action
+    step naming the connector (Outlook / Teams / SharePoint / Dataverse / HTTP / Power
+    Automate flow), the operation, and which `{{value}}` literals feed it. This is the
+    manual-wiring checklist the maker completes in the designer; instructions alone cannot
+    attach tools.
+  - App-package layout (zip with the Teams/M365 `manifest.json` referencing the declarative
+    agent) so the bundle imports via Copilot Studio's agent builder / M365 Agents Toolkit.
+- **Builder changes**: `electron/skillbuilder/` gains a declarative-agent renderer (new
+  `common/declarative-agent.ts` schema + `renderDeclarativeAgent()`); the Copilot Studio
+  catalog instructs the agent to express every action step connector-first so the manifest
+  and `connectors.md` fall out of the plan deterministically (no extra agent turn).
+- **Scoped out of G** (candidate for a later phase): generating executable **API plugin /
+  OpenAPI action definitions** and **topic (adaptive dialog) YAML** — high effort, and the
+  schema surface churns; revisit once G's bundles are validated with real imports.
+
+## Workstream H (Phase 2) — In-app skill execution engine on Foundry Codex
+
+The same Foundry Codex deployment becomes the runtime that **executes** installed
+app-architecture skills — the true successor to the GitHub Copilot experience, since it
+runs on the machine the recording was made on. This is largely reuse of Workstream A:
+`FoundrySession`'s tool loop with an execution toolset instead of the describer's
+read-only one.
+
+- **`electron/runner/`** — new module:
+  - `SkillRunner`: loads a `SKILL.md` from the app library (`~/.skill-recorder/skills`),
+    substitutes `{{value}}` literals, sets the body as session instructions plus a runner
+    preamble (follow steps in order, confirm before side effects, report a run summary),
+    and drives one `FoundrySession` per run with `sendAndWait` + abort.
+  - **Execution tools**: `run_shell` (cwd-scoped, output-capped), `read_file`/`write_file`
+    (path-scoped), `fetch_url`, `ask_user` (blocking confirmation surfaced in the UI).
+  - **`allowed-tools` becomes enforced**, not advisory: the frontmatter patterns
+    (e.g. `Bash(git *)`) compile to an allowlist checked in-process before `run_shell`
+    executes anything; a non-matching command is refused and reported to the model.
+  - **Safety UX**: every side-effecting call (any `run_shell`/`write_file`) requires a
+    visible approve / always-allow-for-this-skill decision in the run panel; a full run
+    transcript (tool calls, outputs, model text) is persisted per run for review.
+- **UI**: the Library gains a Skills view over the app library with a **Run** button,
+  streaming progress (reusing the existing progress-event pattern), the confirmation
+  prompts, and the run transcript. IPC: `skill:run`, `skill:run-cancel`,
+  `skill:run-progress`, `skill:run-confirm`.
+- **Automations**: app-architecture automations execute the same way; the app schedules
+  them (its own scheduler over the automation's schedule shape) — can land after manual
+  Run ships.
+- **Evals**: a runner eval that executes a fixture skill against a mocked toolset and
+  scores step order + allowlist enforcement.
+
 ## Sequencing
 
-A → B → C → D → E → F, one commit per workstream on the branch above.
+Phase 1: A → B → C → D → E → F, one commit per workstream on the branch above.
+Phase 2: G and H (independent of each other; H depends on A only, G on D only).
 
 ## Risks / notes
 
@@ -197,5 +261,11 @@ A → B → C → D → E → F, one commit per workstream on the branch above.
    default parameter, the fix is confined to `electron/foundry/agent.ts`.
 2. **Copilot Studio can't auto-install skills** — its outputs are export bundles with
    import instructions; the catalog copy makes that explicit to the user.
-3. **In-app runtime is intentionally out of scope** this phase (library-only), per product
-   decision.
+3. **In-app runtime lands in Phase 2 (Workstream H)**; Phase 1 ships the app target as
+   library-only so the core backend migration isn't blocked on runner safety UX.
+4. **Shell execution safety (H)** is the highest-risk new surface: enforcement of
+   `allowed-tools`, confirmation UX, and transcript logging are part of the workstream's
+   definition of done, not optional polish.
+5. **Declarative agent schema versioning (G)**: the manifest schema evolves; pin the schema
+   version in `common/declarative-agent.ts` and validate a real import into Copilot Studio
+   as G's acceptance test.
