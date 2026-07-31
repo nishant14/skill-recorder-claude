@@ -34,6 +34,8 @@ onnxruntime), all capture/recorder/frames code, the zod analysis/skill/automatio
 
 ## Workstream A — New Foundry runtime (new code, no new npm dependencies)
 
+> Detailed implementation spec: [`foundry-codex-migration-phase1a.md`](./foundry-codex-migration-phase1a.md)
+
 ### A1. `common/foundry.ts` (shared main + renderer)
 
 - `DEFAULT_FOUNDRY_DEPLOYMENT = "gpt-5.3-codex"`
