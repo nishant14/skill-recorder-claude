@@ -178,16 +178,27 @@ packaging, asarUnpack, and the compliance pipeline simple.
   to GitHub Copilot" → "…to your Azure AI Foundry deployment"; `README.md`, `INSTALL.md`,
   `SECURITY.md`, `evals/README.md`.
 
-## Workstream F — Verification
+## Workstream F — Verification: per-workstream gate ladder
 
-1. `npm install` → `npm run typecheck` + `npm run typecheck:evals` (tests/evals import the
-   real builder code, so this catches every missed call site).
-2. `npm test` (unit tests don't hit the network) + `npm run compliance:test`.
-3. New unit test for the loop: fake `fetch` returning a tool-call round then a final
-   message; assert tool dispatch, image-message injection, timeout/abort behavior, and the
-   not-configured error path.
-4. Live smoke against a real deployment (run by a human with credentials):
-   `AZURE_OPENAI_ENDPOINT=… AZURE_OPENAI_API_KEY=… npm run eval -- --only=<one-scenario>`.
+Testing philosophy: put a gate wherever a distinct risk class gets decided, at the
+boundary where it is cheapest to observe. Unit tests with a faked `fetch` verify **our
+loop logic**; they cannot verify **our assumptions about the API/model** (GPT-5.x Codex
+is newer than the authoring model's knowledge) — only a live contract smoke can, so that
+gate sits at the *end of Workstream A*, before anything builds on those assumptions.
+Output **quality** is gated by the existing scored eval suites, not by unit tests.
+Deliberate non-goals: no mocks simulating unobserved Azure behaviors (after the first
+smoke run, captured real responses become the unit-test fixtures), no network tests in
+CI, no renderer UI automation (manual checklist instead — the repo has no renderer test
+infra and this migration doesn't justify building one).
+
+| Gate | When | What runs | Question it answers | Human needed? |
+|---|---|---|---|---|
+| G0 | every commit | `npm run typecheck` + `typecheck:evals` + `npm test` | compile-time + deterministic behavior intact? | no |
+| G1 | exit of A | Phase 1a unit matrix + **live contract smoke** (`scripts/foundry-smoke.ts`: plain completion, tool round-trip, image round-trip) | does the real deployment honor our wire assumptions? | yes (credentials) |
+| G2 | exit of B | one live describer eval: `npm run eval -- --only=<slug>` | full loop with real frames/vision, end to end? | yes |
+| G3 | exit of C + D | manual UI checklist (configure connection, bad-key error path, analyze, build, install/export both architectures) + unit tests for the `scout→app` / `cowork→copilot-studio` schema migration | flows and existing user data intact? | yes (UI part) |
+| G4 | exit of E | `npm run compliance:test` + a `dist` build; packaged artifact contains no `@github/copilot*` | packaging/compliance clean? | no |
+| G5 | pre-merge | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. a Copilot-era baseline where numbers exist, else absolute rubric thresholds | did output quality regress? | yes |
 
 ## Workstream G (Phase 2) — Copilot Studio declarative agent export
 

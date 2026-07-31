@@ -17,6 +17,7 @@ electron/foundry/config.ts        connection resolution: env → file (Electron-
 electron/foundry/agent.ts         FoundryClient / FoundrySession + tool loop
 electron/foundry/config.test.ts   unit tests (node:test)
 electron/foundry/agent.test.ts    unit tests (node:test, faked fetch)
+scripts/foundry-smoke.ts          live contract smoke (gate G1 — manual, credentialed)
 ```
 
 Module-purity constraints (both enforced by the eval harness, which loads app TS outside
@@ -275,6 +276,30 @@ request bodies and returns queued responses; restore in `finally`):
    cleared) → rejects with `FOUNDRY_NOT_CONFIGURED_ERROR`
 10. single-flight: second `sendAndWait` while one is in flight throws; works again after
 
+## A5. `scripts/foundry-smoke.ts` — live contract smoke (gate G1)
+
+The unit tests above verify our loop against **our assumptions** about the wire contract;
+this script verifies the assumptions themselves against the real deployment — the one
+risk mocks cannot see, and the reason this gate sits at the end of Workstream A instead
+of the end of Phase 1. Run manually with credentials
+(`node --experimental-transform-types --import ./evals/register.mjs scripts/foundry-smoke.ts`);
+never wired into CI or `npm test`.
+
+Three checks, each printing PASS/FAIL and the raw response on failure:
+1. **Plain completion** — `sendAndWait` with no tools returns non-empty text.
+2. **Tool round-trip** — one `echo_args` tool; assert the model calls it and the final
+   text reflects the tool's result (proves `tools`/`tool_choice`/`role:"tool"` are
+   honored by this deployment).
+3. **Image round-trip** — a tool returns a tiny generated JPEG (solid color + a word) as
+   `binaryResultsForLlm`; assert the final text identifies the color/word (proves the
+   data-URI `image_url` user-message bridge works on this deployment).
+
+Exit non-zero on any failure. **Follow-up rule:** the captured request/response bodies
+from the first passing run become the fixtures for `agent.test.ts`'s fakes, so the unit
+suite mirrors observed reality rather than imagination; any contract deviation discovered
+here is fixed inside `electron/foundry/agent.ts` only (route, params, image shape), then
+the smoke re-runs.
+
 ## Acceptance checklist
 
 - [ ] `npm run typecheck` green (new files compile; no existing file touched but
@@ -283,4 +308,6 @@ request bodies and returns queued responses; restore in `finally`):
 - [ ] `rg "@github/copilot-sdk" electron/foundry common/foundry.ts` → no hits
 - [ ] `rg "from \"electron\"" electron/foundry` → no hits
 - [ ] No new entries in `package.json` `dependencies`
+- [ ] Gate G1: `scripts/foundry-smoke.ts` passes all three checks against the real
+      deployment (manual, credentialed — blocks the start of Workstream B, not the commit)
 - [ ] Commit message: `Add Foundry runtime: config resolution + chat tool loop (Workstream A)`
