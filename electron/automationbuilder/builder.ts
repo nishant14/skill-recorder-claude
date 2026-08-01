@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
@@ -16,7 +16,7 @@ import {
 import type { AutomationBuildInput, AutomationBuildProgress } from "../../common/ipc";
 import { slugifySkillName, type SkillArchitecture } from "../../common/skill";
 import { AgentBuilder, type BaseLive } from "../builders/agent-builder";
-import { loadIndex, loadReference } from "../builders/api-reference-store";
+import { loadIndex, loadReference, specPath } from "../builders/api-reference-store";
 import { createApiReferenceTools, renderApiReferenceBrief } from "../builders/api-reference-tools";
 import { createReadTools } from "../builders/read-tools";
 import { loadPersistedAnalysis } from "../describer/describer";
@@ -30,6 +30,9 @@ import { createAutomationBuilderTools } from "./tools";
 const log = createLogger("AutomationBuilder");
 
 const TURN_TIMEOUT_MS = 180_000;
+
+/** Folder inside an exported bundle that carries the copied API reference. */
+const API_BUNDLE_DIR = "api";
 
 const KICKOFF_PROMPT =
   "Read get_analysis (and get_timeline where the tool mapping or schedule needs evidence), then call " +
@@ -261,7 +264,29 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, "automation.json");
     writeFileSync(file, renderAutomationJson(automation));
+    this.copyApiReference(automation, dir);
     return file;
+  }
+
+  /**
+   * A copilot-studio bundle carries the spec next to `automation.json`: the maker imports
+   * it as a custom connector, which is what turns the steps' `api:` operations into
+   * actions they can wire up. An app automation stays in this app, where the runner still
+   * has the session's own reference, so it needs no copy. Best effort — a failed copy
+   * leaves a valid bundle, so it warns rather than failing the export.
+   */
+  private copyApiReference(automation: BuiltAutomation, bundleDir: string): void {
+    if (automation.architecture !== "copilot-studio") return;
+    if (collectApiRefs(automation.steps).length === 0) return;
+    const spec = specPath(sessionDir(automation.sessionId));
+    if (!spec) return;
+    try {
+      const target = path.join(bundleDir, API_BUNDLE_DIR);
+      mkdirSync(target, { recursive: true });
+      copyFileSync(spec, path.join(target, "openapi.json"));
+    } catch (err) {
+      log.warn("could not copy the API reference into the automation bundle:", msg(err));
+    }
   }
 
   private persist(dir: string, automation: BuiltAutomation): void {

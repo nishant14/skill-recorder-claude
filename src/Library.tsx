@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Analysis, AnalysisStep } from "../common/analysis";
+import { collectApiRefs } from "../common/api-reference";
 import type { ApiReferenceSummary } from "../common/api-reference";
 import type { FoundryConnectionInfo } from "../common/foundry";
 import {
@@ -1200,6 +1201,9 @@ function SkillBuilderView({
   const canceled = useRef(false);
   const inFlight = useRef(false);
   const [placement, setPlacement] = useState<SkillPlacement>("install");
+  // Engine-owned: the operations the built skill was actually grounded on (empty unless
+  // the plan named `api:` operations AND a spec was attached to copy into the folder).
+  const [apiOperations, setApiOperations] = useState<string[]>([]);
   // Read-only here: the reference is attached on the picker, before this panel opens.
   const [reference] = useApiReference(sessionId);
 
@@ -1227,6 +1231,7 @@ function SkillBuilderView({
         // We don't persist how it was placed; copilot-studio can only export, and an app
         // skill defaults to install (its primary action), so infer it from the architecture.
         setPlacement(s.architecture === "copilot-studio" ? "export" : "install");
+        setApiOperations(s.apiReference?.operations ?? []);
         if (s.plan) setPlan(s.plan);
         setPhase("done");
       } else if (hasSkill) {
@@ -1276,6 +1281,7 @@ function SkillBuilderView({
         setBuiltName(res.skill.name);
         setExportedPath(res.path ?? res.skill.exportedPath ?? "");
         setPlacement(res.placement ?? which);
+        setApiOperations(res.skill.apiReference?.operations ?? []);
         setPhase("done");
       } else if (res.canceled) {
         // User dismissed the export folder picker — quietly return to the plan.
@@ -1403,6 +1409,13 @@ function SkillBuilderView({
                   : "is exported. Drop the folder into this app's skill library when you want it installed."}
             </p>
             {exportedPath && <p className="sb-path">{exportedPath}</p>}
+            {apiOperations.length > 0 && (
+              <p className="sb-import-hint">
+                {architecture === "copilot-studio"
+                  ? `Import api/openapi.json from this folder as a custom connector, then configure these actions: ${apiOperations.join(", ")}.`
+                  : `Its API operations (${apiOperations.join(", ")}) will run against the spec stored in api/openapi.json once the runner ships.`}
+              </p>
+            )}
           </div>
         )}
       </div>
@@ -1566,6 +1579,13 @@ function AutomationBuilderView({
   }, [sessionId, plan]);
 
   const busy = phase === "planning" || phase === "creating";
+  // API-grounded only when the reviewed steps name `api:` operations AND a spec is
+  // attached (docs alone index no operations) — that pair is also what puts
+  // api/openapi.json in a copilot-studio bundle, so the copy below can promise it.
+  const apiOperations =
+    plan && (reference?.operationCount ?? 0) > 0
+      ? collectApiRefs(plan.steps).map((ref) => ref.replace(/^api:/i, ""))
+      : [];
 
   return (
     <section className="ws">
@@ -1681,6 +1701,13 @@ function AutomationBuilderView({
                 ? "Recreate this as a scheduled trigger in Copilot Studio using the steps in automation.json."
                 : "Saved to your automation library."}
             </p>
+            {apiOperations.length > 0 && (
+              <p className="sb-import-hint">
+                {architecture === "copilot-studio"
+                  ? `Import api/openapi.json from this folder as a custom connector, then configure these actions: ${apiOperations.join(", ")}.`
+                  : `Its API operations (${apiOperations.join(", ")}) will run against the attached spec once the runner ships.`}
+              </p>
+            )}
           </div>
         )}
       </div>

@@ -17,6 +17,11 @@
 //
 // Both target this app's own library (`app`), whose agent has a shell, files, and web.
 //
+// A third `app` scenario, api-sales-order, is the **API-grounded** case: the recording is
+// ordinary UI work in a sales portal, but an OpenAPI spec is attached to the session, so
+// the plan must name `api:` operations (createSalesOrder + a customer lookup) instead of
+// replaying clicks. Its rubric forbids the UI vocabulary outright.
+//
 // A third group targets the **copilot-studio** catalogue — a hosted agent with NO
 // shell, NO filesystem, and NO browser, only connector actions. These three cover the
 // surfaces a maker actually wires up (Teams, Outlook mail, Calendar) and each asserts
@@ -24,7 +29,14 @@
 // the *.office.com / teams.microsoft.com hosts) AND any device-shell command are
 // forbidden — a Copilot Studio agent cannot run `gh`, `bash`, or read `~/…`.
 
+import { readFileSync } from "node:fs";
+
 import type { SkillBuilderScenario } from "./scenario";
+
+/** The fixture spec attached to the API-grounded scenario, parsed once per run. */
+const salesApiSpec = JSON.parse(
+  readFileSync(new URL("../mocks/openapi-sales.json", import.meta.url), "utf8"),
+) as object;
 
 /** Read one canonical page, compute a delta, append a dated row to a tracker sheet. */
 const priceTracker: SkillBuilderScenario = {
@@ -175,6 +187,98 @@ const githubIssueTriage: SkillBuilderScenario = {
     mustUseAny: [["gh "], ["gh issue", "gh api"]],
     forbidden: ["playwright", "browser_", "click", "navigate to github", "github.com/acme"],
     minValues: 1,
+    minCalculations: 1,
+    minActions: 1,
+  },
+};
+
+/* --- API-grounded scenario ------------------------------------------------- */
+
+/**
+ * The whole point of Workstream J: the recording is pure UI work (browse the portal,
+ * fill a form, submit), but the session has the portal's OpenAPI spec attached — so the
+ * right generalization drops the UI entirely and names the operations that do the same
+ * job. The spec deliberately carries decoys (products, invoices, an order *list*), so
+ * reaching for `createSalesOrder` + a customer lookup is a real choice, not the only one.
+ */
+const apiSalesOrder: SkillBuilderScenario = {
+  id: "api-sales-order",
+  title: "Create a sales order in the Northwind portal (spec attached)",
+  architecture: "app",
+  platform: "darwin",
+  truth:
+    "In Chrome the user opens the Northwind sales portal, starts a new order, searches the customer " +
+    "account by name, picks it, adds two line items (SKU + quantity), and submits the order. The " +
+    "Northwind Sales API spec is attached to the recording, so the right generalization is not a UI " +
+    "replay: resolve the customer with listCustomers (or getCustomer once the id is known) and place " +
+    "the order with createSalesOrder, passing customerId + items. Clicking through the portal, " +
+    "driving a browser, or navigating to the orders page is the wrong answer here.",
+  analysis: {
+    title: "Create a sales order for a customer",
+    intent:
+      "Place a sales order in the Northwind sales portal for a named customer: find the customer's " +
+      "account, add each product line (SKU and quantity) to a new order, and submit it.",
+    intentConfidence: "high",
+    intentRationale:
+      "The browser stayed on the Northwind sales portal's New order form; the customer 'Contoso Ltd' " +
+      "was searched for and selected, two SKUs with quantities were entered as line items, and the " +
+      "order was submitted, landing on the confirmation page for order SO-10482.",
+    steps: [
+      {
+        id: "s1",
+        title: "Open the portal's new order form",
+        detail:
+          "Navigated in Chrome to the Northwind sales portal and started a new sales order from the " +
+          "Orders page.",
+        apps: ["Google Chrome"],
+        evidence: [
+          "browser.url https://sales.northwind.example/orders/new",
+          "title 'New order — Northwind Sales'",
+        ],
+        confidence: "high",
+      },
+      {
+        id: "s2",
+        title: "Find the customer account",
+        detail:
+          "Typed the customer's name into the account picker, waited for the matches, and selected " +
+          "the 'Contoso Ltd' account the order is for.",
+        apps: ["Google Chrome"],
+        evidence: [
+          "clipboard 'Contoso Ltd'",
+          "browser.url https://sales.northwind.example/orders/new",
+        ],
+        confidence: "high",
+      },
+      {
+        id: "s3",
+        title: "Add the line items",
+        detail:
+          "Added two line items to the order — SKU NW-1140 × 12 and SKU NW-2207 × 3 — entering each " +
+          "product code and its quantity in the form's item rows.",
+        apps: ["Google Chrome"],
+        evidence: ["clipboard 'NW-1140 qty 12'", "clipboard 'NW-2207 qty 3'"],
+        confidence: "high",
+      },
+      {
+        id: "s4",
+        title: "Submit the order",
+        detail:
+          "Submitted the completed order and landed on the confirmation page showing the new order " +
+          "number SO-10482.",
+        apps: ["Google Chrome"],
+        evidence: [
+          "browser.url https://sales.northwind.example/orders/SO-10482",
+          "title 'Order SO-10482 — Northwind Sales'",
+        ],
+        confidence: "medium",
+      },
+    ],
+  },
+  apiReference: { spec: salesApiSpec },
+  rubric: {
+    mustUseAny: [["api:createSalesOrder"], ["api:listCustomers", "api:getCustomer"]],
+    forbidden: ["click", "browser", "navigate to"],
     minCalculations: 1,
     minActions: 1,
   },
@@ -410,6 +514,7 @@ const studioCalendarSchedule: SkillBuilderScenario = {
 export const skillScenarios: SkillBuilderScenario[] = [
   priceTracker,
   githubIssueTriage,
+  apiSalesOrder,
   studioTeamsDigest,
   studioOutlookReply,
   studioCalendarSchedule,

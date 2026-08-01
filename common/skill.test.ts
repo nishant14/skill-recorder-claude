@@ -7,7 +7,9 @@ import {
   renderSkillMarkdown,
   SkillArchitecture,
   SkillPlanSchema,
+  SkillSubmissionSchema,
   TARGETS,
+  toBuiltSkill,
 } from "./skill";
 
 /**
@@ -95,6 +97,74 @@ test("TARGETS and ARCHITECTURES stay consistent with the enum", () => {
   // Every (kind, architecture) pair appears exactly once.
   const pairs = TARGETS.map((t) => `${t.kind}:${t.architecture}`);
   assert.equal(new Set(pairs).size, TARGETS.length);
+});
+
+/* --- API grounding (Workstream J) ------------------------------------------ */
+
+/**
+ * `apiReference` is the pointer the Workstream H runner reads, and it is **engine-owned**:
+ * every skill written before J parses with it absent, the model has no way to supply one
+ * (it isn't part of the submission the agent fills in), and what the builder passes in
+ * survives a JSON round-trip unchanged.
+ */
+test("apiReference defaults to null so pre-J skill.json files still parse", () => {
+  const built = BuiltSkillSchema.parse(legacyBuiltSkill);
+  assert.equal(built.apiReference, null);
+  // Explicit null is the same as absent — the builder writes one for un-grounded skills.
+  assert.equal(BuiltSkillSchema.parse({ ...legacyBuiltSkill, apiReference: null }).apiReference, null);
+});
+
+test("apiReference is engine-owned — a submission can never carry one", () => {
+  const submission = SkillSubmissionSchema.parse({
+    name: "Create sales order",
+    description: "Create a sales order for a customer.",
+    allowedTools: ["api:createSalesOrder"],
+    body: "## Steps\n\nCall createSalesOrder.",
+    // What a model might try to smuggle in; the submission schema has no such field.
+    apiReference: { operations: ["deleteEverything"], specFile: "/etc/passwd" },
+  });
+  assert.equal("apiReference" in submission, false);
+
+  // Without the engine's argument the built skill is un-grounded, whatever the agent sent.
+  const ungrounded = toBuiltSkill("s1", "app", submission, null);
+  assert.equal(ungrounded.apiReference, null);
+
+  const grounded = toBuiltSkill("s1", "app", submission, null, {
+    operations: ["createSalesOrder", "listCustomers"],
+    specFile: "api/openapi.json",
+  });
+  assert.deepEqual(grounded.apiReference, {
+    operations: ["createSalesOrder", "listCustomers"],
+    specFile: "api/openapi.json",
+  });
+});
+
+test("apiReference round-trips through persistence unchanged", () => {
+  const built = BuiltSkillSchema.parse({
+    ...legacyBuiltSkill,
+    apiReference: { operations: ["createSalesOrder"], specFile: "api/openapi.json" },
+  });
+  const reparsed = BuiltSkillSchema.parse(JSON.parse(JSON.stringify(built)));
+  assert.deepEqual(reparsed.apiReference, built.apiReference);
+  // `operations` may be empty (refs that resolved to nothing were dropped) but the
+  // pointer still has to say where the spec is, so `specFile` is required.
+  assert.deepEqual(
+    BuiltSkillSchema.parse({ ...legacyBuiltSkill, apiReference: { specFile: "api/openapi.json" } })
+      .apiReference,
+    { operations: [], specFile: "api/openapi.json" },
+  );
+  assert.equal(
+    BuiltSkillSchema.safeParse({ ...legacyBuiltSkill, apiReference: { operations: ["x"] } }).success,
+    false,
+  );
+});
+
+test("the API reference never leaks into the rendered SKILL.md frontmatter", () => {
+  const skill = BuiltSkillSchema.parse({
+    ...legacyBuiltSkill,
+    apiReference: { operations: ["createSalesOrder"], specFile: "api/openapi.json" },
+  });
+  assert.equal(renderSkillMarkdown(skill).includes("apiReference"), false);
 });
 
 test("renderSkillMarkdown is byte-stable — the SKILL.md format is unchanged by the retarget", () => {

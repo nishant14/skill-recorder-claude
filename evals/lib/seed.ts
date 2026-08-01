@@ -11,6 +11,7 @@ import path from "node:path";
 
 import { toAnalysis, type Analysis, type AnalysisSubmission } from "../../common/analysis";
 import { SessionBundleSchema, type SessionBundle } from "../../common/bundle";
+import { writeReference } from "../../electron/builders/api-reference-store";
 
 /** The minimum a scenario must supply to be seeded to disk. */
 export interface SeedInput {
@@ -20,12 +21,28 @@ export interface SeedInput {
   platform: NodeJS.Platform;
   /** The approved analysis fed to the builder, exactly as the describer would emit it. */
   analysis: AnalysisSubmission;
+  /**
+   * An API reference attached to the recording, for scenarios that measure whether the
+   * builder maps UI steps onto concrete operations. `spec` is a parsed OpenAPI document;
+   * `docs` are plain-text fallback material. Written through the store's own writer, so a
+   * seeded session is laid out and indexed exactly like one the user attached in the app.
+   */
+  apiReference?: {
+    spec: object;
+    docs?: { name: string; text: string }[];
+  };
 }
 
 /** Seed the scenario's fixed approved analysis + timeline so the builder can read them. */
 export function seedScenario(root: string, scenario: SeedInput): void {
   const dir = path.join(root, scenario.id);
   mkdirSync(dir, { recursive: true });
+  if (scenario.apiReference) {
+    writeReference(dir, {
+      spec: scenario.apiReference.spec,
+      ...(scenario.apiReference.docs ? { docs: scenario.apiReference.docs } : {}),
+    });
+  }
   const analysis: Analysis = {
     ...toAnalysis(scenario.id, 1, scenario.analysis, [], null),
     approved: true,

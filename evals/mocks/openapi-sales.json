@@ -1,0 +1,312 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Northwind Sales API",
+    "version": "2.4.0",
+    "description": "Orders, customers, products and invoices for the Northwind sales portal. The same operations the portal's own web UI calls."
+  },
+  "servers": [{ "url": "https://sales.northwind.example/api/v2" }],
+  "security": [{ "apiKeyAuth": [] }],
+  "tags": [
+    { "name": "orders", "description": "Sales orders" },
+    { "name": "customers", "description": "Customer accounts" },
+    { "name": "catalog", "description": "Product catalog" },
+    { "name": "billing", "description": "Invoices" }
+  ],
+  "paths": {
+    "/sales/orders": {
+      "post": {
+        "operationId": "createSalesOrder",
+        "summary": "Create a sales order for a customer",
+        "description": "Creates a sales order with one or more line items. This is what the portal's New order form submits.",
+        "tags": ["orders"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": { "$ref": "#/components/schemas/SalesOrderRequest" }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created order.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/SalesOrder" }
+              }
+            }
+          },
+          "400": { "description": "The order was rejected (unknown customer, or no line items)." }
+        }
+      },
+      "get": {
+        "operationId": "listSalesOrders",
+        "summary": "List sales orders",
+        "tags": ["orders"],
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "query",
+            "required": false,
+            "description": "Only orders for this customer.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "string", "enum": ["draft", "submitted", "shipped", "cancelled"] }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching orders.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/SalesOrder" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers": {
+      "get": {
+        "operationId": "listCustomers",
+        "summary": "Search customer accounts by name",
+        "tags": ["customers"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Free-text match on the customer's account name.",
+            "schema": { "type": "string" }
+          },
+          {
+            "name": "limit",
+            "in": "query",
+            "required": false,
+            "schema": { "type": "integer", "format": "int32" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching customers.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Customer" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/customers/{customerId}": {
+      "parameters": [
+        {
+          "name": "customerId",
+          "in": "path",
+          "required": true,
+          "description": "The customer's account id.",
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Get one customer account, including its billing address",
+        "tags": ["customers"],
+        "responses": {
+          "200": {
+            "description": "The customer.",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/Customer" }
+              }
+            }
+          },
+          "404": { "description": "No such customer." }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "summary": "List catalog products",
+        "tags": ["catalog"],
+        "parameters": [
+          { "name": "q", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching products.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/products/{sku}": {
+      "get": {
+        "operationId": "getProduct",
+        "summary": "Get one catalog product by SKU",
+        "tags": ["catalog"],
+        "parameters": [
+          { "name": "sku", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The product.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Product" } }
+            }
+          }
+        }
+      }
+    },
+    "/invoices": {
+      "get": {
+        "operationId": "listInvoices",
+        "summary": "List invoices",
+        "tags": ["billing"],
+        "parameters": [
+          { "name": "customerId", "in": "query", "required": false, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching invoices.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Invoice" } }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "operationId": "createInvoice",
+        "summary": "Raise an invoice for a completed order",
+        "tags": ["billing"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["orderId"],
+                "properties": {
+                  "orderId": { "type": "string", "description": "The order to bill." },
+                  "dueDate": { "type": "string", "format": "date" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created invoice.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Invoice" } }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Sales-Api-Key",
+        "description": "A portal API key. Issued per user in Settings → API access."
+      }
+    },
+    "schemas": {
+      "SalesOrderRequest": {
+        "type": "object",
+        "required": ["customerId", "items"],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "description": "Account id of the customer the order is for (see listCustomers)."
+          },
+          "purchaseOrderRef": {
+            "type": "string",
+            "description": "The customer's own PO reference, when they gave one."
+          },
+          "requestedDeliveryDate": { "type": "string", "format": "date" },
+          "items": {
+            "type": "array",
+            "description": "One entry per line item on the order.",
+            "items": { "$ref": "#/components/schemas/OrderLineItem" }
+          },
+          "notes": { "type": "string", "description": "Free-text note shown on the picking slip." }
+        }
+      },
+      "OrderLineItem": {
+        "type": "object",
+        "required": ["sku", "quantity"],
+        "properties": {
+          "sku": { "type": "string", "description": "Catalog SKU of the product ordered." },
+          "quantity": { "type": "integer", "format": "int32", "description": "Units ordered." },
+          "unitPrice": {
+            "type": "number",
+            "format": "double",
+            "description": "Agreed unit price; omit to use the catalog price."
+          }
+        }
+      },
+      "SalesOrder": {
+        "type": "object",
+        "properties": {
+          "orderId": { "type": "string" },
+          "customerId": { "type": "string" },
+          "status": { "type": "string", "enum": ["draft", "submitted", "shipped", "cancelled"] },
+          "total": { "type": "number", "format": "double" },
+          "createdAt": { "type": "string", "format": "date-time" },
+          "items": { "type": "array", "items": { "$ref": "#/components/schemas/OrderLineItem" } }
+        }
+      },
+      "Customer": {
+        "type": "object",
+        "properties": {
+          "customerId": { "type": "string" },
+          "name": { "type": "string", "description": "Account name as it appears in the portal." },
+          "email": { "type": "string", "format": "email" },
+          "billingAddress": {
+            "type": "object",
+            "properties": {
+              "line1": { "type": "string" },
+              "city": { "type": "string" },
+              "postalCode": { "type": "string" },
+              "country": { "type": "string" }
+            }
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "properties": {
+          "sku": { "type": "string" },
+          "name": { "type": "string" },
+          "listPrice": { "type": "number", "format": "double" },
+          "inStock": { "type": "integer", "format": "int32" }
+        }
+      },
+      "Invoice": {
+        "type": "object",
+        "properties": {
+          "invoiceId": { "type": "string" },
+          "orderId": { "type": "string" },
+          "amountDue": { "type": "number", "format": "double" },
+          "dueDate": { "type": "string", "format": "date" }
+        }
+      }
+    }
+  }
+}

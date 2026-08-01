@@ -1,8 +1,14 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { collectApiRefs, unresolvedApiOperations } from "../../common/api-reference";
+import {
+  collectApiRefs,
+  findOperation,
+  normalizeApiRef,
+  unresolvedApiOperations,
+  type ApiOperation,
+} from "../../common/api-reference";
 import {
   BuiltSkillSchema,
   renderSkillMarkdown,
@@ -17,7 +23,7 @@ import {
 import { unresolvedTokens } from "../../common/values";
 import type { SkillBuildInput, SkillBuildProgress } from "../../common/ipc";
 import { AgentBuilder, type BaseLive } from "../builders/agent-builder";
-import { loadIndex, loadReference } from "../builders/api-reference-store";
+import { indexPath, loadIndex, loadReference, specPath } from "../builders/api-reference-store";
 import { createApiReferenceTools, renderApiReferenceBrief } from "../builders/api-reference-tools";
 import { createReadTools } from "../builders/read-tools";
 import { loadPersistedAnalysis } from "../describer/describer";
@@ -31,6 +37,11 @@ import { createSkillBuilderTools } from "./tools";
 const log = createLogger("SkillBuilder");
 
 const TURN_TIMEOUT_MS = 180_000;
+
+/** Folder inside a skill that carries its copied API reference. */
+const API_BUNDLE_DIR = "api";
+/** The `apiReference.specFile` pointer: relative to the skill folder, always posix. */
+const EXPORTED_SPEC_FILE = `${API_BUNDLE_DIR}/openapi.json`;
 
 const KICKOFF_PROMPT =
   "Read get_analysis (and get_timeline where the tool mapping needs evidence), then call " +
@@ -193,13 +204,19 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
       // The same posture for API grounding: the agent is hard-rejected at propose time,
       // but the plan the user edited is authoritative — they may know an operation this
       // reference doesn't describe. Warn, never fail; Workstream H revalidates at run time.
-      const unknownOperations = unresolvedApiOperations(
-        collectApiRefs(plan.steps, plan.allowedTools),
-        loadIndex(live.sessionDir)?.operations ?? [],
-      );
+      const apiRefs = collectApiRefs(plan.steps, plan.allowedTools);
+      const indexedOperations = loadIndex(live.sessionDir)?.operations ?? [];
+      const unknownOperations = unresolvedApiOperations(apiRefs, indexedOperations);
       if (unknownOperations.length) {
         log.warn(`plan references API operations the attached reference doesn't have: ${unknownOperations.join(", ")}`);
       }
+      // The engine — never the model — decides whether this skill is API-grounded: it is
+      // when the reviewed plan names `api:` operations AND a spec is attached to copy.
+      // The pointer travels with the skill so the runner never has to find the session.
+      const apiReference =
+        apiRefs.length && specPath(live.sessionDir)
+          ? { operations: resolvedOperationIds(apiRefs, indexedOperations), specFile: EXPORTED_SPEC_FILE }
+          : null;
       // The frontmatter comes from the edited plan (authoritative); only the body is
       // the agent's generated prose. allowed-tools may be tightened by the agent to the
       // final steps, but never emptied below what the plan declared.
@@ -209,7 +226,7 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
         allowedTools: submission.allowedTools.length ? submission.allowedTools : plan.allowedTools,
         body: submission.body,
       };
-      const built = toBuiltSkill(sessionId, plan.architecture, finalSubmission, plan);
+      const built = toBuiltSkill(sessionId, plan.architecture, finalSubmission, plan, apiReference);
       // Only an app skill has a library to be installed into; anything else is a bundle
       // the user takes elsewhere, so an install request degrades to an export.
       const installing = target.kind === "install" && plan.architecture === "app";
@@ -333,6 +350,7 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, "SKILL.md");
     writeFileSync(file, renderSkillMarkdown(skill));
+    this.copyApiReference(skill, dir);
     return file;
   }
 
@@ -349,7 +367,32 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     mkdirSync(dir, { recursive: true });
     const file = path.join(dir, "SKILL.md");
     writeFileSync(file, renderSkillMarkdown(skill));
+    this.copyApiReference(skill, dir);
     return file;
+  }
+
+  /**
+   * Copy the session's spec (+ its derived index) into `<skillDir>/api/`. An installed
+   * skill has to keep working after the recording it came from is deleted, and a
+   * copilot-studio bundle carries the spec so the maker can import it as a custom
+   * connector — so the reference travels *with* the skill instead of being looked up
+   * from the session at run time. Best effort: a failed copy leaves a valid SKILL.md
+   * (the runner revalidates operations anyway), so it warns rather than failing the build.
+   */
+  private copyApiReference(skill: BuiltSkill, skillDir: string): void {
+    if (!skill.apiReference) return;
+    const source = sessionDir(skill.sessionId);
+    const spec = specPath(source);
+    if (!spec) return;
+    try {
+      const target = path.join(skillDir, API_BUNDLE_DIR);
+      mkdirSync(target, { recursive: true });
+      copyFileSync(spec, path.join(target, "openapi.json"));
+      const index = indexPath(source);
+      if (index) copyFileSync(index, path.join(target, "index.json"));
+    } catch (err) {
+      log.warn("could not copy the API reference into the skill folder:", msg(err));
+    }
   }
 
   private persist(dir: string, skill: BuiltSkill): void {
@@ -359,6 +402,19 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
       log.warn("failed to persist skill:", msg(err));
     }
   }
+}
+
+/** The distinct operation ids a plan's `api:` refs actually resolve to, in first-seen
+ *  order. Unresolved refs are dropped here (they are warned about separately) — the
+ *  pointer must only promise operations the stored spec really describes. */
+function resolvedOperationIds(refs: readonly string[], operations: readonly ApiOperation[]): string[] {
+  const ids: string[] = [];
+  for (const raw of refs) {
+    const ref = normalizeApiRef(raw);
+    const op = ref ? findOperation(operations, ref) : null;
+    if (op && !ids.includes(op.operationId)) ids.push(op.operationId);
+  }
+  return ids;
 }
 
 /** Render the final, user-edited plan into a compact spec the create turn builds from. */

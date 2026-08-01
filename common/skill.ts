@@ -204,6 +204,24 @@ export const BuiltSkillSchema = z.object({
   values: z.array(ValueSchema).default([]),
   /** The plan the skill was built from (for the UI / re-export). */
   plan: SkillPlanSchema.nullable().default(null),
+  /**
+   * Pointer to the API reference this skill was grounded against, when its steps name
+   * `api:` operations and a spec was attached. **Engine-owned** — the model never
+   * supplies it; the builder fills it in from the session's index at create time, and
+   * the export step copies the spec next to the SKILL.md so an installed skill stays
+   * self-contained after the recording is deleted. `specFile` is relative to the skill
+   * folder; the Workstream H runner reads this to know it may execute HTTP calls and
+   * which operations the plan claimed.
+   */
+  apiReference: z
+    .object({
+      /** Resolved `operationId`s the plan's steps / allowed-tools referenced. */
+      operations: z.array(z.string()).default([]),
+      /** Path of the copied spec, relative to the skill folder (`api/openapi.json`). */
+      specFile: z.string(),
+    })
+    .nullable()
+    .default(null),
   createdAt: z.number(),
   /** Absolute path of the exported SKILL.md, once exported. */
   exportedPath: z.string().optional(),
@@ -222,12 +240,15 @@ export function slugifySkillName(raw: string): string {
   return slug || "recorded-skill";
 }
 
-/** Build a full BuiltSkill from an agent submission + engine-managed fields. */
+/** Build a full BuiltSkill from an agent submission + engine-managed fields.
+ *  `apiReference` is one of those engine-managed fields: it is resolved from the
+ *  session's attached reference by the builder, never read off the submission. */
 export function toBuiltSkill(
   sessionId: string,
   architecture: SkillArchitecture,
   submission: SkillSubmission,
   plan: SkillPlan | null,
+  apiReference: BuiltSkill["apiReference"] = null,
 ): BuiltSkill {
   return BuiltSkillSchema.parse({
     version: 1,
@@ -239,6 +260,7 @@ export function toBuiltSkill(
     body: submission.body,
     values: plan?.values ?? [],
     plan,
+    apiReference,
     createdAt: Date.now(),
   });
 }

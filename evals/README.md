@@ -258,11 +258,12 @@ each scenario asserts the shape of the proposed `SkillPlan`:
 - **typed steps** — `minCalculations` / `minActions` require the procedure to be
   split into `calculation` (no side effect) and `action` (changes the world) steps.
 
-**Coverage.** Five scenarios. Two target the **app** (this app's own library, whose
+**Coverage.** Six scenarios. Three target the **app** (this app's own library, whose
 agent has a shell, files, and web): `price-tracker-skill` (a canonical page URL → a fixed
 **value** referenced as `{{…}}`, `web_fetch` + the `.xlsx` file, calculations then an
 append) and `github-issue-triage-skill` (the gh-vs-browser case as a skill — must use
-`gh`, forbid the browser, and drive the mutating comment/label actions). Three target
+`gh`, forbid the browser, and drive the mutating comment/label actions), plus the
+API-grounded `api-sales-order` (below). Three target
 **copilot-studio**, a hosted agent with **no shell, no filesystem, and no browser** —
 each asserts the right `Connector.Action` is reached for while playwright/`click`, the
 web hosts, and any device-shell command (`bash`, `gh `) are forbidden:
@@ -271,9 +272,39 @@ web hosts, and any device-shell command (`bash`, `gh `) are forbidden:
 `copilot-studio-calendar-schedule` (find a slot then book via
 `Outlook.FindMeetingTimes` → `Outlook.CreateEvent`).
 
+### API-grounded scenarios
+
+A scenario may attach an **API reference** to its seeded recording, via
+`apiReference: { spec, docs? }` on the scenario (see `evals/lib/seed.ts`). The seeder
+writes it through the store's own writer (`writeReference`), so the session is laid out
+and indexed exactly as if the user had attached the file in the app — the builder then
+sees the real `list_api_operations` / `get_api_operation` tools and the generated
+reference brief.
+
+`api-sales-order` is the case Workstream J exists for: the recording is ordinary UI work
+(open the Northwind sales portal, search a customer, add two line items, submit), but the
+portal's OpenAPI spec (`evals/mocks/openapi-sales.json`) is attached — so the plan must
+name `api:createSalesOrder` plus a customer lookup (`api:listCustomers` /
+`api:getCustomer`) on its step `tool`s, and the rubric **forbids** `click`, `browser` and
+`navigate to` outright. The fixture carries decoy operations (products, invoices, an order
+*list*) so picking the right operation is a real choice. The scorer already reads each
+step's `tool` field alongside its text and the plan's `allowed-tools`, so `api:` refs are
+scanned with no rubric changes.
+
+**Gate GJ** (live, credentialed) is exactly this scenario:
+
+```bash
+npm run eval:skill -- --only=api-sales-order
+```
+
 ## Mock pages (`evals/mocks/`)
 
-Static, self-contained HTML fixtures matching the scenarios (`pricing.html`,
+`openapi-sales.json` is the API-reference fixture the `api-sales-order` skill scenario
+attaches (a small, realistic sales API — orders, customers, and decoy product/invoice
+operations, with an apiKey security scheme). It describes a fictional host and is never
+called; it is read as a *document*.
+
+The rest are static, self-contained HTML fixtures matching the scenarios (`pricing.html`,
 `invoices.html`, `directory.html`, `article-habits.html`, `article-focus.html`;
 open `index.html` as a launcher). They're **safe** — nothing submits or sends.
 

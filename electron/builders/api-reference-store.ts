@@ -110,6 +110,12 @@ export function specPath(dir: string): string | null {
   return existsSync(file) ? file : null;
 }
 
+/** Absolute path of the derived index, for the export step that copies it beside the spec. */
+export function indexPath(dir: string): string | null {
+  const file = path.join(apiDir(dir), INDEX_FILE);
+  return existsSync(file) ? file : null;
+}
+
 /* --- Classification --------------------------------------------------------- */
 
 interface ClassifiedSpec {
@@ -417,6 +423,70 @@ async function readCapped(response: Response): Promise<string> {
     parts.push(value);
   }
   return Buffer.concat(parts.map((p) => Buffer.from(p))).toString("utf8");
+}
+
+/* --- Seeding (evals) -------------------------------------------------------- */
+
+/** In-memory sources for {@link writeReference}. */
+export interface ReferenceSeed {
+  /** An already-parsed OpenAPI document (the grounded path). */
+  spec?: unknown;
+  /** Documentation as plain text — no HTML stripping, no classification. */
+  docs?: { name: string; text: string }[];
+}
+
+/**
+ * Write a reference straight from in-memory sources into `<dir>/api-reference/`.
+ *
+ * This exists so the eval harnesses' single seeding path (`evals/lib/seed.ts`) produces
+ * a session that is byte-identical in *layout* to one the user attached, indexed by the
+ * same {@link commit} → rebuild pass — rather than re-implementing the folder shape and
+ * the index build somewhere the store can't keep in step with it.
+ *
+ * Deliberately skips {@link classify} and the attach caps: the caller supplies material
+ * it already owns (a fixture), and enforcing limits on user-supplied bytes is the job of
+ * the attach path, not of this writer.
+ */
+export function writeReference(dir: string, seed: ReferenceSeed): ApiReferenceSummary | null {
+  const manifest: ApiReferenceManifest = { version: 1, sources: [], updatedAt: 0 };
+  mkdirSync(path.join(apiDir(dir), DOCS_DIR), { recursive: true });
+
+  if (seed.spec !== undefined && seed.spec !== null) {
+    const text = JSON.stringify(seed.spec, null, 2);
+    const info = ((seed.spec as Record<string, unknown>).info ?? {}) as Record<string, unknown>;
+    const title = typeof info.title === "string" ? info.title : "";
+    const apiVersion = typeof info.version === "string" ? info.version : "";
+    writeFileSync(path.join(apiDir(dir), SPEC_FILE), text);
+    manifest.sources.push({
+      id: "spec",
+      kind: "openapi",
+      name: `${title ? title.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "") : "openapi"}.json`,
+      origin: "file",
+      location: "",
+      bytes: Buffer.byteLength(text),
+      ...(title ? { title } : {}),
+      ...(apiVersion ? { apiVersion } : {}),
+      attachedAt: Date.now(),
+    });
+  }
+  for (const doc of seed.docs ?? []) {
+    const id = nextDocId(manifest);
+    writeFileSync(path.join(apiDir(dir), DOCS_DIR, `${id}.txt`), doc.text);
+    manifest.sources.push({
+      id,
+      kind: "docs",
+      name: doc.name,
+      origin: "file",
+      location: "",
+      bytes: Buffer.byteLength(doc.text),
+      attachedAt: Date.now(),
+    });
+  }
+  if (manifest.sources.length === 0) {
+    rmSync(apiDir(dir), { recursive: true, force: true });
+    return null;
+  }
+  return commit(dir, manifest);
 }
 
 /* --- Remove ----------------------------------------------------------------- */

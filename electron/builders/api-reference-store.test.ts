@@ -12,6 +12,7 @@ import {
   MAX_DOC_SOURCES,
   MAX_SOURCE_BYTES,
   removeSource,
+  writeReference,
   YAML_REFUSAL,
 } from "./api-reference-store";
 
@@ -326,5 +327,39 @@ test("attaching to an unknown session is refused", async () => {
       attachFromFile("20260801-999999-nope", file("sales.json", JSON.stringify(SPEC))),
       /Unknown session/,
     );
+  });
+});
+
+test("writeReference seeds the same layout an attach produces", async () => {
+  await withSession(async ({ dir }) => {
+    // The eval harnesses' seeding path: in-memory sources, no dialog, no download. It has
+    // to land the same four artifacts the attach path does, or a seeded scenario would be
+    // measuring something the app never builds.
+    const summary = writeReference(dir, {
+      spec: SPEC,
+      docs: [{ name: "orders.md", text: "# Orders\nPost to /sales/orders to create one.\n" }],
+    });
+
+    const api = path.join(dir, "api-reference");
+    assert.ok(existsSync(path.join(api, "manifest.json")));
+    assert.deepEqual(JSON.parse(readFileSync(path.join(api, "spec.json"), "utf8")), SPEC);
+    assert.ok(existsSync(path.join(api, "docs", "doc-1.txt")));
+
+    assert.equal(summary?.name, "Sales API");
+    assert.equal(summary?.operationCount, 2);
+    assert.ok((summary?.chunkCount ?? 0) > 0);
+    assert.deepEqual(loadReference(dir), summary);
+    assert.deepEqual(loadIndex(dir)?.operations.map((o) => o.operationId), [
+      "listSalesOrders",
+      "createSalesOrder",
+    ]);
+  });
+});
+
+test("writeReference with nothing to write leaves no empty reference behind", async () => {
+  await withSession(async ({ dir }) => {
+    assert.equal(writeReference(dir, {}), null);
+    assert.ok(!existsSync(path.join(dir, "api-reference")));
+    assert.equal(loadReference(dir), null);
   });
 });

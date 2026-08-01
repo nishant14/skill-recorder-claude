@@ -10,6 +10,7 @@
 
 import type { AnalysisSubmission } from "../../common/analysis";
 import type { SkillArchitecture } from "../../common/skill";
+import type { SeedInput } from "../lib/seed";
 
 /**
  * Deterministic rubric for a proposed SkillPlan. Beyond the native-tool check the
@@ -47,5 +48,11 @@ export interface SkillBuilderScenario {
   truth: string;
   /** The approved analysis fed to the builder, exactly as the describer would emit it. */
   analysis: AnalysisSubmission;
+  /**
+   * An API reference to attach to the seeded recording (an OpenAPI spec, plus optional
+   * fallback docs). Present only on API-grounded scenarios: it is what lets the builder
+   * see `list_api_operations` / `get_api_operation` and map action steps onto `api:` refs.
+   */
+  apiReference?: SeedInput["apiReference"];
   rubric: SkillRubric;
 }
