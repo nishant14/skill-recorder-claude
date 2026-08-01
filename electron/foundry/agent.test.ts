@@ -138,6 +138,26 @@ const textReply = (content: string): Response =>
 const toolReply = (...items: WireItem[]): Response =>
   okJson({ status: "completed", output: items });
 
+/** The same replies, but carrying a `usage` object of whatever shape the test needs. */
+const textReplyWithUsage = (content: string, usage: unknown): Response =>
+  okJson({
+    status: "completed",
+    usage,
+    output: [
+      { type: "message", role: "assistant", content: [{ type: "output_text", text: content }] },
+    ],
+  });
+
+const toolReplyWithUsage = (usage: unknown, ...items: WireItem[]): Response =>
+  okJson({ status: "completed", usage, output: items });
+
+/** What the deployment actually sends: snake_case counts plus a derived total. */
+const usage = (input: number, output: number) => ({
+  input_tokens: input,
+  output_tokens: output,
+  total_tokens: input + output,
+});
+
 const call = (callId: string, name: string, args: unknown): WireItem => ({
   type: "function_call",
   id: `fc_${callId}`,
@@ -685,7 +705,99 @@ test("FoundryClient.createSession auto-starts from the stored connection", async
   });
 });
 
-// --- 12. single flight ------------------------------------------------------
+// --- 12. token usage --------------------------------------------------------
+
+test("usage sums every request of a multi-round turn, and across turns", async () => {
+  const { tool } = echoTool();
+  const session = new FoundrySession(CONFIG, { tools: [tool] });
+
+  assert.deepEqual(session.usage, { inputTokens: 0, outputTokens: 0, requests: 0 });
+
+  // One turn, three requests: two tool rounds plus the final answer.
+  await withFetch(
+    queue(
+      toolReplyWithUsage(usage(100, 10), call("call_1", "echo", { message: "a" })),
+      toolReplyWithUsage(usage(200, 20), call("call_2", "echo", { message: "b" })),
+      textReplyWithUsage("done", usage(300, 30)),
+    ),
+    async ({ requests }) => {
+      assert.equal(await session.sendAndWait("go", 5_000), "done");
+      assert.equal(requests.length, 3);
+    },
+  );
+  assert.deepEqual(session.usage, { inputTokens: 600, outputTokens: 60, requests: 3 });
+
+  // A second turn keeps accumulating — the counters are per session, not per turn.
+  await withFetch(queue(textReplyWithUsage("again", usage(7, 3))), async () => {
+    assert.equal(await session.sendAndWait("more", 5_000), "again");
+  });
+  assert.deepEqual(session.usage, { inputTokens: 607, outputTokens: 63, requests: 4 });
+
+  // The getter hands back a snapshot: mutating it must not touch the session.
+  const snapshot = session.usage;
+  snapshot.inputTokens = 999_999;
+  assert.equal(session.usage.inputTokens, 607);
+});
+
+test("a response with missing, partial or junk usage is tolerated, not fatal", async () => {
+  const session = new FoundrySession(CONFIG, {});
+
+  // No usage key at all — the request is still counted, the tokens are simply unknown.
+  await withFetch(queue(textReply("no usage")), async () => {
+    assert.equal(await session.sendAndWait("one", 5_000), "no usage");
+  });
+  assert.deepEqual(session.usage, { inputTokens: 0, outputTokens: 0, requests: 1 });
+
+  // Partial (output missing) and unknown extra fields alongside the counts.
+  await withFetch(
+    queue(
+      textReplyWithUsage("partial", { input_tokens: 40, input_tokens_details: { cached: 5 } }),
+    ),
+    async () => {
+      assert.equal(await session.sendAndWait("two", 5_000), "partial");
+    },
+  );
+  assert.deepEqual(session.usage, { inputTokens: 40, outputTokens: 0, requests: 2 });
+
+  // Wrong types and a non-object usage contribute nothing and throw nothing.
+  await withFetch(
+    queue(
+      textReplyWithUsage("junk", { input_tokens: "lots", output_tokens: null }),
+      textReplyWithUsage("stringly", "42"),
+    ),
+    async () => {
+      assert.equal(await session.sendAndWait("three", 5_000), "junk");
+      assert.equal(await session.sendAndWait("four", 5_000), "stringly");
+    },
+  );
+  assert.deepEqual(session.usage, { inputTokens: 40, outputTokens: 0, requests: 4 });
+});
+
+test("usage survives a failed turn — the history rolls back, the spend does not", async () => {
+  const { tool } = echoTool();
+  const session = new FoundrySession(CONFIG, { tools: [tool] });
+
+  // Round 1 is billed and then the turn dies on the deadline: the items it added are
+  // rolled back, but those tokens were charged all the same.
+  const respond: Responder = (request, index) =>
+    index === 0
+      ? toolReplyWithUsage(usage(500, 50), call("call_1", "echo", { message: "hi" }))
+      : hang(request, index);
+
+  await withFetch(respond, async () => {
+    await assert.rejects(() => session.sendAndWait("doomed", 500), /timed out after 1s/);
+  });
+  // Only the round that came back is counted — the aborted one never produced a body.
+  assert.deepEqual(session.usage, { inputTokens: 500, outputTokens: 50, requests: 1 });
+
+  await withFetch(queue(textReplyWithUsage("recovered", usage(11, 1))), async ({ requests }) => {
+    assert.equal(await session.sendAndWait("second", 5_000), "recovered");
+    assert.deepEqual(requests[0].body.input, [userItem("second")], "history still rolls back");
+  });
+  assert.deepEqual(session.usage, { inputTokens: 511, outputTokens: 51, requests: 2 });
+});
+
+// --- 13. single flight ------------------------------------------------------
 
 test("a second turn while one is in flight is refused, and later turns still work", async () => {
   const session = new FoundrySession(CONFIG, {});

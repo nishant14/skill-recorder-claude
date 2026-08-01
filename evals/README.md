@@ -24,6 +24,7 @@ npm run eval -- --only=web-to-spreadsheet
 npm run eval -- --judge            # also run the semantic LLM judge
 npm run eval -- --keep             # print the temp sessions dir (artifacts kept)
 npm run eval -- --model=<model-id> # override the describer model
+npm run eval -- --repeat=3         # run every scenario 3× (mean score, tokens, latency)
 ```
 
 Requires GitHub Copilot CLI to be signed in (same auth the app uses). Exit code
@@ -70,6 +71,52 @@ A forbidden-noise hit fails the scenario outright; otherwise pass = ≥80% of ch
 `--judge` adds an optional second opinion: a separate Copilot agent grades
 faithfulness 0–5 against the scenario's ground truth (`judge.ts`). Off by default
 to keep runs deterministic.
+
+## Model cost/quality comparison (describer)
+
+Which general GPT deployment should the describer run on — say `gpt-5.3` vs `gpt-5.6`?
+The suite answers it with numbers: `--repeat=N` runs every scenario N times and records
+the **tokens each run billed** (from the Responses `usage` object, accumulated per agent
+session), so a results file carries mean score, mean latency **and** mean cost inputs.
+`evals/compare.ts` then puts two such files side by side.
+
+1. In the Azure AI Foundry portal, create **two general-model deployments** on the same
+   resource (one per candidate model) and note each one's price per 1M input and output
+   tokens from the pricing page.
+2. Run the suite once per deployment — three reps each, so run-to-run variance is visible
+   as a score spread rather than mistaken for a model difference:
+
+   ```bash
+   npm run eval -- --model=<deployment-a> --repeat=3
+   npm run eval -- --model=<deployment-b> --repeat=3
+   ```
+
+   Each prints the results file it wrote (`evals/results/<timestamp>.json`).
+3. Compare them offline (no model calls, no network — pure arithmetic over the two files):
+
+   ```bash
+   node --experimental-transform-types --no-warnings --import ./evals/register.mjs \
+     evals/compare.ts evals/results/<a>.json evals/results/<b>.json \
+     --price-in-a=<$/1M> --price-out-a=<$/1M> \
+     --price-in-b=<$/1M> --price-out-b=<$/1M>
+   ```
+
+   Per scenario and overall you get mean score, mean tokens, mean latency for each file
+   plus the deltas; with the four price flags it also prints **mean cost per analysis**
+   and **cost per score point** (a point is 1% of the rubric — the column that catches a
+   model that is cheaper only because it is worse). The price flags have **no defaults
+   and nothing is hardcoded**: rates change, so they come from the pricing page for the
+   two deployments *you* created. Without them the table is tokens-only and says so.
+
+**Leave `--judge` off for an A/B.** The judge runs on the same `--model` as the describer,
+so turning it on changes the grader along with the subject under test — and its tokens are
+billed to a separate session that the cost columns don't count. The rubric in `scoring.ts`
+is deterministic and model-independent, which is exactly what a comparison needs.
+
+The comparison arithmetic lives in `evals/compare-lib.ts` (means, spread, cost) and is
+unit-tested in `evals/compare-lib.test.ts`, which runs in `npm test`. `compare.ts` also
+reads results files written before `--repeat` existed — they compare as a single run with
+unknown (zero) tokens.
 
 ## Scenarios
 

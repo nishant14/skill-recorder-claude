@@ -148,6 +148,16 @@ export class Describer {
     if (live) await live.agent.abort().catch(() => undefined);
   }
 
+  /**
+   * Tokens the live agent conversation for a session has been billed for, or `null`
+   * when no conversation is held (never started, or already disposed). Read by the
+   * eval harness for the cost-vs-quality model comparison — the app doesn't surface
+   * it, so this deliberately adds no IPC channel and no field on `Analysis`.
+   */
+  usageFor(sessionId: string): { inputTokens: number; outputTokens: number; requests: number } | null {
+    return this.live.get(sessionId)?.agent.usage ?? null;
+  }
+
   /** True while an analyze/feedback turn is actively running for this session. */
   isAnalyzing(sessionId: string): boolean {
     return this.active.has(sessionId);

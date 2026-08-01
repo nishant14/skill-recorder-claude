@@ -108,6 +108,15 @@ interface ResponsesBody {
   status?: unknown;
   error?: unknown;
   output?: unknown;
+  /** `{ input_tokens, output_tokens, total_tokens }` in practice — read tolerantly. */
+  usage?: unknown;
+}
+
+/** What a session has been billed for so far. Plain counters, no wire types. */
+interface UsageTotals {
+  inputTokens: number;
+  outputTokens: number;
+  requests: number;
 }
 
 // --- client -----------------------------------------------------------------
@@ -172,6 +181,8 @@ export class FoundrySession {
   /** Non-null exactly while a turn is in flight (the single-flight latch). */
   private controller: AbortController | null = null;
   private closed = false;
+  /** Running token totals across every request of every turn. Never reset. */
+  private readonly totals: UsageTotals = { inputTokens: 0, outputTokens: 0, requests: 0 };
 
   constructor(config: FoundryConfig, options: SessionOptions) {
     this.config = config;
@@ -179,6 +190,21 @@ export class FoundrySession {
     this.toolsByName = new Map(this.tools.map((t) => [t.name, t]));
     this.model = options.model?.trim() || config.deployment;
     this.instructions = options.instructions?.trim() ?? "";
+  }
+
+  /**
+   * Tokens this session has been billed for, summed over **every** request of every
+   * turn — a tool loop that took six rounds counts all six. A turn that failed and was
+   * rolled back still counts too: the history is undone, the spend is not. Deployments
+   * that omit `usage` simply contribute nothing, so a zero here means "not reported",
+   * not "free".
+   *
+   * Returns a copy: callers (the eval harness reads it per scenario run) must not be
+   * able to mutate the session's counters, and a snapshot must not drift underneath
+   * them while a turn is running.
+   */
+  get usage(): { inputTokens: number; outputTokens: number; requests: number } {
+    return { ...this.totals };
   }
 
   /**
@@ -331,11 +357,28 @@ export class FoundrySession {
     } catch {
       throw new Error("Azure AI Foundry returned a response that could not be read as JSON.");
     }
+    // Before the error check: a response we could read was a request the deployment
+    // charged for, whether or not the turn goes on to succeed.
+    this.countUsage(data?.usage);
     // A 200 can still carry a failure (`status: "failed"` + `error`).
     if (data?.error) throw new Error(responseErrorMessage(data.error));
     const output = Array.isArray(data?.output) ? data.output.filter(isRecord) : [];
     if (output.length === 0) throw new Error("Azure AI Foundry returned no output.");
     return output;
+  }
+
+  /**
+   * Fold one response's `usage` into the session totals. Accounting must never break a
+   * turn, so every unknown shape degrades to zero rather than throwing: a missing
+   * object, a partial one (input but no output), or numbers of the wrong type all just
+   * add nothing, and extra fields (`total_tokens`, per-modality breakdowns) are ignored
+   * because they are derivable or not ours to interpret.
+   */
+  private countUsage(usage: unknown): void {
+    this.totals.requests += 1;
+    if (!isRecord(usage)) return;
+    this.totals.inputTokens += tokenCount(usage.input_tokens);
+    this.totals.outputTokens += tokenCount(usage.output_tokens);
   }
 
   /**
@@ -419,6 +462,11 @@ function imageUserMessage(toolName: string, images: ToolBinaryResult[]): Respons
     parts.push({ type: "input_image", image_url: `data:${img.mimeType};base64,${img.data}` });
   }
   return userMessage(parts);
+}
+
+/** A reported token count, or 0 for anything that isn't a usable non-negative number. */
+function tokenCount(value: unknown): number {
+  return typeof value === "number" && Number.isFinite(value) && value > 0 ? value : 0;
 }
 
 /** `call_id` is what a `function_call_output` must reference; `id` is the fallback. */

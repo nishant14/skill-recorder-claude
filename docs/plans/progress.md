@@ -20,9 +20,19 @@ authoritative for *what to build*.
 - **Next step: Workstream C** (auth/config UX — connection form, doctor, IPC; deletes
   `copilot-cli-path.ts` + `copilot-signin.ts`), then D. Until C ships, an unconfigured
   machine shows the Foundry not-configured message as a plain banner (known interim UX).
-- **Open question (understand-first, no decision recorded):** whether the *describer*
-  should run a mainline GPT-5.x deployment instead of codex (builders stay codex).
-  Decide empirically via `npm run eval` with `--model=<deployment>` comparison.
+- **Open question (understand-first, no decision recorded):** which *general* GPT
+  deployment the describer should run on — e.g. `gpt-5.3` vs `gpt-5.6` — instead of codex
+  (builders stay codex). **Now instrumented, decision still open.** The eval suite
+  measures it: the Foundry session accumulates Responses-API `usage`, `npm run eval --
+  --model=<deployment> --repeat=3` records per-rep score, latency and tokens into
+  `evals/results/*.json`, and `evals/compare.ts <a.json> <b.json>` prints the A/B table.
+  Procedure: create two general-model deployments on the resource, run the suite at
+  `--repeat=3` against each (judge **off** — it shares `--model`), then compare with the
+  per-1M input/output prices read off the Azure pricing page (`--price-in-a` /
+  `--price-out-a` / `--price-in-b` / `--price-out-b`; there are no default rates). The
+  criterion is **cost vs quality** — mean cost per analysis and cost per score point next
+  to mean score and its spread. **The user decides on the numbers**; nothing here picks a
+  model. See "Model cost/quality comparison" in `evals/README.md`.
 - **Standing constraints:** delegate implementation to subagents (see CLAUDE.md "Model
   economy"); live/credentialed gates are human-run, never wired into `npm test` or CI;
   never commit credentials (they live only in `~/.skill-recorder/foundry.json`) or a
