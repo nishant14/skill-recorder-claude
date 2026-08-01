@@ -1020,10 +1020,19 @@ async function prepareElectronNotices({ outputDir, rootDir, policy, fetchImpl })
     const target = path.join(noticeDirectory, targetName);
     await writeFile(target, content);
     const sha256 = await sha256File(target);
-    if (sha256 !== policy.electron.notices?.[targetName]) {
+    // LICENSES.chromium.html legitimately differs between platform distributions
+    // (each platform's Chromium build bundles a different license set), so a
+    // per-platform pin in `noticesByPlatform` wins over the flat `notices` map.
+    // The distribution archive itself is verified against its reviewed per-platform
+    // hash above, so these derived pins inherit that trust chain.
+    const platformKey = `${process.platform}-${process.arch}`;
+    const expectedNotice =
+      policy.electron.noticesByPlatform?.[platformKey]?.[targetName] ??
+      policy.electron.notices?.[targetName];
+    if (sha256 !== expectedNotice) {
       throw new Error(
         `Electron distribution notice ${targetName} has SHA-256 ${sha256}, ` +
-          `expected ${policy.electron.notices?.[targetName] ?? "(unreviewed)"}.`,
+          `expected ${expectedNotice ?? "(unreviewed)"}.`,
       );
     }
     notices.push({

@@ -14,6 +14,11 @@
     "notices": {
       "LICENSE.electron.txt": "5154e165bd6c2cc0cfbcd8916498c7abab0497923bafcd5cb07673fe8480087d",
       "LICENSES.chromium.html": "b911161e6594ec76b872498b423c54406168f2974e0d407a847f7de1e5ff94dd"
+    },
+    "noticesByPlatform": {
+      "linux-x64": {
+        "LICENSES.chromium.html": "4fc0507a046b9ecd0738b2dd64119b5ec8bc29ac0221b63edb693fd5fd497c87"
+      }
     }
   },
   "sharp": "0.34.5",
