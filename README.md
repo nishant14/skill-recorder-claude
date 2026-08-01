@@ -41,7 +41,8 @@ app you can relaunch anytime. Nothing is installed globally. You'll need a GitHu
 **Copilot access**; the Copilot CLI ships with the app.
 
 macOS is the primary target. Windows 11 (x64 and ARM64) is supported too (see
-[`WINDOWS-VALIDATION.md`](WINDOWS-VALIDATION.md)).
+[`WINDOWS-VALIDATION.md`](WINDOWS-VALIDATION.md)), as is Ubuntu 22.04/24.04 x64 on an
+X11 session (see [`LINUX-VALIDATION.md`](LINUX-VALIDATION.md)).
 
 ### Install it
 

@@ -1,6 +1,6 @@
 # Windows event capture
 
-Skill Recorder is cross platform (macOS + Windows). The core (recorder controller,
+Skill Recorder is cross platform (macOS + Windows + Ubuntu Linux). The core (recorder controller,
 event bus, session store, collector host, capture tiers, describer, skill builder)
 is platform agnostic. This doc covers the parts that are OS specific: how each
 event source behaves on Windows, how to set it up, and a live smoke test to run

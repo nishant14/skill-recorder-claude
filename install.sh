@@ -329,6 +329,17 @@ build_source_install() {
     [ -z "$missing_libraries" ] ||
       die "Electron requires missing Ubuntu libraries: $missing_libraries"
   fi
+  if [ "$PLATFORM" = "linux" ]; then
+    local missing_tools=""
+    for tool in xprop xwininfo; do
+      have "$tool" || missing_tools="$missing_tools $tool"
+    done
+    [ -z "$missing_tools" ] ||
+      die "App and window capture requires:$missing_tools. Run: sudo apt install x11-utils"
+    if ! python3 -c "import pyatspi" >/dev/null 2>&1; then
+      warn "Browser URL capture disabled until python3-pyatspi is installed. Run: sudo apt install python3-pyatspi"
+    fi
+  fi
 
   info "Generating and validating platform license materials."
   "$NPM" run compliance:licenses
@@ -426,6 +437,24 @@ write_launcher() {
     local desktop="$applications/skill-recorder-source.desktop"
     local desktop_temporary="$applications/.skill-recorder-source.desktop.$$"
     mkdir -p "$applications"
+
+    # Prefer the real application icon over a generic stock name. The icon lives in the
+    # commit-pinned source tree; copy it next to the launcher so removing an old source
+    # version cannot leave the entry pointing at a missing file.
+    local icon="applications-development"
+    if [ -f "$source_directory/build/icon.png" ]; then
+      local icon_target="$INSTALL_ROOT/icon.png"
+      local icon_temporary="$INSTALL_ROOT/.icon.png.$$"
+      if cp -f "$source_directory/build/icon.png" "$icon_temporary" 2>/dev/null; then
+        chmod 644 "$icon_temporary"
+        mv -f "$icon_temporary" "$icon_target"
+        icon="$icon_target"
+      else
+        rm -f -- "$icon_temporary"
+        warn "Could not copy the application icon; using a generic desktop icon."
+      fi
+    fi
+
     {
       printf '%s\n' \
         '[Desktop Entry]' \
@@ -433,14 +462,23 @@ write_launcher() {
         'Name=Skill Recorder (Source)' \
         'Comment=Skill Recorder built locally from pinned source'
       printf 'Exec="%s"\n' "$launcher"
+      printf 'Icon=%s\n' "$icon"
       printf '%s\n' \
-        'Icon=applications-development' \
         'Terminal=false' \
         'Categories=Development;'
+      # Electron derives its X11 app_id (and therefore WM_CLASS) from the "name" field
+      # in package.json, which is "skill-recorder". Verified live with `xprop WM_CLASS`
+      # against a running source build.
+      printf '%s\n' 'StartupWMClass=skill-recorder'
     } > "$desktop_temporary"
     chmod 644 "$desktop_temporary"
     mv -f "$desktop_temporary" "$desktop"
     DESKTOP_ENTRY="$desktop"
+
+    if have desktop-file-validate; then
+      desktop-file-validate "$desktop" ||
+        warn "desktop-file-validate reported issues with $desktop"
+    fi
   fi
 
   if [ "$PLATFORM" = "darwin" ]; then

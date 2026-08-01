@@ -13,7 +13,7 @@ jobs:
   build:
     name: ${{ matrix.os }}
     runs-on: ${{ matrix.os }}
-    timeout-minutes: 20
+    timeout-minutes: 25
     strategy:
       fail-fast: false
       matrix:
@@ -23,6 +23,16 @@ jobs:
 
     steps:
       - uses: actions/checkout@v4
+
+      # install.sh hard-requires x11-utils on Ubuntu, and the capture checks below
+      # need a display plus the AT-SPI stack. Must run before install.sh.
+      - name: Install Ubuntu capture prerequisites
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            x11-utils desktop-file-utils xvfb python3-pyatspi at-spi2-core dbus
+
       - uses: actions/setup-node@v4
         with:
           node-version: 24
@@ -48,6 +58,17 @@ jobs:
           SKILL_RECORDER_NO_LAUNCH: "1"
         run: bash install.sh
 
+      - name: Verify Ubuntu desktop entry
+        if: runner.os == 'Linux'
+        run: |
+          entry="${XDG_DATA_HOME:-$HOME/.local/share}/applications/skill-recorder-source.desktop"
+          test -f "$entry"
+          cat "$entry"
+          desktop-file-validate "$entry"
+          grep -q '^StartupWMClass=skill-recorder$' "$entry"
+          icon="$(sed -n 's/^Icon=//p' "$entry")"
+          test -f "$icon"
+
       - name: Verify macOS relaunch app bundle
         if: runner.os == 'macOS'
         run: |
@@ -72,11 +93,68 @@ jobs:
             if (!existsSync('.compliance/licenses/LGPL-3.0.txt'))
               throw new Error('Canonical LGPL-3.0 text is missing');
           "
+      # get-windows is a macOS-only optional dependency. Linux uses the in-repo X11
+      # provider below instead.
       - name: Verify optional window provider
+        if: runner.os == 'macOS'
         run: >-
           node --input-type=module -e
           "const m = await import('get-windows');
           if (typeof m.activeWindow !== 'function')
           throw new Error('get-windows activeWindow export is unavailable')"
+
+      - name: Verify Linux X11 window provider
+        if: runner.os == 'Linux'
+        run: >-
+          xvfb-run -a
+          node --experimental-transform-types --no-warnings
+          --import ./evals/register.mjs --input-type=module -e
+          "const m = await import('./electron/collectors/linux-active-window.ts');
+          const result = await m.readLinuxActiveWindow();
+          console.log('readLinuxActiveWindow resolved:',
+          JSON.stringify(result) ?? 'undefined')"
+
+      - name: Compile the AT-SPI helper script
+        if: runner.os == 'Linux'
+        run: |
+          node --experimental-transform-types --no-warnings \
+            --import ./evals/register.mjs --input-type=module -e \
+            "const { writeFileSync } = await import('node:fs');
+            const m = await import('./electron/collectors/linux-url-provider.ts');
+            writeFileSync(process.env.RUNNER_TEMP + '/atspi-helper.py', m.ATSPI_SCRIPT)"
+          python3 -m py_compile "$RUNNER_TEMP/atspi-helper.py"
+
       - run: npm test
       - run: npm run build
+
+  package-linux:
+    name: Ubuntu package x64
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+          cache: npm
+
+      # ELECTRON_SKIP_BINARY_DOWNLOAD must stay unset here: packaging needs the real
+      # Electron distribution, which electron-builder reads from .compliance-cache.
+      - name: Install native dependencies
+        run: |
+          npm ci
+          node -e "require('sharp'); require('onnxruntime-node'); require('koffi')"
+          if grep -q 'ffmpeg-static' package-lock.json; then
+            echo "ffmpeg-static remains in the lockfile" >&2
+            exit 1
+          fi
+
+      - name: Generate license inventory
+        run: npm run compliance:licenses
+
+      - name: Package AppImage
+        run: npm run dist:linux:x64
+
+      - name: Verify packaged architecture
+        run: node scripts/verify-linux-package.mjs x64

@@ -200,12 +200,25 @@ npm start
 ### Ubuntu
 
 Install the basic archive/download tools if the machine does not already have
-them:
+them, plus the X11 utilities that app and window capture require:
 
 ```sh
 sudo apt-get update
-sudo apt-get install --yes ca-certificates curl tar
+sudo apt-get install --yes ca-certificates curl tar x11-utils
 ```
+
+`x11-utils` (`xprop`, `xwininfo`) is **required**: without it there are no app or
+window events at all, and `install.sh` fails rather than building an app that
+cannot capture. Browser URL capture additionally needs the AT-SPI2 Python
+bindings, which are **optional** — `install.sh` only warns when they are missing:
+
+```sh
+sudo apt-get install --yes python3-pyatspi at-spi2-core
+```
+
+Ubuntu capture is validated on an **X11** session only. See
+[`LINUX-VALIDATION.md`](LINUX-VALIDATION.md) and
+[`docs/linux-capture.md`](docs/linux-capture.md).
 
 Then use the same pinned source process:
 

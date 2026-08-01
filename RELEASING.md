@@ -85,7 +85,10 @@ The pull request must pass:
 
 - Windows x64 and ARM64 license, test, build, package, and architecture checks;
 - macOS and Ubuntu license, test, and build checks;
-- commit-pinned source-installer checks on Windows, macOS, and Ubuntu.
+- the Ubuntu x64 AppImage package and `verify-linux-package.mjs` architecture,
+  payload, and `get-windows`-absence checks (`package-linux`);
+- commit-pinned source-installer checks on Windows, macOS, and Ubuntu, including
+  `desktop-file-validate` on the generated Ubuntu desktop entry.
 
 Resolve every compliance failure. Never disable or bypass a compliance check to
 publish a release.

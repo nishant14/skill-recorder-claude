@@ -37,6 +37,12 @@ authoritative for *what to build*.
   logs `describer deployment gpt-5.2` and scores 100%. Builders stay `gpt-5.3-codex`;
   transcription stays `gpt-4o-transcribe`. The resource now hosts three required
   deployments.
+- **Parallel initiative — Linux support (own plan: [`linux-support.md`](./linux-support.md)):
+  phases L1–L3 all implemented** (X11 capture provider replacing get-windows, AT-SPI URL
+  provider, packaging/CI/validation parity). Human-pending: GL1/GL2 live checklist on a
+  desktop (X11 recording run, Wayland degradation check, snap-Firefox
+  `GNOME_ACCESSIBILITY=1` experiment) and GL3's clean-VM install test; the `package-linux`
+  CI job proves the automated half on push.
 - **Standing constraints:** delegate implementation to subagents (see CLAUDE.md "Model
   economy"); live/credentialed gates are human-run, never wired into `npm test` or CI;
   never commit credentials (they live only in `~/.skill-recorder/foundry.json`) or a

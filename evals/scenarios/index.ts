@@ -4,6 +4,7 @@ import { expenseReport } from "./expense-report";
 import { invoiceExtract } from "./invoice-extract";
 import { irrelevantDetour } from "./irrelevant-detour";
 import { leadToCrm } from "./lead-to-crm";
+import { linuxDeploy } from "./linux-deploy";
 import { releaseNotes } from "./release-notes";
 import { researchCompile } from "./research-compile";
 import { webToSpreadsheet } from "./web-to-spreadsheet";
@@ -23,4 +24,6 @@ export const scenarios: Scenario[] = [
   leadToCrm,
   // Windows-shaped capture (win32 app names + browser.url + pwsh):
   windowsDeploy,
+  // Linux-shaped capture (raw X11 WM_CLASS tokens + AT-SPI browser.url + bash):
+  linuxDeploy,
 ];

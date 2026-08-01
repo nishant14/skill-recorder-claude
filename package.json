@@ -24,6 +24,7 @@
     "dist": "npm run compliance:prepare && node scripts/assert-generic-dist-platform.mjs && vite build && electron-builder --publish never",
     "dist:win:x64": "npm run compliance:prepare && node scripts/assert-native-windows-arch.mjs x64 && vite build && electron-builder --config.npmRebuild=false --publish never --win nsis --x64",
     "dist:win:arm64": "npm run compliance:prepare && node scripts/assert-native-windows-arch.mjs arm64 && vite build && electron-builder --config.npmRebuild=false --publish never --win nsis --arm64",
+    "dist:linux:x64": "npm run compliance:prepare && node scripts/assert-native-linux-arch.mjs x64 && vite build && electron-builder --config.npmRebuild=false --publish never --linux AppImage --x64",
     "dist:portable:mac": "npm run compliance:prepare && vite build && electron-builder --publish never --mac zip",
     "dist:portable:win": "npm run compliance:prepare && node scripts/assert-native-windows-arch.mjs x64 && vite build && electron-builder --config.npmRebuild=false --publish never --win portable --x64",
     "start": "electron ."
@@ -113,10 +114,27 @@
       "artifactName": "${productName}-${version}-windows-${arch}.${ext}"
     },
     "linux": {
+      "icon": "build/icon.png",
+      "files": [
+        "dist/**",
+        "dist-electron/**",
+        "package.json",
+        "LICENSE",
+        "THIRD-PARTY-NOTICES.md",
+        "!node_modules/get-windows/**"
+      ],
       "target": [
         "AppImage"
       ],
-      "category": "Development"
+      "category": "Development",
+      "maintainer": "Skill Recorder contributors",
+      "synopsis": "Record a work session and derive a structured skill description",
+      "desktop": {
+        "entry": {
+          "StartupWMClass": "skill-recorder"
+        }
+      },
+      "artifactName": "${productName}-${version}-linux-${arch}.${ext}"
     },
     "compression": "normal",
     "nsis": {
