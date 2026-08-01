@@ -17,9 +17,11 @@ authoritative for *what to build*.
   Unblock: create a transcription deployment in the Foundry portal (gpt-4o-transcribe /
   gpt-4o-mini-transcribe / whisper) or set `transcriptionDeployment` in
   `~/.skill-recorder/foundry.json`, then rerun the smoke.
-- **Next step: Workstream C** (auth/config UX — connection form, doctor, IPC; deletes
-  `copilot-cli-path.ts` + `copilot-signin.ts`), then D. Until C ships, an unconfigured
-  machine shows the Foundry not-configured message as a plain banner (known interim UX).
+- **Workstream C implemented** (`a884963`): connection form + live Test, doctor tile,
+  truthful runtime copy, Copilot plumbing deleted. **G3(C)'s manual UI checklist is the
+  user's** (spec §G3(C), run on a desktop via `npm run dev`). **Next step: Workstream D**
+  (retarget outputs to `copilot-studio` + `app`; new catalogs; engine-owned automation
+  `model` field; schema-migration tests complete gate G3).
 - **Describer-model comparison: MEASURED, decision pending (user's call).** Run
   2026-08-01, 9 scenarios × 3 reps per model, deterministic rubric, judge off, prices
   user-supplied (`gpt-5.6-sol` $5/$30 per 1M in/out; `gpt-5.2` $1.75/$14):
@@ -46,7 +48,7 @@ authoritative for *what to build*.
 |---|---|---|---|---|
 | A | Foundry runtime (`common/foundry.ts`, `electron/foundry/*`, smoke script) | **done, merged** (`6b9acc4`…`4c5a538`) | G1 — **passed** | smoke 3/3 live vs `gpt-5.3-codex` 2026-08-01; `npm test` 87/87; `npm run typecheck` exit 0; `npm run typecheck:evals` exit 0 |
 | B | Swap Describer / SkillBuilder / AutomationBuilder / evals-judge onto the runtime | **done** (`94b810d`; spec [`phase1b`](./foundry-codex-migration-phase1b.md)) | G2 — **passed** | live eval `--only=directory-lookup` 2026-08-01: PASS, score 100%, 5 steps, 11.3s vs `gpt-5.3-codex`; typecheck/typecheck:evals 0; tests 111/111 |
-| C | Auth/config UX + IPC (replaces GitHub sign-in) | not started | G3 (exit of C + D) | — |
+| C | Auth/config UX + IPC (replaces GitHub sign-in) | **implemented** (`a884963`; spec [`phase1c`](./foundry-codex-migration-phase1c.md)) | G3(C) — **awaiting the user's manual UI checklist** (spec §G3(C); tile note = endpoint host) | typecheck/typecheck:evals 0; tests 125/125; `rg -i copilot src/` = 0 hits; no source file imports the SDK; `copilot-cli-path.ts` + `copilot-signin.ts` deleted |
 | D | Retarget outputs to `copilot-studio` + `app` architectures | not started | G3 (exit of C + D) | — |
 | E | Packaging, install scripts, compliance, privacy copy | not started | G4 (exit of E) | — |
 | F | The gate ladder itself (verification strategy) | ladder defined; G0/G1 in force | G0–G5, G6 | see gate ledger below |
