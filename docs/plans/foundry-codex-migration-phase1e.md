@@ -1,7 +1,11 @@
 # Phase 1e in detail — Workstream E: dependency purge, packaging, compliance
 
 Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md) · Tracker: [`progress.md`](./progress.md)
-Status: **approved — implementing**
+Status: **implemented — gate G4 passed locally (2026-08-01: first-ever Linux AppImage
+built + `verify-linux-package` end to end; three findings fixed — per-platform Electron
+notices pins at two check sites, AppImage `x86_64` naming). CI legs latent until GitHub
+Actions is enabled on the repo, so Windows packaging is unverified post-purge. G5 passed
+after E — Phase 1 complete.**
 
 ## Scope and definition of done
 

@@ -1,13 +1,16 @@
 # Migration plan: GitHub Copilot CLI → GPT-5.3 Codex on Azure AI Foundry
 
-Status (2026-08-01): **Workstreams A, B, C, D, I and J are implemented on `main`** — every
-LLM call (describer, both builders, eval judge) and narration transcription runs on Azure
-AI Foundry. Gates **G1 3/3**, **G2 100%**, **G3(D) live 3/3**, **G6 4/4** and **GJ** are
-passed; **G3(C)'s manual UI checklist is still pending with the user**. **Remaining in
-Phase 1: Workstream E** (dependency/packaging purge, gate G4) then the **G5** full-suite
-sweep. **Phase 2: G** (declarative agent bundles) and **H** (in-app runner) are not
-started. [`progress.md`](./progress.md) is the status authority — this file stays
-authoritative for *what to build*, not for where we are.
+Status (2026-08-01, night): **PHASE 1 IS COMPLETE — Workstreams A, B, C, D, E, I and J are
+implemented on `main`.** Every LLM call and narration transcription runs on Azure AI
+Foundry; the Copilot SDK/CLI and local-ML stack are fully purged. Gates **G1 3/3**,
+**G2 100%**, **G3(D) live 3/3**, **G4 (local pass — first Linux AppImage, verifier end to
+end)**, **G5 (describer 10/10 + judge, builder 10/10, skill 9/9)**, **G6 4/4** and **GJ
+(all four documentation levels)** are passed. Outstanding: G3(C)'s manual UI checklist
+(user) and enabling GitHub Actions (zero runs on the repo — the CI gate legs are latent,
+so Windows packaging is unverified post-purge). **Phase 2: G** (declarative agent
+bundles) and **H** (in-app runner) are not started.
+[`progress.md`](./progress.md) is the status authority — this file stays authoritative
+for *what to build*, not for where we are.
 Branch: work lands on `main`. The historical feature branch
 `claude/gpt-5.6-codex-foundry-migration-u1csnc` is merged; the "5.6" in its name is a
 naming artifact — the deployment is `gpt-5.3-codex`.
