@@ -295,3 +295,25 @@ test("the system-prompt brief states the convention, the credential rule, and th
   });
   assert.ok(!specOnly.includes("search_api_docs"));
 });
+
+test("a docs-only reference gets the search-first brief, never the api: grounding demand", () => {
+  // Regression pin for a live finding: with 0 operations the operation-first brief reads
+  // as "nothing to ground in, guessing is rejected", and the model rationally ignored the
+  // docs and produced pure UI replay. Docs-only briefs must steer to search_api_docs and
+  // documented endpoints instead.
+  const reference = {
+    name: "Sales API guide",
+    sources: [
+      { id: "doc-1", kind: "docs" as const, name: "api-guide.md", bytes: 9, operationCount: 0, chunkCount: 8 },
+    ],
+    operationCount: 0,
+    chunkCount: 8,
+    updatedAt: 1,
+  };
+  const brief = renderApiReferenceBrief({ reference, architecture: "app", kind: "skill" });
+  assert.match(brief, /do NOT use `api:` refs/);
+  assert.match(brief, /search_api_docs/);
+  assert.match(brief, /documented HTTP endpoints over UI replay/);
+  assert.doesNotMatch(brief, /look the operation up/);
+  assert.doesNotMatch(brief, /list_api_operations/);
+});

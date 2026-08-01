@@ -280,7 +280,10 @@ export interface ApiReferenceBriefOptions {
 export function renderApiReferenceBrief(options: ApiReferenceBriefOptions): string {
   const { reference, architecture, kind } = options;
   const names = reference.sources.map((s) => `${s.name} (${s.kind === "openapi" ? "spec" : "docs"})`).join(", ");
-  const tools = ["list_api_operations", "get_api_operation", ...(reference.chunkCount ? ["search_api_docs"] : [])];
+  const docsOnly = reference.operationCount === 0 && reference.chunkCount > 0;
+  const tools = docsOnly
+    ? ["search_api_docs"]
+    : ["list_api_operations", "get_api_operation", ...(reference.chunkCount ? ["search_api_docs"] : [])];
   const stepWord = kind === "skill" ? "step" : "step prompt";
 
   const lines = [
@@ -290,17 +293,38 @@ export function renderApiReferenceBrief(options: ApiReferenceBriefOptions): stri
       `${reference.operationCount} operation(s)` +
       (reference.chunkCount ? ` and ${reference.chunkCount} documentation section(s).` : "."),
     "",
-    `Read it with **${tools.join("**, **")}**. Every action step that touches this application must be grounded in a`,
-    "concrete operation from this reference instead of UI replay — look the operation up, then name it on the",
-    `${stepWord}'s \`tool\` as \`api:<operationId>\` (or \`api:METHOD /path\`). A step naming an operation that isn't in`,
-    "the reference is rejected, so never guess an id — look it up first. Steps that do NOT touch this",
-    "application keep using the catalogue's capabilities as usual.",
-    "",
+  ];
+
+  if (docsOnly) {
+    // Unstructured docs yield searchable sections but no machine-resolvable operation
+    // index, so `api:` grounding is impossible — without this branch the operation-first
+    // wording below reads as "nothing to ground in, guessing is rejected" and the model
+    // rationally falls back to UI replay, ignoring the docs entirely (observed live).
+    lines.push(
+      `These are unstructured docs — there is no operation index, so do NOT use \`api:\` refs. Instead, search the`,
+      `docs with **search_api_docs** and prefer the documented HTTP endpoints over UI replay: write each action`,
+      `${stepWord} against the documented request (name the method and path, e.g. "POST /api/v1/orders", and which`,
+      "fields carry which values), exactly as the docs describe it. Fall back to the UI only for actions the docs",
+      "do not cover. Steps that do NOT touch this application keep using the catalogue's capabilities as usual.",
+      "",
+    );
+  } else {
+    lines.push(
+      `Read it with **${tools.join("**, **")}**. Every action step that touches this application must be grounded in a`,
+      "concrete operation from this reference instead of UI replay — look the operation up, then name it on the",
+      `${stepWord}'s \`tool\` as \`api:<operationId>\` (or \`api:METHOD /path\`). A step naming an operation that isn't in`,
+      "the reference is rejected, so never guess an id — look it up first. Steps that do NOT touch this",
+      "application keep using the catalogue's capabilities as usual.",
+      "",
+    );
+  }
+
+  lines.push(
     "**Never write credentials.** API keys, tokens, and Authorization headers are configured once in the runner or",
     "connector — never in a value, a step, or a request body. The reference exposes security *scheme names* only, and",
     "naming the scheme is all a step should ever do.",
     "",
-  ];
+  );
 
   if (architecture === "app") {
     lines.push(

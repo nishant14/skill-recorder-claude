@@ -377,7 +377,10 @@ const apiSalesOrderDocs: SkillBuilderScenario = {
   analysis: salesOrderAnalysis,
   apiReference: { docs: [{ name: "api-guide.md", text: testbedDoc("api-guide.md") }] },
   rubric: {
-    mustUseAny: [["/api/v1/orders", "POST /api", "create order endpoint", "createSalesOrder"]],
+    // "}/orders" and "/orders" cover the (desirable) pattern where the model hoists the
+    // API base URL into a {{value}} and writes the endpoint as {{base}}/orders — the
+    // literal /api/v1 prefix then lives in the value, which the rubric doesn't scan.
+    mustUseAny: [["/api/v1/orders", "/orders", "POST /api", "create order endpoint", "createSalesOrder"]],
     // "api:" is safe to forbid *because of the colon*: "/api/v1/orders" and "X-Api-Key"
     // both contain "api" but neither contains "api:". The one shape that would trip it
     // falsely is prose punctuation ("the API: POST /api/v1/orders"), which is rare enough
