@@ -1,7 +1,21 @@
 # Phase 1a in detail — Workstream A: the Foundry runtime
 
 Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md)
-Status: **approved, not yet implemented**
+Status: **implemented — gate G1 passed 3/3 (2026-08-01)**
+
+> **G1 outcome — transport is the Responses API, not chat completions.** The live smoke
+> against the real `gpt-5.3-codex` deployment (`*.services.ai.azure.com`) returned
+> HTTP 400 "The requested operation is unsupported" for every `/openai/v1/chat/completions`
+> request: codex deployments are Responses-API-only. Per the contained-fix rule, only
+> `electron/foundry/agent.ts` (+ its test fixtures) changed: requests now go to
+> `POST {endpoint}/openai/v1/responses` with `store: false` (history stays local, so the
+> rollback design and privacy posture are unchanged), flat function tools, item-based
+> history (`message` / `function_call` / `function_call_output`), reasoning items echoed
+> verbatim with `include: ["reasoning.encrypted_content"]`, and the image bridge as
+> `input_image` data-URI parts. The chat-completions wire text in section A3 below is
+> retained as the original spec; where they differ, **the code and its tests are the
+> contract.** After the port, the smoke passed 3/3 (completion, tool round-trip, image
+> round-trip). Everything in Workstreams B–F consumes only the unchanged public surface.
 
 ## Scope and definition of done
 

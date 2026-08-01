@@ -12,6 +12,11 @@ import { FoundryClient, FoundrySession, type Tool } from "./agent";
  * scripted fake that records what we sent and replays queued responses, so the whole
  * file runs offline: nothing here ever opens a socket.
  *
+ * The wire is the **Responses API** (`/openai/v1/responses`): a system prompt is
+ * top-level `instructions`, the conversation is an `input` item array, tool replies are
+ * `function_call_output` items, and — because `store: false` makes each request
+ * stateless — every output item the model returned must reappear in the next request.
+ *
  * The assertions are deliberately about the **next request body** rather than about
  * internal state — the wire history is the contract the API validates, and a loop bug
  * (a missing tool reply, an image part in the wrong position, a failed turn left in
@@ -26,28 +31,38 @@ const CONFIG: FoundryConfig = {
   deployment: "gpt-5.3-codex",
 };
 
-const COMPLETIONS_URL = "https://unit.test.invalid/openai/v1/chat/completions";
+const RESPONSES_URL = "https://unit.test.invalid/openai/v1/responses";
 
 // --- fetch faking -----------------------------------------------------------
 
-interface WireToolCall {
-  id: string;
-  type: string;
-  function: { name: string; arguments: string };
+interface WireItem {
+  type?: string;
+  role?: string;
+  content?: unknown;
+  call_id?: string;
+  name?: string;
+  arguments?: string;
+  output?: string;
+  [key: string]: unknown;
 }
 
-interface WireMessage {
-  role: string;
-  content: unknown;
-  tool_calls?: WireToolCall[];
-  tool_call_id?: string;
+interface WireTool {
+  type: string;
+  name: string;
+  description: string;
+  parameters: unknown;
+  strict?: boolean;
 }
 
 interface WireBody {
-  messages: WireMessage[];
   model?: string;
-  tools?: { type: string; function: { name: string; description: string; parameters: unknown } }[];
+  instructions?: string;
+  input: WireItem[];
+  store?: boolean;
+  tools?: WireTool[];
   tool_choice?: string;
+  parallel_tool_calls?: boolean;
+  include?: string[];
 }
 
 interface RecordedRequest {
@@ -110,19 +125,45 @@ const okJson = (payload: unknown): Response =>
     headers: { "content-type": "application/json" },
   });
 
+/** A terminal turn: one assistant message item, no function calls. */
 const textReply = (content: string): Response =>
-  okJson({ choices: [{ message: { role: "assistant", content } }] });
+  okJson({
+    status: "completed",
+    output: [
+      { type: "message", role: "assistant", content: [{ type: "output_text", text: content }] },
+    ],
+  });
 
-const toolReply = (...calls: WireToolCall[]): Response =>
-  okJson({ choices: [{ message: { role: "assistant", content: null, tool_calls: calls } }] });
+/** A tool round: the output carries `function_call` items (plus anything else given). */
+const toolReply = (...items: WireItem[]): Response =>
+  okJson({ status: "completed", output: items });
 
-const call = (id: string, name: string, args: unknown): WireToolCall => ({
+const call = (callId: string, name: string, args: unknown): WireItem => ({
+  type: "function_call",
+  id: `fc_${callId}`,
+  call_id: callId,
+  name,
+  arguments: typeof args === "string" ? args : JSON.stringify(args),
+});
+
+/** An opaque reasoning item — carried verbatim, never interpreted. */
+const reasoning = (id: string): WireItem => ({
+  type: "reasoning",
   id,
-  type: "function",
-  function: {
-    name,
-    arguments: typeof args === "string" ? args : JSON.stringify(args),
-  },
+  summary: [],
+  encrypted_content: `enc-${id}`,
+});
+
+const userItem = (text: string): WireItem => ({
+  type: "message",
+  role: "user",
+  content: [{ type: "input_text", text }],
+});
+
+const assistantItem = (text: string): WireItem => ({
+  type: "message",
+  role: "assistant",
+  content: [{ type: "output_text", text }],
 });
 
 const errorReply = (status: number, body = "", headers: Record<string, string> = {}): Response =>
@@ -150,17 +191,17 @@ function echoTool(): { tool: Tool; seen: unknown[] } {
   return { tool, seen };
 }
 
-/** Content of the single `role:"tool"` message in a request body. */
-function toolMessageContent(body: WireBody): string {
-  const message = body.messages.find((m) => m.role === "tool");
-  assert.ok(message, "request should carry a role:\"tool\" reply");
-  return String(message.content);
+/** Output of the single `function_call_output` item in a request body. */
+function toolOutput(body: WireBody): string {
+  const item = body.input.find((i) => i.type === "function_call_output");
+  assert.ok(item, "request should carry a function_call_output reply");
+  return String(item.output);
 }
 
 /** Run a one-round tool turn and hand back the request body the loop sent afterwards. */
 async function toolRoundRequestBody(
   tool: Tool,
-  toolCall: WireToolCall,
+  toolCall: WireItem,
   session = new FoundrySession(CONFIG, { tools: [tool] }),
 ): Promise<WireBody> {
   return withFetch(queue(toolReply(toolCall), textReply("done")), async ({ requests }) => {
@@ -180,16 +221,16 @@ test("plain turn returns the assistant text and sends no tools", async () => {
 
     assert.equal(requests.length, 1);
     const [request] = requests;
-    assert.equal(request.url, COMPLETIONS_URL);
+    assert.equal(request.url, RESPONSES_URL);
     assert.equal(request.headers["api-key"], API_KEY);
     assert.equal(request.headers.Authorization, `Bearer ${API_KEY}`);
     assert.equal(request.headers["Content-Type"], "application/json");
 
     assert.equal(request.body.model, "gpt-5.3-codex");
-    assert.deepEqual(request.body.messages, [
-      { role: "system", content: "You are a test." },
-      { role: "user", content: "hello" },
-    ]);
+    assert.equal(request.body.instructions, "You are a test.");
+    assert.equal(request.body.store, false, "history stays local — nothing is stored server-side");
+    assert.deepEqual(request.body.include, ["reasoning.encrypted_content"]);
+    assert.deepEqual(request.body.input, [userItem("hello")]);
     assert.ok(!("tools" in request.body), "no tools key when the session has no tools");
     assert.ok(!("tool_choice" in request.body), "no tool_choice when the session has no tools");
   });
@@ -208,28 +249,30 @@ test("tool round parses arguments, replies in band, and returns the follow-up te
   await withFetch(queue(toolReply(toolCall), textReply("all done")), async ({ requests }) => {
     assert.equal(await session.sendAndWait("turn 1", 5_000), "all done");
 
-    // The tool advertisement rides on every request of the turn.
+    // The tool advertisement rides on every request of the turn — flat, not nested.
     assert.deepEqual(requests[0].body.tools, [
       {
         type: "function",
-        function: {
-          name: "echo",
-          description: "Echo the message back.",
-          parameters: tool.parameters,
-        },
+        name: "echo",
+        description: "Echo the message back.",
+        parameters: tool.parameters,
+        strict: false,
       },
     ]);
     assert.equal(requests[0].body.tool_choice, "auto");
+    assert.equal(requests[0].body.parallel_tool_calls, false);
 
     // The handler sees parsed arguments, never the raw JSON string.
     assert.deepEqual(seen, [{ message: "hi" }]);
 
     assert.equal(requests.length, 2);
-    assert.deepEqual(requests[1].body.messages, [
-      { role: "system", content: "You are a test." },
-      { role: "user", content: "turn 1" },
-      { role: "assistant", content: null, tool_calls: [toolCall] },
-      { role: "tool", tool_call_id: "call_1", content: "echoed: hi" },
+    assert.equal(requests[1].body.instructions, "You are a test.");
+    assert.deepEqual(requests[1].body.input, [
+      userItem("turn 1"),
+      // The function_call item is echoed back verbatim…
+      toolCall,
+      // …and answered by a function_call_output carrying the same call_id.
+      { type: "function_call_output", call_id: "call_1", output: "echoed: hi" },
     ]);
   });
 });
@@ -251,16 +294,22 @@ test("images returned by a tool ride in as a user message after the tool replies
   };
 
   const body = await toolRoundRequestBody(tool, call("call_img", "get_shot", {}));
-  const roles = body.messages.map((m) => m.role);
-  assert.deepEqual(roles, ["user", "assistant", "tool", "user"]);
+  const types = body.input.map((i) => `${i.type}${i.role ? `:${i.role}` : ""}`);
+  assert.deepEqual(types, [
+    "message:user",
+    "function_call",
+    "function_call_output",
+    "message:user",
+  ]);
 
-  const image = body.messages[3];
-  const parts = image.content as { type: string; text?: string; image_url?: { url: string } }[];
+  const image = body.input[3];
+  const parts = image.content as { type: string; text?: string; image_url?: unknown }[];
   assert.equal(parts.length, 2);
-  assert.equal(parts[0].type, "text");
+  assert.equal(parts[0].type, "input_text");
   assert.equal(parts[0].text, "Images returned by get_shot (in order):\n1. the login screen");
-  assert.equal(parts[1].type, "image_url");
-  assert.equal(parts[1].image_url?.url, `data:image/jpeg;base64,${data}`);
+  assert.equal(parts[1].type, "input_image");
+  // `image_url` is a plain data-URI STRING on this API, not an object.
+  assert.equal(parts[1].image_url, `data:image/jpeg;base64,${data}`);
 });
 
 // --- 4. failure paths -------------------------------------------------------
@@ -274,7 +323,7 @@ test("a failing tool result is prefixed so the model can tell success from failu
   };
 
   const body = await toolRoundRequestBody(tool, call("call_fail", "save", {}));
-  assert.equal(toolMessageContent(body), "Tool failed: the disk is full");
+  assert.equal(toolOutput(body), "Tool failed: the disk is full");
 });
 
 test("a throwing handler answers in band instead of breaking the conversation", async () => {
@@ -288,13 +337,13 @@ test("a throwing handler answers in band instead of breaking the conversation", 
   };
 
   const body = await toolRoundRequestBody(tool, call("call_boom", "boom", {}));
-  assert.equal(toolMessageContent(body), "Tool boom failed: kaboom");
+  assert.equal(toolOutput(body), "Tool boom failed: kaboom");
 });
 
 test("an unknown tool name is answered with the list of available tools", async () => {
   const { tool } = echoTool();
   const body = await toolRoundRequestBody(tool, call("call_unknown", "nope", {}));
-  assert.equal(toolMessageContent(body), 'Unknown tool "nope". Available tools: echo.');
+  assert.equal(toolOutput(body), 'Unknown tool "nope". Available tools: echo.');
 });
 
 test("malformed tool arguments get a corrective reply asking for valid JSON", async () => {
@@ -302,9 +351,9 @@ test("malformed tool arguments get a corrective reply asking for valid JSON", as
   const body = await toolRoundRequestBody(tool, call("call_bad", "echo", "{not json"));
 
   assert.deepEqual(seen, [], "the handler must not run on unparseable arguments");
-  const content = toolMessageContent(body);
-  assert.match(content, /^Could not parse the arguments for echo as JSON \(/);
-  assert.match(content, /Call echo again with a valid JSON object as its arguments\.$/);
+  const output = toolOutput(body);
+  assert.match(output, /^Could not parse the arguments for echo as JSON \(/);
+  assert.match(output, /Call echo again with a valid JSON object as its arguments\.$/);
 });
 
 // --- 5. timeout + history rollback -----------------------------------------
@@ -316,11 +365,13 @@ test("a timed-out turn rejects and leaves no residue in the conversation", async
     tools: [tool],
   });
 
-  // Round 1 succeeds with a tool call; round 2 hangs until the deadline aborts it.
-  // That is the dangerous shape: an assistant `tool_calls` message plus its tool
-  // reply are already in the history when the turn dies.
+  // Round 1 succeeds with a reasoning item plus a tool call; round 2 hangs until the
+  // deadline aborts it. That is the dangerous shape: the echoed function_call, its
+  // reasoning item and the function_call_output are all in the history when the turn dies.
   const respond: Responder = (request, index) =>
-    index === 0 ? toolReply(call("call_1", "echo", { message: "hi" })) : hang(request, index);
+    index === 0
+      ? toolReply(reasoning("rs_doomed"), call("call_1", "echo", { message: "hi" }))
+      : hang(request, index);
 
   await withFetch(respond, async ({ requests }) => {
     await assert.rejects(
@@ -336,13 +387,11 @@ test("a timed-out turn rejects and leaves no residue in the conversation", async
   await withFetch(queue(textReply("recovered")), async ({ requests }) => {
     assert.equal(await session.sendAndWait("second", 5_000), "recovered");
     assert.deepEqual(
-      requests[0].body.messages,
-      [
-        { role: "system", content: "You are a test." },
-        { role: "user", content: "second" },
-      ],
-      "the failed turn's user/assistant/tool messages must all be rolled back",
+      requests[0].body.input,
+      [userItem("second")],
+      "the failed turn's user, reasoning, function_call and function_call_output items must all be rolled back",
     );
+    assert.equal(requests[0].body.instructions, "You are a test.");
   });
 });
 
@@ -467,7 +516,82 @@ test("the API key never leaks into a thrown error message", async () => {
   );
 });
 
-// --- 8. round cap -----------------------------------------------------------
+// --- 8. empty output --------------------------------------------------------
+
+test("a response with no output items is reported instead of returning empty text", async () => {
+  const session = new FoundrySession(CONFIG, {});
+
+  await withFetch(queue(okJson({ status: "completed", output: [] })), async () => {
+    await assert.rejects(
+      () => session.sendAndWait("hello", 10_000),
+      (err: Error) => {
+        assert.equal(err.message, "Azure AI Foundry returned no output.");
+        return true;
+      },
+    );
+  });
+});
+
+test("a 400 that rejects the reasoning include is resent without it, once, for good", async () => {
+  const session = new FoundrySession(CONFIG, {});
+  const rejectsInclude = errorReply(
+    400,
+    JSON.stringify({ error: { message: "Unknown parameter: 'include[0]'." } }),
+  );
+
+  await withFetch(queue(rejectsInclude, textReply("ok"), textReply("ok again")), async ({ requests }) => {
+    assert.equal(await session.sendAndWait("hello", 10_000), "ok");
+    assert.equal(requests.length, 2, "the resend does not consume a retry attempt");
+    assert.deepEqual(requests[0].body.include, ["reasoning.encrypted_content"]);
+    assert.ok(!("include" in requests[1].body), "the include is dropped on the resend");
+
+    // Remembered for the session — the next turn never asks for it again.
+    assert.equal(await session.sendAndWait("again", 10_000), "ok again");
+    assert.ok(!("include" in requests[2].body));
+  });
+});
+
+test("an unrelated 400 still surfaces the server's own message", async () => {
+  const session = new FoundrySession(CONFIG, {});
+
+  await withFetch(
+    queue(errorReply(400, JSON.stringify({ error: { message: "bad request" } }))),
+    async ({ requests }) => {
+      await assert.rejects(
+        () => session.sendAndWait("hello", 10_000),
+        /^Error: Azure AI Foundry request failed \(HTTP 400\): bad request$/,
+      );
+      assert.equal(requests.length, 1);
+    },
+  );
+});
+
+// --- 9. reasoning items -----------------------------------------------------
+
+test("reasoning items are echoed back verbatim on the next request", async () => {
+  const { tool } = echoTool();
+  const session = new FoundrySession(CONFIG, { tools: [tool] });
+  const thought = reasoning("rs_1");
+  const toolCall = call("call_1", "echo", { message: "hi" });
+
+  await withFetch(
+    queue(toolReply(thought, toolCall), textReply("done")),
+    async ({ requests }) => {
+      assert.equal(await session.sendAndWait("think", 5_000), "done");
+      assert.equal(requests.length, 2);
+      // `store: false` means the model only sees its own reasoning if we resend it —
+      // deep-equal, so nothing in the opaque item may be dropped or rewritten.
+      assert.deepEqual(requests[1].body.input, [
+        userItem("think"),
+        thought,
+        toolCall,
+        { type: "function_call_output", call_id: "call_1", output: "echoed: hi" },
+      ]);
+    },
+  );
+});
+
+// --- 10. round cap ----------------------------------------------------------
 
 test("a model that only ever calls tools is stopped by the round cap", async () => {
   const { tool } = echoTool();
@@ -490,7 +614,7 @@ test("a model that only ever calls tools is stopped by the round cap", async () 
   });
 });
 
-// --- 9. unconfigured client -------------------------------------------------
+// --- 11. unconfigured client ------------------------------------------------
 
 const CONFIG_ENV_VARS = [
   "SKILL_RECORDER_CONFIG_DIR",
@@ -551,7 +675,7 @@ test("FoundryClient.createSession auto-starts from the stored connection", async
 
     await withFetch(queue(textReply("ready")), async ({ requests }) => {
       assert.equal(await session.sendAndWait("hello", 5_000), "ready");
-      assert.equal(requests[0].url, COMPLETIONS_URL);
+      assert.equal(requests[0].url, RESPONSES_URL);
       assert.equal(requests[0].body.model, "gpt-5.3-codex");
     });
 
@@ -561,7 +685,7 @@ test("FoundryClient.createSession auto-starts from the stored connection", async
   });
 });
 
-// --- 10. single flight ------------------------------------------------------
+// --- 12. single flight ------------------------------------------------------
 
 test("a second turn while one is in flight is refused, and later turns still work", async () => {
   const session = new FoundrySession(CONFIG, {});
@@ -589,10 +713,10 @@ test("a second turn while one is in flight is refused, and later turns still wor
       // The latch clears, so the session is usable again.
       assert.equal(await session.sendAndWait("three", 10_000), "third");
       assert.equal(requests.length, 2, "the refused turn never reached the network");
-      assert.deepEqual(requests[1].body.messages, [
-        { role: "user", content: "one" },
-        { role: "assistant", content: "first" },
-        { role: "user", content: "three" },
+      assert.deepEqual(requests[1].body.input, [
+        userItem("one"),
+        assistantItem("first"),
+        userItem("three"),
       ]);
     },
   );

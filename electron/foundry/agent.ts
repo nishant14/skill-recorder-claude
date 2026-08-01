@@ -6,9 +6,30 @@ import { createLogger } from "../logger";
 import { loadFoundryConfig } from "./config";
 
 /**
- * A minimal agent runtime over the Azure AI Foundry (Azure OpenAI) chat-completions
- * API: one client that resolves the connection, sessions that own a conversation,
- * and a tool loop that runs our in-process tools until the model stops calling them.
+ * A minimal agent runtime over the Azure AI Foundry **Responses API**: one client that
+ * resolves the connection, sessions that own a conversation, and a tool loop that runs
+ * our in-process tools until the model stops calling them.
+ *
+ * **Why Responses and not chat-completions.** Gate G1 (the live smoke against the real
+ * `gpt-5.3-codex` deployment) found that every POST to `/openai/v1/chat/completions`
+ * comes back `HTTP 400 · "The requested operation is unsupported."` — this deployment
+ * exposes `/openai/v1/responses` only. So the transport speaks the Responses wire:
+ * a system prompt travels as top-level `instructions`, the conversation travels as an
+ * `input` item array, tools are **flat** (`{ type, name, description, parameters }`,
+ * no nested `function` object), tool replies are `function_call_output` items keyed by
+ * `call_id`, and images ride as `input_image` parts whose `image_url` is a plain data-URI
+ * string.
+ *
+ * **`store: false` on every request.** The conversation stays entirely in this process:
+ * nothing is persisted server-side, which keeps the privacy posture identical to the
+ * chat-completions build *and* keeps the rollback design intact — a failed turn is undone
+ * by truncating our own array, with no server state left pointing at it. The cost is that
+ * each request is stateless, so **every** output item the model returns (messages,
+ * `function_call`s, and the opaque `reasoning` items reasoning models like codex require
+ * back) is appended to the history verbatim and echoed on the next request. That is also
+ * why the body asks for `include: ["reasoning.encrypted_content"]` — without the encrypted
+ * payload a reasoning item cannot be re-submitted. If a deployment rejects that include
+ * value, the session drops it once and remembers (surface drift tolerance).
  *
  * The public surface deliberately mirrors the Copilot SDK's
  * (`start`/`createSession`/`sendAndWait`/`abort`/`disconnect`/`stop`) and its `Tool`
@@ -20,10 +41,12 @@ import { loadFoundryConfig } from "./config";
  *
  * Non-goals, deliberately deferred:
  * - **Streaming.** Nothing consumes token deltas; progress comes from tool callbacks.
+ * - **Server-side conversation state.** `store: false` + local history (see above).
  * - **History trimming/compaction.** Turns are already bounded (≤500 event rows per
  *   `get_events`, ≤6 images per `get_frames`, and the 32-round cap below).
  * - **Parallel tool execution.** Handlers share mutable in-process state (the frame
- *   extractor), so calls run sequentially in the order the model asked for them.
+ *   extractor), so calls run sequentially in the order the model asked for them —
+ *   `parallel_tool_calls: false` tells the model the same thing.
  * - **Entra ID auth.** Key auth only.
  */
 
@@ -44,7 +67,13 @@ const BACKOFF_MS = [1_000, 2_000];
 /** Never honor a `Retry-After` longer than this — the turn has its own deadline. */
 const MAX_RETRY_AFTER_MS = 30_000;
 
+/** Asked for so reasoning items come back re-submittable under `store: false`. */
+const REASONING_INCLUDE = "reasoning.encrypted_content";
+
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null;
 
 // --- tool contract (drop-in for the Copilot SDK's) --------------------------
 
@@ -75,7 +104,7 @@ export interface Tool {
 }
 
 export interface SessionOptions {
-  /** Seeded as the conversation's system message. */
+  /** Sent as the request's top-level `instructions`. */
   instructions?: string;
   tools?: Tool[];
   /** Deployment override; defaults to the client's configured deployment. */
@@ -84,39 +113,17 @@ export interface SessionOptions {
 
 // --- wire shapes ------------------------------------------------------------
 
-interface ChatTextPart {
-  type: "text";
-  text: string;
-}
+/**
+ * One item on the Responses `input`/`output` timeline. Deliberately open-ended: the
+ * deployment may return item types this build has never seen, and the contract is to
+ * carry them back verbatim rather than to understand them.
+ */
+type ResponseItem = Record<string, unknown>;
 
-interface ChatImagePart {
-  type: "image_url";
-  image_url: { url: string };
-}
-
-type ChatContentPart = ChatTextPart | ChatImagePart;
-
-interface ChatToolCall {
-  id: string;
-  type: "function";
-  function: { name: string; arguments: string };
-}
-
-interface ChatMessage {
-  role: "system" | "user" | "assistant" | "tool";
-  content: string | ChatContentPart[] | null;
-  tool_calls?: ChatToolCall[];
-  tool_call_id?: string;
-}
-
-interface ChatResponseMessage {
-  role?: string;
-  content?: string | null;
-  tool_calls?: ChatToolCall[];
-}
-
-interface ChatCompletionResponse {
-  choices?: { message?: ChatResponseMessage }[];
+interface ResponsesBody {
+  status?: unknown;
+  error?: unknown;
+  output?: unknown;
 }
 
 // --- client -----------------------------------------------------------------
@@ -164,16 +171,20 @@ export class FoundryClient {
 // --- session ----------------------------------------------------------------
 
 /**
- * One conversation. Owns its message history, runs one turn at a time, and executes
- * tool calls in process. History survives across turns so the feedback loop stays in
- * the same conversation; a failed turn is rolled back so it can't corrupt it.
+ * One conversation. Owns its item history, runs one turn at a time, and executes tool
+ * calls in process. History survives across turns so the feedback loop stays in the same
+ * conversation; a failed turn is rolled back so it can't corrupt it.
  */
 export class FoundrySession {
   private readonly config: FoundryConfig;
   private readonly tools: Tool[];
   private readonly toolsByName: Map<string, Tool>;
   private readonly model: string;
-  private readonly messages: ChatMessage[] = [];
+  private readonly instructions: string;
+  /** The `input` timeline: our items plus every output item echoed back verbatim. */
+  private readonly items: ResponseItem[] = [];
+  /** Cleared for the session's lifetime if the deployment rejects the include value. */
+  private includeReasoning = true;
   /** Non-null exactly while a turn is in flight (the single-flight latch). */
   private controller: AbortController | null = null;
   private closed = false;
@@ -183,8 +194,7 @@ export class FoundrySession {
     this.tools = options.tools ?? [];
     this.toolsByName = new Map(this.tools.map((t) => [t.name, t]));
     this.model = options.model?.trim() || config.deployment;
-    const instructions = options.instructions?.trim();
-    if (instructions) this.messages.push({ role: "system", content: instructions });
+    this.instructions = options.instructions?.trim() ?? "";
   }
 
   /**
@@ -192,17 +202,17 @@ export class FoundrySession {
    * calling tools. Resolves with the final assistant text.
    *
    * On **any** failure the history is rolled back to its pre-prompt length. Without
-   * that, a timed-out round can strand an assistant `tool_calls` message with no
-   * matching `role:"tool"` replies, and the API rejects (HTTP 400) every later
-   * request in the conversation — which would break "analysis times out → user
-   * sends feedback → same session".
+   * that, a timed-out round can strand a `function_call` item with no matching
+   * `function_call_output`, and the API rejects (HTTP 400) every later request in the
+   * conversation — which would break "analysis times out → user sends feedback → same
+   * session".
    */
   async sendAndWait(prompt: string, timeoutMs: number): Promise<string> {
     if (this.closed) throw new Error("This agent session has been closed.");
     if (this.controller) throw new Error("A turn is already running in this session.");
 
-    const historyLength = this.messages.length;
-    this.messages.push({ role: "user", content: prompt });
+    const historyLength = this.items.length;
+    this.items.push(userMessage([{ type: "input_text", text: prompt }]));
 
     const controller = new AbortController();
     this.controller = controller;
@@ -224,7 +234,7 @@ export class FoundrySession {
     } finally {
       clearTimeout(timer);
       this.controller = null;
-      if (!completed) this.messages.length = historyLength;
+      if (!completed) this.items.length = historyLength;
     }
   }
 
@@ -244,53 +254,59 @@ export class FoundrySession {
 
   private async runTurn(signal: AbortSignal): Promise<string> {
     for (let round = 0; round < MAX_ROUNDS_PER_TURN; round++) {
-      const message = await this.requestCompletion(signal);
-      const toolCalls = message.tool_calls ?? [];
-      // Echo the assistant message back into the history verbatim: the wire format
-      // requires the `tool_calls` we are about to answer to be present.
-      this.messages.push({
-        role: "assistant",
-        content: message.content ?? null,
-        ...(toolCalls.length ? { tool_calls: toolCalls } : {}),
-      });
-      if (toolCalls.length === 0) return message.content ?? "";
-      const imageMessages = await this.runToolCalls(toolCalls);
-      // Only now, once every tool_call_id has its reply, may other messages follow.
-      for (const imageMessage of imageMessages) this.messages.push(imageMessage);
+      const output = await this.requestResponse(signal);
+      // Echo every output item back into the history verbatim: `store: false` makes each
+      // request stateless, so the model only sees its own messages, function calls and
+      // (opaque) reasoning items if we send them again.
+      for (const item of output) this.items.push(item);
+
+      const calls = output.filter((item) => item.type === "function_call");
+      if (calls.length === 0) return outputText(output);
+
+      const imageMessages = await this.runToolCalls(calls);
+      // Only now, once every call_id has its output, may other items follow.
+      for (const imageMessage of imageMessages) this.items.push(imageMessage);
     }
     throw new Error(`The agent exceeded ${MAX_ROUNDS_PER_TURN} tool rounds in one turn.`);
   }
 
   /**
-   * Run one round's tool calls sequentially, appending a `role:"tool"` message per
-   * call. Every failure mode answers *in band* — an unknown tool, unparseable
-   * arguments, or a throwing handler become tool content the model can recover from,
-   * because dropping a reply would invalidate the whole conversation.
+   * Run one round's tool calls sequentially, appending a `function_call_output` item per
+   * call. Every failure mode answers *in band* — an unknown tool, unparseable arguments,
+   * or a throwing handler become tool output the model can recover from, because dropping
+   * a reply would invalidate the whole conversation.
    *
    * Returns the image-carrying user messages for the caller to append **after** all
-   * tool messages of the round.
+   * `function_call_output` items of the round.
    */
-  private async runToolCalls(calls: ChatToolCall[]): Promise<ChatMessage[]> {
-    const imageMessages: ChatMessage[] = [];
+  private async runToolCalls(calls: ResponseItem[]): Promise<ResponseItem[]> {
+    const imageMessages: ResponseItem[] = [];
     for (const call of calls) {
-      const name = call.function?.name ?? "";
+      const callId = callIdOf(call);
+      const name = typeof call.name === "string" ? call.name : "";
       const tool = this.toolsByName.get(name);
       if (!tool) {
-        this.reply(call, `Unknown tool "${name}". Available tools: ${this.toolNames()}.`);
+        this.reply(callId, `Unknown tool "${name}". Available tools: ${this.toolNames()}.`);
         continue;
       }
 
       let args: unknown;
-      const rawArgs = call.function?.arguments ?? "";
-      try {
-        args = rawArgs.trim() ? JSON.parse(rawArgs) : {};
-      } catch (err) {
-        this.reply(
-          call,
-          `Could not parse the arguments for ${name} as JSON (${msg(err)}). ` +
-            `Call ${name} again with a valid JSON object as its arguments.`,
-        );
-        continue;
+      const rawArgs = call.arguments;
+      if (isRecord(rawArgs)) {
+        // Tolerated drift: some surfaces hand back an already-parsed object.
+        args = rawArgs;
+      } else {
+        const text = typeof rawArgs === "string" ? rawArgs : "";
+        try {
+          args = text.trim() ? JSON.parse(text) : {};
+        } catch (err) {
+          this.reply(
+            callId,
+            `Could not parse the arguments for ${name} as JSON (${msg(err)}). ` +
+              `Call ${name} again with a valid JSON object as its arguments.`,
+          );
+          continue;
+        }
       }
 
       let result: ToolResult;
@@ -299,14 +315,14 @@ export class FoundrySession {
       } catch (err) {
         const text = `Tool ${name} failed: ${msg(err)}`;
         log.warn(text);
-        this.reply(call, text);
+        this.reply(callId, text);
         continue;
       }
 
       const object: ToolResultObject =
         typeof result === "string" ? { textResultForLlm: result } : result;
       const text = object.textResultForLlm ?? "";
-      this.reply(call, object.resultType === "failure" ? `Tool failed: ${text}` : text);
+      this.reply(callId, object.resultType === "failure" ? `Tool failed: ${text}` : text);
 
       const images = object.binaryResultsForLlm ?? [];
       if (images.length) imageMessages.push(imageUserMessage(name, images));
@@ -314,42 +330,39 @@ export class FoundrySession {
     return imageMessages;
   }
 
-  private reply(call: ChatToolCall, content: string): void {
-    this.messages.push({ role: "tool", tool_call_id: call.id, content });
+  private reply(callId: string, output: string): void {
+    this.items.push({ type: "function_call_output", call_id: callId, output });
   }
 
   private toolNames(): string {
     return this.tools.map((t) => t.name).join(", ") || "(none)";
   }
 
-  /** One POST (with retries) plus response validation. */
-  private async requestCompletion(signal: AbortSignal): Promise<ChatResponseMessage> {
-    const response = await this.post(this.requestBody(), signal);
-    let data: ChatCompletionResponse;
+  /** One POST (with retries) plus response validation; returns the output items. */
+  private async requestResponse(signal: AbortSignal): Promise<ResponseItem[]> {
+    const response = await this.post(signal);
+    let data: ResponsesBody;
     try {
-      data = (await response.json()) as ChatCompletionResponse;
+      data = (await response.json()) as ResponsesBody;
     } catch {
       throw new Error("Azure AI Foundry returned a response that could not be read as JSON.");
     }
-    const message = data?.choices?.[0]?.message;
-    if (!message) throw new Error("Azure AI Foundry returned no completion choices.");
-    return message;
+    // A 200 can still carry a failure (`status: "failed"` + `error`).
+    if (data?.error) throw new Error(responseErrorMessage(data.error));
+    const output = Array.isArray(data?.output) ? data.output.filter(isRecord) : [];
+    if (output.length === 0) throw new Error("Azure AI Foundry returned no output.");
+    return output;
   }
 
   /**
-   * Default route is the modern `/openai/v1` surface (deployment travels in the
-   * body); an explicitly configured `apiVersion` switches to the legacy data-plane
-   * route, which encodes the deployment in the path instead.
+   * The Responses route. `apiVersion` is an escape hatch that pins the surface version;
+   * it stays on the same path (the legacy `/openai/deployments/...` route has no
+   * `responses` operation).
    */
   private requestUrl(): string {
     const { endpoint, apiVersion } = this.config;
-    if (apiVersion) {
-      return (
-        `${endpoint}/openai/deployments/${encodeURIComponent(this.model)}/chat/completions` +
-        `?api-version=${encodeURIComponent(apiVersion)}`
-      );
-    }
-    return `${endpoint}/openai/v1/chat/completions`;
+    const url = `${endpoint}/openai/v1/responses`;
+    return apiVersion ? `${url}?api-version=${encodeURIComponent(apiVersion)}` : url;
   }
 
   /**
@@ -358,19 +371,28 @@ export class FoundrySession {
    * live smoke test demands them.
    */
   private requestBody(): Record<string, unknown> {
-    const body: Record<string, unknown> = { messages: this.messages };
-    if (!this.config.apiVersion) body.model = this.model;
+    const body: Record<string, unknown> = { model: this.model };
+    if (this.instructions) body.instructions = this.instructions;
+    body.input = this.items;
+    body.store = false;
     if (this.tools.length) {
+      // Flat function tools — the Responses API has no nested `function` object.
+      // `strict: false` because these are plain JSON Schemas, not strict-mode-complete.
       body.tools = this.tools.map((t) => ({
         type: "function",
-        function: { name: t.name, description: t.description, parameters: t.parameters },
+        name: t.name,
+        description: t.description,
+        parameters: t.parameters,
+        strict: false,
       }));
       body.tool_choice = "auto";
+      body.parallel_tool_calls = false;
     }
+    if (this.includeReasoning) body.include = [REASONING_INCLUDE];
     return body;
   }
 
-  private async post(body: Record<string, unknown>, signal: AbortSignal): Promise<Response> {
+  private async post(signal: AbortSignal): Promise<Response> {
     const url = this.requestUrl();
     // Both auth headers: the Azure OpenAI data plane reads `api-key`, the newer
     // Foundry surface reads the bearer token, and the two are the same key.
@@ -379,9 +401,11 @@ export class FoundrySession {
       "api-key": this.config.apiKey,
       Authorization: `Bearer ${this.config.apiKey}`,
     };
-    const payload = JSON.stringify(body);
 
-    for (let attempt = 1; ; attempt++) {
+    let attempt = 1;
+    for (;;) {
+      // Rebuilt per attempt: dropping `include` must change the payload we resend.
+      const payload = JSON.stringify(this.requestBody());
       let response: Response;
       try {
         response = await fetch(url, { method: "POST", headers, body: payload, signal });
@@ -394,9 +418,23 @@ export class FoundrySession {
         );
       }
       if (response.ok) return response;
+
+      // Surface drift: a deployment that does not know `reasoning.encrypted_content`
+      // rejects the whole request. Drop the include once and resend, then remember.
+      if (response.status === 400 && this.includeReasoning) {
+        const detail = await errorDetail(response);
+        if (/include/i.test(detail)) {
+          log.warn(`the deployment rejected include:["${REASONING_INCLUDE}"]; resending without it.`);
+          this.includeReasoning = false;
+          continue;
+        }
+        throw statusError(response.status, response.statusText, detail, this.model);
+      }
+
       if (RETRYABLE_STATUS.has(response.status) && attempt < MAX_ATTEMPTS) {
         log.warn(`HTTP ${response.status} from Azure AI Foundry; retrying (attempt ${attempt + 1}/${MAX_ATTEMPTS}).`);
         await delay(retryDelayMs(response, attempt), signal);
+        attempt += 1;
         continue;
       }
       throw await httpError(response, this.model);
@@ -406,20 +444,70 @@ export class FoundrySession {
 
 // --- helpers ----------------------------------------------------------------
 
+/** A `message` input item with the given parts. */
+function userMessage(content: Record<string, unknown>[]): ResponseItem {
+  return { type: "message", role: "user", content };
+}
+
 /**
- * The vision bridge. Tool messages are text-only on this API, so images returned by
- * a tool ride in as a following user message: one text part naming the source tool
- * and numbering the images, then one `image_url` part per image as a data URI.
+ * The vision bridge. `function_call_output` is text-only, so images returned by a tool
+ * ride in as a following user message: one `input_text` part naming the source tool and
+ * numbering the images, then one `input_image` part per image whose `image_url` is the
+ * data URI **as a plain string** (the Responses API does not wrap it in an object).
  */
-function imageUserMessage(toolName: string, images: ToolBinaryResult[]): ChatMessage {
+function imageUserMessage(toolName: string, images: ToolBinaryResult[]): ResponseItem {
   const lines = images.map((img, i) => `${i + 1}. ${img.description ?? "(no description)"}`);
-  const parts: ChatContentPart[] = [
-    { type: "text", text: [`Images returned by ${toolName} (in order):`, ...lines].join("\n") },
+  const parts: Record<string, unknown>[] = [
+    { type: "input_text", text: [`Images returned by ${toolName} (in order):`, ...lines].join("\n") },
   ];
   for (const img of images) {
-    parts.push({ type: "image_url", image_url: { url: `data:${img.mimeType};base64,${img.data}` } });
+    parts.push({ type: "input_image", image_url: `data:${img.mimeType};base64,${img.data}` });
   }
-  return { role: "user", content: parts };
+  return userMessage(parts);
+}
+
+/** `call_id` is what a `function_call_output` must reference; `id` is the fallback. */
+function callIdOf(call: ResponseItem): string {
+  if (typeof call.call_id === "string" && call.call_id) return call.call_id;
+  if (typeof call.id === "string" && call.id) return call.id;
+  return "";
+}
+
+/**
+ * The turn's answer: every `output_text` the model produced, in order. Read loosely —
+ * a `content` string, or parts carrying `text`, both count.
+ */
+function outputText(items: ResponseItem[]): string {
+  const texts: string[] = [];
+  for (const item of items) {
+    if (item.type !== "message") continue;
+    const content = item.content;
+    if (typeof content === "string") {
+      texts.push(content);
+      continue;
+    }
+    if (!Array.isArray(content)) continue;
+    for (const part of content) {
+      if (!isRecord(part)) continue;
+      if (typeof part.text !== "string") continue;
+      if (part.type === undefined || part.type === "output_text" || part.type === "text") {
+        texts.push(part.text);
+      }
+    }
+  }
+  return texts.join("");
+}
+
+/** Pull a user-facing message out of a response-level `error` of unknown shape. */
+function responseErrorMessage(error: unknown): string {
+  if (typeof error === "string" && error.trim()) return error.trim();
+  if (isRecord(error)) {
+    const message = error.message;
+    if (typeof message === "string" && message.trim()) return message.trim();
+    const code = error.code;
+    if (typeof code === "string" && code.trim()) return `Azure AI Foundry returned an error: ${code.trim()}`;
+  }
+  return "Azure AI Foundry returned an error with no details.";
 }
 
 /** The Error an aborted turn should surface (timeout message, or the cancel one). */
@@ -465,23 +553,26 @@ function retryDelayMs(response: Response, attempt: number): number {
  * them (the detail comes from the server's own body).
  */
 async function httpError(response: Response, model: string): Promise<Error> {
-  const detail = await errorDetail(response);
+  return statusError(response.status, response.statusText, await errorDetail(response), model);
+}
+
+function statusError(status: number, statusText: string, detail: string, model: string): Error {
   const suffix = detail ? ` ${detail}` : "";
-  if (response.status === 401 || response.status === 403) {
+  if (status === 401 || status === 403) {
     return new Error(
-      `Azure AI Foundry rejected the API key (HTTP ${response.status}). Check the connection settings.${suffix}`,
+      `Azure AI Foundry rejected the API key (HTTP ${status}). Check the connection settings.${suffix}`,
     );
   }
-  if (response.status === 404) {
+  if (status === 404) {
     return new Error(
       `Azure AI Foundry could not find the "${model}" deployment (HTTP 404). Check the endpoint and deployment name.${suffix}`,
     );
   }
-  if (response.status === 429) {
+  if (status === 429) {
     return new Error("Azure AI Foundry is rate-limiting requests (HTTP 429). Try again in a moment.");
   }
   return new Error(
-    `Azure AI Foundry request failed (HTTP ${response.status}): ${detail || response.statusText || "no details"}`,
+    `Azure AI Foundry request failed (HTTP ${status}): ${detail || statusText || "no details"}`,
   );
 }
 
