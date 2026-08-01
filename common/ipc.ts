@@ -1,5 +1,6 @@
 import type { Analysis, AnalysisFeedback, AnalysisStep, Confidence } from "./analysis";
 import type { AutomationPlan, BuiltAutomation } from "./automation";
+import type { FoundryConnectionInfo } from "./foundry";
 import type { MicrophoneDevice } from "./microphone";
 import type { NarrationLanguage } from "./narration";
 import type { BuiltSkill, SkillArchitecture, SkillPlan } from "./skill";
@@ -285,31 +286,46 @@ export interface DebugBundleResult {
   error?: string;
 }
 
-export interface CopilotInfo {
-  ok: boolean;
-  path: string | null;
+/* --- Azure AI Foundry connection ------------------------------------------ */
+
+/**
+ * Input from the in-app connection form. The API key is **write-only**: it travels
+ * main-ward in this payload and never comes back in any renderer-facing shape (the
+ * renderer only ever reads {@link FoundryConnectionInfo}).
+ */
+export interface FoundryConnectionInput {
+  endpoint: string;
+  apiKey: string;
+  /** Builders' deployment; blank keeps the release default. */
+  deployment?: string;
+  /** Describer's deployment; blank keeps the release default. */
+  describerDeployment?: string;
+  /** Narration transcription deployment; blank keeps the release default. */
+  transcriptionDeployment?: string;
 }
 
-/** Result of asking the app to open a terminal on the bundled CLI's sign-in command. */
-export interface CopilotSignInResult {
+/** Result of saving a connection: the post-save state, plus why a save was refused. */
+export interface FoundryConnectionResult {
   ok: boolean;
-  /** The exact command the terminal was asked to run, so the user can run it themselves. */
-  command?: string;
+  /** Key-free connection state after the attempt — always present. */
+  info: FoundryConnectionInfo;
+  /** Validation/write failure, verbatim from main; safe to render as-is. */
   error?: string;
 }
 
-/**
- * Message every Copilot-backed feature throws when the CLI has no stored credentials.
- * Skill Recorder ships its own Copilot CLI in `node_modules`, so there is usually no
- * global `copilot` command to run — the renderer matches this message to offer the
- * in-app sign-in affordance instead.
- */
-export const COPILOT_SIGNED_OUT_ERROR =
-  "GitHub Copilot isn't signed in on this computer yet. Sign in below, then try again.";
+/** Result of a live "test connection" round-trip against the main deployment. */
+export interface FoundryTestResult {
+  ok: boolean;
+  /** e.g. `Connected — gpt-5.3-codex answered in 1.2s`, or the failure's own message. */
+  message: string;
+}
 
-/** Whether an error from a Copilot-backed feature means "no credentials yet". */
-export function isCopilotSignedOutError(error?: string | null): boolean {
-  return typeof error === "string" && error.includes("isn't signed in on this computer");
+/** The doctor's view: the connection plus the two other resolved deployments. */
+export interface FoundryDoctorInfo extends FoundryConnectionInfo {
+  /** Resolved describer deployment (release default applied), or null when unconfigured. */
+  describerDeployment: string | null;
+  /** Resolved transcription deployment (release default applied), or null when unconfigured. */
+  transcriptionDeployment: string | null;
 }
 
 /** Which foreground-window provider is available on this platform. */
@@ -340,7 +356,7 @@ export interface DoctorSource {
 
 export interface DoctorReport {
   platform: NodeJS.Platform;
-  copilotCli: CopilotInfo;
+  foundry: FoundryDoctorInfo;
   activeWindow: ActiveWindowInfo;
   browserUrl: BrowserUrlInfo;
   sessionsDir: string;
@@ -362,7 +378,9 @@ export const IPC = {
   status: "recorder:status",
   marker: "recorder:marker",
   doctor: "doctor:check",
-  copilotSignIn: "copilot:sign-in",
+  foundryGetConnection: "foundry:get-connection",
+  foundrySaveConnection: "foundry:save-connection",
+  foundryTestConnection: "foundry:test-connection",
   statusChanged: "recorder:status-changed",
   recordingPrivacyReviewed: "recorder:privacy-reviewed",
   recordingPrivacyWarningRequested: "recorder:privacy-warning-requested",
@@ -417,17 +435,18 @@ export interface SkillRecorderApi {
   status(): Promise<RecorderStatus>;
   marker(note: string): Promise<MarkerResult>;
   doctor(): Promise<DoctorReport>;
-  /**
-   * Open a terminal window running the bundled Copilot CLI's `login` command, so the
-   * user can sign in without a globally installed `copilot`.
-   */
-  copilotSignIn(): Promise<CopilotSignInResult>;
+  /** The stored Azure AI Foundry connection, minus the key (which never comes back). */
+  getFoundryConnection(): Promise<FoundryConnectionInfo>;
+  /** Validate + persist a connection from the in-app form. */
+  saveFoundryConnection(input: FoundryConnectionInput): Promise<FoundryConnectionResult>;
+  /** One live round-trip against the configured deployment, to prove it works. */
+  testFoundryConnection(): Promise<FoundryTestResult>;
   onStatusChanged(cb: (status: RecorderStatus) => void): () => void;
   narrationStatus(): Promise<NarrationStatus>;
   downloadNarrationModel(): Promise<NarrationActionResult>;
   transcribeNarration(sessionId: string): Promise<NarrationActionResult>;
   onNarrationStatusChanged(cb: (status: NarrationStatus) => void): () => void;
-  /** Run the Copilot describer on a session (defaults to the last completed one). */
+  /** Run the describer on a session (defaults to the last completed one). */
   analyze(sessionId?: string): Promise<AnalyzeResult>;
   /** Send NL feedback and re-analyze in the same multi-turn session. */
   analyzeFeedback(input: AnalysisFeedbackInput): Promise<AnalyzeResult>;

@@ -1,16 +1,21 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Analysis, AnalysisStep } from "../common/analysis";
+import type { FoundryConnectionInfo } from "../common/foundry";
+import {
+  DEFAULT_FOUNDRY_DEPLOYMENT,
+  DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
+  DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+  isFoundryNotConfiguredError,
+} from "../common/foundry";
 import type {
   AnalyzeProgress,
   AutomationBuildProgress,
-  CopilotSignInResult,
   NarrationStatus,
   SessionSummary,
   SkillBuildProgress,
   SkillPlacement,
 } from "../common/ipc";
-import { isCopilotSignedOutError } from "../common/ipc";
 import type {
   BuildTarget,
   BuiltSkill,
@@ -402,40 +407,158 @@ function DebugDownload({ sessionId }: { sessionId: string }) {
 }
 
 /**
- * Error banner for the Copilot-backed panels. When the CLI has no credentials the app
- * offers to open a terminal on its *bundled* Copilot binary — there's no global
- * `copilot` command to send people to.
+ * Error banner for the Foundry-backed panels. When this computer has no connection
+ * stored yet, the banner *becomes* the connection form — the renderer affordance the
+ * "isn't configured" contract points at — so first run is "paste endpoint + key, Save,
+ * Analyze again" instead of hand-editing JSON. Every other error renders verbatim.
+ *
+ * The API key is write-only: it is typed here, sent main-ward, and never read back
+ * (`getFoundryConnection` is key-free by construction), so the field starts blank even
+ * when an endpoint is already stored.
  */
-function AnalysisError({ error }: { error: string }) {
-  const [signIn, setSignIn] = useState<CopilotSignInResult | null>(null);
-  const [opening, setOpening] = useState(false);
+function FoundryConnectionError({ error }: { error: string }) {
+  const needsConnection = isFoundryNotConfiguredError(error);
+  const [info, setInfo] = useState<FoundryConnectionInfo | null>(null);
+  const [endpoint, setEndpoint] = useState("");
+  const [apiKey, setApiKey] = useState("");
+  const [deployment, setDeployment] = useState(DEFAULT_FOUNDRY_DEPLOYMENT);
+  const [describerDeployment, setDescriberDeployment] = useState(
+    DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
+  );
+  const [transcriptionDeployment, setTranscriptionDeployment] = useState(
+    DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+  );
+  const [saving, setSaving] = useState(false);
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const [testing, setTesting] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
 
-  const openSignIn = async () => {
-    setOpening(true);
-    setSignIn(await window.skillRecorder.copilotSignIn());
-    setOpening(false);
+  useEffect(() => {
+    if (!needsConnection) return;
+    let live = true;
+    void window.skillRecorder.getFoundryConnection().then((next) => {
+      if (!live) return;
+      setInfo(next);
+      if (next.endpoint) setEndpoint(next.endpoint);
+      if (next.deployment) setDeployment(next.deployment);
+    });
+    return () => {
+      live = false;
+    };
+  }, [needsConnection]);
+
+  if (!needsConnection) return <div className="analysis-error">{error}</div>;
+
+  const save = async () => {
+    setSaving(true);
+    setSaved(false);
+    setSaveError(null);
+    setTestMessage(null);
+    const result = await window.skillRecorder.saveFoundryConnection({
+      endpoint,
+      apiKey,
+      deployment,
+      describerDeployment,
+      transcriptionDeployment,
+    });
+    setInfo(result.info);
+    setSaved(result.ok);
+    // Validation messages come from main written for the user — show them as they are.
+    setSaveError(result.ok ? null : (result.error ?? "Could not save the connection."));
+    setSaving(false);
   };
 
-  if (!isCopilotSignedOutError(error)) return <div className="analysis-error">{error}</div>;
+  const test = async () => {
+    setTesting(true);
+    setTestMessage(null);
+    const result = await window.skillRecorder.testFoundryConnection();
+    setTestMessage(result.message);
+    setTesting(false);
+  };
+
+  const busy = saving || testing;
 
   return (
     <div className="analysis-error">
       <p>{error}</p>
-      <div className="signin-row">
-        <button className="row-action" onClick={() => void openSignIn()} disabled={opening}>
-          {opening ? "Opening…" : "Sign in to Copilot"}
-        </button>
-        {signIn?.ok && (
-          <span>A terminal opened — finish signing in there, then try again.</span>
-        )}
-        {signIn && !signIn.ok && <span>{signIn.error ?? "Couldn't open a terminal."}</span>}
+      <div className="foundry-form">
+        <label className="foundry-field">
+          <span className="edit-label">Endpoint</span>
+          <input
+            value={endpoint}
+            placeholder="https://<resource>.services.ai.azure.com"
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setEndpoint(e.target.value)}
+          />
+        </label>
+        <label className="foundry-field">
+          <span className="edit-label">API key</span>
+          <input
+            type="password"
+            value={apiKey}
+            placeholder="Paste the resource key"
+            spellCheck={false}
+            autoComplete="off"
+            onChange={(e) => setApiKey(e.target.value)}
+          />
+        </label>
+        <details className="analyze-disclosure">
+          <summary>Deployments</summary>
+          <div className="foundry-form">
+            <label className="foundry-field">
+              <span className="edit-label">Skills and automations</span>
+              <input
+                value={deployment}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => setDeployment(e.target.value)}
+              />
+            </label>
+            <label className="foundry-field">
+              <span className="edit-label">Recording analysis</span>
+              <input
+                value={describerDeployment}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => setDescriberDeployment(e.target.value)}
+              />
+            </label>
+            <label className="foundry-field">
+              <span className="edit-label">Voice transcription</span>
+              <input
+                value={transcriptionDeployment}
+                spellCheck={false}
+                autoComplete="off"
+                onChange={(e) => setTranscriptionDeployment(e.target.value)}
+              />
+            </label>
+            <span className="edit-hint">
+              Leave these as they are unless your resource names its deployments differently.
+            </span>
+          </div>
+        </details>
       </div>
-      {signIn?.command && (
-        <>
-          <p className="signin-manual">Or run this command yourself:</p>
-          <code className="signin-command">{signIn.command}</code>
-        </>
-      )}
+
+      <div className="signin-row">
+        <button className="row-action" onClick={() => void save()} disabled={busy}>
+          {saving ? "Saving…" : "Save"}
+        </button>
+        <button
+          className="row-action"
+          onClick={() => void test()}
+          disabled={busy || !info?.configured}
+        >
+          {testing ? "Testing…" : "Test connection"}
+        </button>
+        {saved && <span>Saved — try Analyze again.</span>}
+        {saveError && <span>{saveError}</span>}
+        {testMessage && <span>{testMessage}</span>}
+      </div>
+
+      <p className="signin-manual">Or write the same values yourself into:</p>
+      <code className="signin-command">~/.skill-recorder/foundry.json</code>
     </div>
   );
 }
@@ -696,11 +819,11 @@ function AnalysisWorkspace({
               Analyze recording
             </button>
             <details className="analyze-disclosure">
-              <summary>What gets sent to GitHub Copilot</summary>
+              <summary>What gets sent for analysis</summary>
               <p>
                 Analyze sends the event timeline—including window and document titles, URLs,
                 and clipboard previews—plus extracted screen images, narration text, and other
-                content you provide to GitHub&apos;s cloud service for processing by GitHub Copilot.{" "}
+                content you provide to your Azure AI Foundry deployment for analysis.{" "}
                 <span className="cloud-analysis-caution">
                   Do not analyze a recording that may contain passwords, access tokens, API keys,
                   credentials, secrets, or other sensitive or confidential information.
@@ -727,7 +850,7 @@ function AnalysisWorkspace({
           </div>
         )}
 
-        {error && <AnalysisError error={error} />}
+        {error && <FoundryConnectionError error={error} />}
 
         {analysis && !analyzing && (
           <div className="ws-read">
@@ -1037,7 +1160,7 @@ function SkillBuilderView({
       </div>
 
       <div className="ws-body">
-        {error && <AnalysisError error={error} />}
+        {error && <FoundryConnectionError error={error} />}
 
         {phase === "loading" && (
           <div className="status-line">
@@ -1293,7 +1416,7 @@ function AutomationBuilderView({
       </div>
 
       <div className="ws-body">
-        {error && <AnalysisError error={error} />}
+        {error && <FoundryConnectionError error={error} />}
 
         {phase === "loading" && (
           <div className="status-line">

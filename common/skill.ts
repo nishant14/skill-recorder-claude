@@ -4,7 +4,7 @@ import { migrateLegacyInputsToValues, renderValues, ValueSchema } from "./values
 
 /**
  * The Skill Builder's contract. From an *approved* {@link Analysis} the multi-turn
- * Copilot agent first proposes a **plan** ({@link SkillPlan}) — how it will
+ * builder agent first proposes a **plan** ({@link SkillPlan}) — how it will
  * generalize the recorded task, what fixed values it needs, and which of the target
  * architecture's native tools it will use — which the user refines in natural
  * language. On confirmation the agent submits the final **built skill**

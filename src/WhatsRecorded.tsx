@@ -128,7 +128,7 @@ export function WhatsRecorded({
             <li>
               When you choose Analyze, the event timeline—including window and document titles,
               URLs, and clipboard previews—plus extracted screen images and narration text (if
-              recorded) are sent to GitHub&apos;s cloud service and processed by GitHub Copilot.
+              recorded) are sent to your Azure AI Foundry deployment for analysis.
             </li>
           </ul>
         </section>

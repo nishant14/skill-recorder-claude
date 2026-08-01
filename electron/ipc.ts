@@ -18,6 +18,9 @@ import type {
   AutomationPlanResult,
   DebugBundleResult,
   DeleteSessionResult,
+  FoundryConnectionInput,
+  FoundryConnectionResult,
+  FoundryTestResult,
   MicrophoneSettingsResult,
   SkillBuildInput,
   SkillCreateResult,
@@ -29,10 +32,11 @@ import type { AutomationPlan } from "../common/automation";
 import type { NarrationLanguage } from "../common/narration";
 import type { SkillPlan } from "../common/skill";
 import { AutomationBuilder, loadPersistedAutomation } from "./automationbuilder/builder";
-import { openCopilotSignIn } from "./copilot-signin";
 import { buildDebugInfo, writeDebugBundle } from "./debug-bundle";
 import { Describer, loadPersistedAnalysis } from "./describer/describer";
 import { runDoctor } from "./doctor";
+import { FoundryClient } from "./foundry/agent";
+import { foundryConnectionInfo, saveFoundryConfig } from "./foundry/config";
 import { createLogger } from "./logger";
 import type { AudioRecorder } from "./audio/recorder";
 import type { NarrationManager } from "./narration/manager";
@@ -42,6 +46,15 @@ import { deleteSession, listSessions } from "./sessions";
 import { loadPersistedSkill, SkillBuilder, type SkillTarget } from "./skillbuilder/builder";
 
 const log = createLogger("IPC");
+
+/**
+ * Deadline for the connection test's single round-trip. Short on purpose: this is a
+ * "does the key work" probe the user is watching, not an analysis run.
+ */
+const FOUNDRY_TEST_TIMEOUT_MS = 15_000;
+
+/** Prompt for the test round-trip — the cheapest turn that still proves the deployment answers. */
+const FOUNDRY_TEST_INSTRUCTIONS = "Reply with the single word: ok";
 
 /** Wire the renderer-facing invoke channels to the recorder, describer, builders + doctor. */
 export function registerIpc(
@@ -116,7 +129,62 @@ export function registerIpc(
   ipcMain.handle(IPC.status, () => recorder.status());
   ipcMain.handle(IPC.marker, (_event, note: string) => recorder.marker(note));
   ipcMain.handle(IPC.doctor, () => runDoctor());
-  ipcMain.handle(IPC.copilotSignIn, () => openCopilotSignIn());
+
+  ipcMain.handle(IPC.foundryGetConnection, () => foundryConnectionInfo());
+
+  ipcMain.handle(
+    IPC.foundrySaveConnection,
+    async (_event, input: FoundryConnectionInput): Promise<FoundryConnectionResult> => {
+      try {
+        saveFoundryConfig({
+          endpoint: input?.endpoint ?? "",
+          apiKey: input?.apiKey ?? "",
+          deployment: input?.deployment,
+          describerDeployment: input?.describerDeployment,
+          transcriptionDeployment: input?.transcriptionDeployment,
+        });
+        return { ok: true, info: foundryConnectionInfo() };
+      } catch (err) {
+        // saveFoundryConfig's messages are written for the user; the form shows them
+        // verbatim. Never log or echo the key.
+        const error = err instanceof Error ? err.message : String(err);
+        log.warn("save foundry connection failed:", error);
+        return { ok: false, info: foundryConnectionInfo(), error };
+      }
+    },
+  );
+
+  // One test at a time: the button is a live network call, and stacking them would
+  // bill for turns nobody is watching.
+  let foundryTestRunning = false;
+  ipcMain.handle(IPC.foundryTestConnection, async (): Promise<FoundryTestResult> => {
+    if (foundryTestRunning) return { ok: false, message: "A test is already running." };
+    foundryTestRunning = true;
+    // A throwaway client so the test always reads the *just-saved* connection rather
+    // than whatever the long-lived agent clients resolved at startup.
+    const client = new FoundryClient();
+    const startedAt = Date.now();
+    try {
+      const session = await client.createSession({ instructions: FOUNDRY_TEST_INSTRUCTIONS });
+      try {
+        await session.sendAndWait("ok", FOUNDRY_TEST_TIMEOUT_MS);
+      } finally {
+        await session.disconnect();
+      }
+      const seconds = ((Date.now() - startedAt) / 1000).toFixed(1);
+      return { ok: true, message: `Connected — ${client.deployment} answered in ${seconds}s` };
+    } catch (err) {
+      // The runtime's taxonomy messages ("rejected the API key…", "could not find the
+      // … deployment…") are already user-facing and key-free — pass them through.
+      const message = err instanceof Error ? err.message : String(err);
+      log.warn("foundry connection test failed:", message);
+      return { ok: false, message };
+    } finally {
+      await client.stop();
+      foundryTestRunning = false;
+    }
+  });
+
   ipcMain.handle(IPC.narrationStatus, () => narration.status());
   ipcMain.handle(IPC.narrationDownload, () => narration.downloadModel());
   ipcMain.handle(IPC.narrationTranscribe, (_event, sessionId: string) =>

@@ -54,8 +54,12 @@ export function Recorder() {
   }, []);
 
   useEffect(() => {
+    // Re-read on focus: the Foundry connection is saved in the Sessions window, and the
+    // user comes back here expecting the tile to agree. The doctor is offline, so this
+    // costs nothing.
+    const refreshDoctor = () => void window.skillRecorder.doctor().then(setDoctor);
     void window.skillRecorder.status().then(applyRecorderStatus);
-    void window.skillRecorder.doctor().then(setDoctor);
+    refreshDoctor();
     void window.skillRecorder.narrationStatus().then(setNarrationStatus);
     void window.skillRecorder.microphoneSettings().then(setMicrophoneSettings);
     void refreshCount();
@@ -63,10 +67,12 @@ export function Recorder() {
     const offNarration = window.skillRecorder.onNarrationStatusChanged(setNarrationStatus);
     const offMicrophones =
       window.skillRecorder.onMicrophoneSettingsChanged(setMicrophoneSettings);
+    window.addEventListener("focus", refreshDoctor);
     return () => {
       offRecorder();
       offNarration();
       offMicrophones();
+      window.removeEventListener("focus", refreshDoctor);
     };
   }, [applyRecorderStatus, refreshCount]);
 
@@ -508,9 +514,9 @@ export function Recorder() {
       {doctor && (
         <div className="doctor">
           <Row
-            label="GitHub Copilot"
-            status={doctor.copilotCli.ok ? "good" : "bad"}
-            note={doctor.copilotCli.ok ? "found" : "missing"}
+            label="Azure AI Foundry"
+            status={doctor.foundry.configured ? "good" : "bad"}
+            note={doctor.foundry.configured ? endpointHost(doctor.foundry.endpoint) : "not configured"}
           />
           {narrationStatus && <VoiceTranscriptionRow status={narrationStatus} />}
         </div>
@@ -534,6 +540,20 @@ export function Recorder() {
       )}
     </div>
   );
+}
+
+/**
+ * The doctor tile's note for a configured connection: the resource host, which is the
+ * part a user recognizes. Anything unparseable falls back to the raw string rather than
+ * throwing inside a render.
+ */
+function endpointHost(endpoint: string | null): string {
+  if (!endpoint) return "configured";
+  try {
+    return new URL(endpoint).host;
+  } catch {
+    return endpoint;
+  }
 }
 
 type RowStatus = "good" | "warn" | "bad";

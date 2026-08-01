@@ -1955,6 +1955,39 @@ button:focus-visible,
   user-select: text;
 }
 
+/* The Foundry connection form the error banner turns into when this computer has no
+   connection stored yet (src/Library.tsx). Fields only — the buttons reuse .signin-row
+   and .row-action, and the Deployments section reuses .analyze-disclosure. */
+.foundry-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.foundry-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.foundry-field input {
+  width: 100%;
+  background: var(--deck);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 12px;
+  padding: 6px 8px;
+  user-select: text;
+}
+
+.foundry-field input:focus {
+  outline: none;
+  border-color: var(--signal);
+}
+
 .ws-read {
   width: 100%;
   max-width: 640px;
@@ -2675,7 +2708,7 @@ button:focus-visible,
 
 /* ==========================================================================
    Read-first review tiles (src/plan-edit.tsx). Each gate reads as a calm report
-   of what Copilot proposed; a field becomes an input only when clicked. Controls
+   of what the agent proposed; a field becomes an input only when clicked. Controls
    (reorder / remove) are revealed on hover. No wall of text boxes by default.
    ========================================================================== */
 

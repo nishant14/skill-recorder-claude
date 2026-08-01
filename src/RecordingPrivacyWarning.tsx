@@ -60,7 +60,7 @@ export function RecordingPrivacyWarning({
         <p id="recording-warning-detail" className="recording-warning-detail">
           If you narrate, that voice recording is sent to your Azure AI Foundry deployment to be
           transcribed. For complete transparency, review exactly what&apos;s captured and what
-          may later be sent to GitHub Copilot for cloud analysis.
+          may later be sent to your Azure AI Foundry deployment for cloud analysis.
         </p>
 
         <div className="recording-warning-actions">

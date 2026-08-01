@@ -1,38 +1,54 @@
-import { execFileSync } from "node:child_process";
 import { existsSync } from "node:fs";
 import { createRequire } from "node:module";
 
 import { CAPTURE_SOURCES, FULL_CAPTURE } from "../common/config";
+import {
+  DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
+  DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+} from "../common/foundry";
 import type {
   ActiveWindowInfo,
   BrowserUrlInfo,
-  CopilotInfo,
   DoctorReport,
   DoctorSource,
+  FoundryDoctorInfo,
 } from "../common/ipc";
 import { browserUrlProviderKind } from "./collectors/url-provider";
-import { resolveCopilotCliPath } from "./copilot-cli-path";
+import { loadFoundryConfig } from "./foundry/config";
 import { sessionsRoot } from "./recorder/session-store";
 
 const require = createRequire(import.meta.url);
 
-function which(cmd: string): string | null {
-  try {
-    const finder = process.platform === "win32" ? "where" : "which";
-    const out = execFileSync(finder, [cmd], { encoding: "utf8" })
-      .trim()
-      .split(/\r?\n/)[0];
-    return out || null;
-  } catch {
-    return null;
+/**
+ * Whether this computer has a Foundry connection, and which deployments it resolves to.
+ * Deliberately **offline**: the doctor is read on every HUD paint, so it never touches
+ * the network — the live probe is the connection form's Test button. The API key is
+ * read but never reported.
+ */
+function checkFoundry(): FoundryDoctorInfo {
+  const loaded = loadFoundryConfig();
+  if (!loaded) {
+    return {
+      configured: false,
+      endpoint: null,
+      deployment: null,
+      source: null,
+      describerDeployment: null,
+      transcriptionDeployment: null,
+    };
   }
-}
-
-function checkCopilot(): CopilotInfo {
-  // The app ships its own Copilot CLI in node_modules, so a global `copilot` on PATH is
-  // optional — check the bundled binary first or one-liner installs look broken here.
-  const p = resolveCopilotCliPath() ?? which("copilot");
-  return { ok: Boolean(p), path: p ?? null };
+  const { config, source } = loaded;
+  return {
+    configured: true,
+    endpoint: config.endpoint,
+    deployment: config.deployment,
+    source,
+    // `loadFoundryConfig` already applies the defaults; the fallbacks keep this honest
+    // if the field ever becomes genuinely optional again.
+    describerDeployment: config.describerDeployment ?? DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
+    transcriptionDeployment:
+      config.transcriptionDeployment ?? DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+  };
 }
 
 function checkActiveWindow(): ActiveWindowInfo {
@@ -79,7 +95,7 @@ export function runDoctor(): DoctorReport {
 
   return {
     platform: process.platform,
-    copilotCli: checkCopilot(),
+    foundry: checkFoundry(),
     activeWindow: checkActiveWindow(),
     browserUrl,
     sessionsDir: sessionsRoot(),
