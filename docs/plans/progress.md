@@ -48,7 +48,7 @@ authoritative for *what to build*.
 | D | Retarget outputs to `copilot-studio` + `app` architectures | not started | G3 (exit of C + D) | — |
 | E | Packaging, install scripts, compliance, privacy copy | not started | G4 (exit of E) | — |
 | F | The gate ladder itself (verification strategy) | ladder defined; G0/G1 in force | G0–G5, G6 | see gate ledger below |
-| I | Cloud transcription on Foundry (retires local Whisper) — Phase 1, parallelizable after A | **implemented** (`0b38fab`; spec [`phase1i`](./foundry-codex-migration-phase1i.md)) | G6 — **3/4, blocked on deployment** | tests 111/111 (whisper tests out; +11 transcribe, +5 wav, +9 narration); smoke checks 1–3 PASS; check 4 → HTTP 404, no `gpt-4o-transcribe` deployment on the resource (user action) |
+| I | Cloud transcription on Foundry (retires local Whisper) — Phase 1, parallelizable after A | **done** (`0b38fab` + audio-route fix; spec [`phase1i`](./foundry-codex-migration-phase1i.md)) | G6 — **passed 4/4** | smoke 4/4 on 2026-08-01 vs `gpt-4o-transcribe`: known phrase round-tripped exactly ("Skill recorder test phrase."), `verbose_json→json` downgrade fired as designed; tests 124/124 |
 | G | Phase 2 — Copilot Studio declarative agent export | not started | G-phase gate TBD (real Copilot Studio import) | — |
 | H | Phase 2 — in-app skill runner on the Foundry deployment | not started | G-phase gate TBD (runner eval + safety UX) | — |
 
@@ -61,7 +61,7 @@ authoritative for *what to build*.
 | G2 | one live describer eval, `npm run eval -- --only=<slug>` | **PASSED 2026-08-01**: `directory-lookup` PASS, score 100%, 5 steps, 11.3s, full tool loop (`get_timeline` + `get_events` → `submit_analysis`) vs `gpt-5.3-codex` | human + credentials |
 | G3 | manual UI checklist (configure, bad-key path, analyze, build, install/export) + unit tests for the `scout→app` / `cowork→copilot-studio` schema migration | pending (exit of C + D) | human for the UI half; migration tests CI-able |
 | G4 | `npm run compliance:test` + a `npm run dist` build; packaged artifact contains no `@github/copilot*` | pending (exit of E) | CI-able |
-| G6 | transcription contract smoke — `scripts/foundry-smoke.ts` check 4: known-phrase clip round-trip (espeak-ng-generated), assert phrase + segment timestamps | **3/4 on 2026-08-01** — checks 1–3 PASS; check 4 FAIL HTTP 404: no `gpt-4o-transcribe` deployment on the resource. Blocked on a user-created transcription deployment; rerun the smoke after | human + credentials |
+| G6 | transcription contract smoke — `scripts/foundry-smoke.ts` check 4: known-phrase clip round-trip (espeak-ng-generated), assert phrase + segment timestamps | **PASSED 4/4, 2026-08-01** after the audio-route fix: the v1 audio route 404s (`DeploymentNotFound`) on this resource class — audio lives on the legacy route (`/openai/deployments/{d}/audio/transcriptions?api-version=2024-10-21`, probe-confirmed on three api-versions); transcript = "Skill recorder test phrase.", `verbose_json→json` downgrade exercised live | human + credentials |
 | G5 | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. the Copilot-era baseline, else absolute rubric thresholds | pending (pre-merge) | human + credentials |
 
 Standing rule: a measured result is recorded here **with its number and how it was

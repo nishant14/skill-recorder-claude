@@ -25,7 +25,12 @@ export async function transcribeWavOnFoundry(
   opts: { language?: string; signal?: AbortSignal },
 ): Promise<CloudTranscription>
 ```
-- `POST {endpoint}/openai/v1/audio/transcriptions` (+ `?api-version=` when configured).
+- ~~`POST {endpoint}/openai/v1/audio/transcriptions`~~ **Superseded at G6 (2026-08-01):**
+  the v1 audio route 404s on this resource class while chat/responses serves v1 — audio
+  still lives on the legacy data plane. The route of record is
+  `POST {endpoint}/openai/deployments/{deployment}/audio/transcriptions?api-version=…`
+  (pin `AUDIO_API_VERSION = "2024-10-21"`, `config.apiVersion` overrides); the code and
+  its tests are the contract.
   Multipart via global `FormData`/`Blob` (Node ≥22 — zero new deps): `file`
   (`narration.wav`, `audio/wav`), `model` = transcription deployment, `language` when
   set, `response_format: "verbose_json"` (segment timestamps).

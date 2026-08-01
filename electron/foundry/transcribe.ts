@@ -9,10 +9,22 @@ import { authHeaders, isRecord, postWithRetry } from "./http";
 /**
  * Speech-to-text against the user's Azure AI Foundry transcription deployment.
  *
- * One multipart `POST {endpoint}/openai/v1/audio/transcriptions` built from Node 22
- * globals (`fetch`/`FormData`/`Blob`) — **no new npm dependency** — sharing
- * `http.ts`'s retry policy and status→message taxonomy with the agent runtime, so
- * both surfaces fail identically and neither ever puts the key in a message or a log.
+ * One multipart POST built from Node 22 globals (`fetch`/`FormData`/`Blob`) — **no new
+ * npm dependency** — sharing `http.ts`'s retry policy and status→message taxonomy with
+ * the agent runtime, so both surfaces fail identically and neither ever puts the key in
+ * a message or a log.
+ *
+ * **Audio rides the legacy data plane, not `/openai/v1`.** A live probe on 2026-08-01
+ * against the real resource (`*.services.ai.azure.com`, deployment `gpt-4o-transcribe`)
+ * answered HTTP 404 `DeploymentNotFound` for every
+ * `POST {endpoint}/openai/v1/audio/transcriptions`, while the deployment-scoped route
+ * `POST {endpoint}/openai/deployments/{deployment}/audio/transcriptions?api-version=…`
+ * answered HTTP 200 (confirmed on `2024-10-21` GA plus the `2025-03-01-preview` and
+ * `2025-01-01-preview` previews). The two surfaces are versioned independently on this
+ * resource class: chat/agent traffic is served by v1 (`/openai/v1/responses`, see
+ * `agent.ts` — deliberately left alone), but the audio surface still lives only on the
+ * legacy plane. This mirrors the G1 outcome — where the plan text and the live wire
+ * differ, the code and its tests are the contract.
  *
  * The caller owns chunking: this transcribes exactly the WAV it is given and returns
  * timestamps relative to *that* WAV's start. `electron/narration/transcribe.ts` adds
@@ -20,6 +32,13 @@ import { authHeaders, isRecord, postWithRetry } from "./http";
  */
 
 const log = createLogger("Foundry/transcribe");
+
+/**
+ * The `api-version` the audio route is pinned to when the config does not name one.
+ * GA (not a preview) and probe-confirmed on the live resource; `config.apiVersion`
+ * stays the escape hatch for a user whose resource wants a different one.
+ */
+export const AUDIO_API_VERSION = "2024-10-21";
 
 /** One timestamped span of speech, relative to the start of the submitted WAV. */
 export interface CloudTranscriptionSegment {
@@ -71,7 +90,7 @@ export async function transcribeWavOnFoundry(
   const signal = opts.signal ?? new AbortController().signal;
 
   const response = await postWithRetry({
-    url: transcriptionUrl(config),
+    url: transcriptionUrl(config, model),
     endpoint: config.endpoint,
     model,
     signal,
@@ -101,12 +120,17 @@ export async function transcribeWavOnFoundry(
 // --- request ----------------------------------------------------------------
 
 /**
- * The audio route on the modern `/openai/v1` surface. `apiVersion` stays an escape
- * hatch that pins the surface version, exactly as in `agent.ts`.
+ * The deployment-scoped audio route on the legacy data plane — the only one this
+ * resource class serves (see the module docstring). `api-version` is always sent
+ * because the legacy plane requires it; `config.apiVersion` overrides the pinned
+ * {@link AUDIO_API_VERSION} when the user names one.
  */
-function transcriptionUrl(config: FoundryConfig): string {
-  const url = `${config.endpoint}/openai/v1/audio/transcriptions`;
-  return config.apiVersion ? `${url}?api-version=${encodeURIComponent(config.apiVersion)}` : url;
+function transcriptionUrl(config: FoundryConfig, deployment: string): string {
+  const version = config.apiVersion || AUDIO_API_VERSION;
+  return (
+    `${config.endpoint}/openai/deployments/${encodeURIComponent(deployment)}` +
+    `/audio/transcriptions?api-version=${encodeURIComponent(version)}`
+  );
 }
 
 function buildForm(wav: Uint8Array, model: string, language?: string): FormData {

@@ -252,7 +252,9 @@ runtime weight download that goes.
 
 ### I1. `electron/foundry/transcribe.ts` (new)
 
-- Direct multipart `POST {endpoint}/openai/v1/audio/transcriptions` using the existing
+- Direct multipart POST to the **legacy deployment-scoped audio route**
+  (`/openai/deployments/{d}/audio/transcriptions?api-version=…` — the v1 audio route
+  404s on this resource class; G6 finding, see the phase1i doc) using the existing
   `FoundryConfig` and the same header/error taxonomy as `agent.ts`. Node 22 globals
   (`fetch` / `FormData` / `Blob`) — **still zero new npm dependencies**.
 - New optional config field `transcriptionDeployment` (env

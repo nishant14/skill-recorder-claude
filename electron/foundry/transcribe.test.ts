@@ -4,6 +4,7 @@ import test, { beforeEach } from "node:test";
 import { DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT, type FoundryConfig } from "../../common/foundry";
 import { encodeWav } from "../audio/wav";
 import {
+  AUDIO_API_VERSION,
   resetTranscriptionFormatDowngrade,
   transcribeWavOnFoundry,
   transcriptionDeployment,
@@ -14,8 +15,11 @@ import {
  * for a scripted fake and restores it in a `finally`, so the file runs offline:
  * nothing here ever opens a socket.
  *
- * The assertions are about the **multipart request** we build and the taxonomy of
- * failures we map — those are the contract with the deployment. The `verbose_json`
+ * The assertions are about the **URL we post to** and the **multipart request** we
+ * build, plus the taxonomy of failures we map — those are the contract with the
+ * deployment. The URL is deployment-scoped on the *legacy* data plane rather than on
+ * `/openai/v1`, because a live probe showed the v1 audio route 404s on this resource
+ * class while chat/responses serves v1; see the module docstring. The `verbose_json`
  * → `json` downgrade gets its own tests because it is a tolerated surface drift
  * (the G1 precedent) that must happen exactly once and then be remembered.
  */
@@ -29,7 +33,12 @@ const CONFIG: FoundryConfig = {
   transcriptionDeployment: "gpt-4o-transcribe",
 };
 
-const URL = "https://unit.test.invalid/openai/v1/audio/transcriptions";
+/** The legacy, deployment-scoped audio route this module posts to. */
+const routeFor = (deployment: string, apiVersion: string = AUDIO_API_VERSION): string =>
+  `https://unit.test.invalid/openai/deployments/${deployment}` +
+  `/audio/transcriptions?api-version=${apiVersion}`;
+
+const URL = routeFor("gpt-4o-transcribe");
 
 /** One second of quiet 16 kHz mono audio — the bytes are irrelevant to the wire. */
 const WAV = encodeWav(new Float32Array(16_000), 16_000);
@@ -104,6 +113,14 @@ test("the request is multipart, timestamped, key-authenticated, and language-tag
 
       assert.equal(requests.length, 1);
       const [request] = requests;
+      // Deployment-scoped legacy route, `api-version` always present and pinned to the
+      // probe-confirmed GA version when the config does not name one.
+      assert.equal(AUDIO_API_VERSION, "2024-10-21");
+      assert.equal(
+        request.url,
+        "https://unit.test.invalid/openai/deployments/gpt-4o-transcribe" +
+          "/audio/transcriptions?api-version=2024-10-21",
+      );
       assert.equal(request.url, URL);
       // Both auth headers, and no hand-written Content-Type: fetch must derive it
       // from the FormData so the multipart boundary matches the body.
@@ -129,11 +146,22 @@ test("the request is multipart, timestamped, key-authenticated, and language-tag
   );
 });
 
-test("no language is sent when none was selected, and apiVersion pins the surface", async () => {
+test("no language is sent when none was selected, and apiVersion overrides the pin", async () => {
   await withFetch(queue(okJson({ text: "hi", segments: [] })), async ({ requests }) => {
-    await transcribeWavOnFoundry({ ...CONFIG, apiVersion: "2024-12-01-preview" }, WAV, {});
-    assert.equal(requests[0].url, `${URL}?api-version=2024-12-01-preview`);
+    await transcribeWavOnFoundry({ ...CONFIG, apiVersion: "2025-03-01-preview" }, WAV, {});
+    // A configured apiVersion replaces AUDIO_API_VERSION — it is never appended twice.
+    assert.equal(requests[0].url, routeFor("gpt-4o-transcribe", "2025-03-01-preview"));
+    assert.ok(!requests[0].url.includes(AUDIO_API_VERSION));
     assert.equal(requests[0].form.get("language"), null);
+  });
+});
+
+test("an odd deployment name is URL-encoded into the path", async () => {
+  await withFetch(queue(okJson({ text: "", segments: [] })), async ({ requests }) => {
+    await transcribeWavOnFoundry({ ...CONFIG, transcriptionDeployment: "my model/v2" }, WAV, {});
+    assert.equal(requests[0].url, routeFor("my%20model%2Fv2"));
+    // The raw name still rides the form field; only the path segment is escaped.
+    assert.equal(field(requests[0].form, "model"), "my model/v2");
   });
 });
 
@@ -147,6 +175,8 @@ test("the transcription deployment is separate from the chat deployment", async 
   );
   await withFetch(queue(okJson({ text: "", segments: [] })), async ({ requests }) => {
     await transcribeWavOnFoundry({ ...CONFIG, transcriptionDeployment: "whisper-1" }, WAV, {});
+    // It names the route as well as the form field: the legacy plane scopes by path.
+    assert.equal(requests[0].url, routeFor("whisper-1"));
     assert.equal(field(requests[0].form, "model"), "whisper-1");
   });
 });
