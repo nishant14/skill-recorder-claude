@@ -43,14 +43,6 @@ const expectedPayloads = [
     packagePath: `/@img/sharp-win32-${arch}/`,
     executable: `/@img/sharp-win32-${arch}/lib/sharp-win32-${arch}.node`,
   },
-  {
-    packagePath: `/onnxruntime-node/bin/napi-v6/win32/${arch}/`,
-    executable: `/onnxruntime-node/bin/napi-v6/win32/${arch}/onnxruntime_binding.node`,
-  },
-  {
-    packagePath: `/@github/copilot-win32-${arch}/`,
-    executable: `/@github/copilot-win32-${arch}/copilot.exe`,
-  },
 ];
 for (const payload of expectedPayloads) {
   if (!normalizedFiles.some((file) => file.includes(payload.packagePath))) {
@@ -68,9 +60,15 @@ const otherArch = arch === "arm64" ? "x64" : "arm64";
 const wrongArchitecturePayloads = [
   `/@koromix/koffi-win32-${otherArch}/`,
   `/@img/sharp-win32-${otherArch}/`,
-  `/@github/copilot-win32-${otherArch}/copilot.exe`,
 ];
-for (const wrongPayload of wrongArchitecturePayloads) {
+// The Copilot CLI/SDK and the local-ML stack left the dependency tree in Workstream E.
+// They are forbidden at any architecture, so a reintroduced payload fails packaging.
+const forbiddenPayloads = [
+  "/@github/copilot",
+  "/@huggingface/",
+  "/onnxruntime",
+];
+for (const wrongPayload of [...wrongArchitecturePayloads, ...forbiddenPayloads]) {
   if (normalizedFiles.some((file) => file.includes(wrongPayload))) {
     throw new Error(`Packaged ${arch} application contains ${wrongPayload}.`);
   }

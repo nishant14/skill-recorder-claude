@@ -3,9 +3,7 @@
 Skill Recorder can run directly from an exact source revision on Windows, macOS,
 or Ubuntu. These methods do not download a prebuilt Skill Recorder application.
 Node.js, Electron, and native dependencies are obtained directly from their
-publishers and assembled locally. The build still pulls the GitHub Copilot CLI
-package, which the app no longer uses at runtime (it is removed in an upcoming
-release).
+publishers and assembled locally.
 
 The generated build is for local execution only. Do not redistribute the build,
 `node_modules`, or downloaded runtimes. Release binaries must use the
@@ -52,8 +50,8 @@ The source installers:
    Electron's official checksum manifest matches the reviewed compliance policy.
 6. Run `npm run compliance:licenses` and fail if any installed platform package
    lacks reviewed legal material.
-7. Build locally, retain repository/dependency licenses, and record hashes for
-   the installed Electron and Copilot executables.
+7. Build locally, retain repository/dependency licenses, and record the hash of
+   the installed Electron executable.
 8. Create Start Menu **and** desktop shortcuts on Windows; a launcher plus a
    `Skill Recorder (Source)` app in `~/Applications` (reachable from Spotlight,
    Launchpad, and the Dock) on macOS; and a launcher plus desktop entry on Ubuntu.
@@ -252,18 +250,17 @@ not regenerate the lockfile during installation. Keep the entire checkout,
 ## Licensing boundary
 
 The source channels distribute this repository's MIT-licensed source. The
-user's package manager obtains Electron, Sharp/libvips, ONNX Runtime, the
-unmodified GitHub Copilot CLI, and other dependencies from their publishers.
+user's package manager obtains Electron, Sharp/libvips, and other dependencies
+from their publishers.
 The local build is not a redistributable application package.
 
 Each platform's compliance check retains:
 
 - `LICENSE` and `THIRD-PARTY-NOTICES.md`;
-- complete license files installed with npm packages, including the Copilot CLI
-  license;
+- complete license files installed with npm packages;
 - Electron and Chromium runtime notices;
 - canonical GPL, LGPL, and MPL texts under `.compliance/licenses`;
-- platform-specific Sharp/libvips and ONNX Runtime notices under `.compliance`;
+- platform-specific Sharp/libvips notices under `.compliance`;
 - an inventory with no unresolved dependency-license entries.
 
 Anyone redistributing a generated application must instead use the supported
@@ -315,7 +312,7 @@ The complete repeatable process is documented in
 5. Publish SHA-256 values for that commit's `install.ps1` and `install.sh`.
 6. Protect the release tag from movement or deletion.
 7. Test the one-line and inspect-first source paths on clean machines.
-8. Do not mirror or repackage Node.js, Electron, npm dependencies, or Copilot
-   binaries in the source-install channel.
+8. Do not mirror or repackage Node.js, Electron, or npm dependencies in the
+   source-install channel.
 9. For any prebuilt release, use `npm run dist*` and publish the complete,
    version-matched compliance materials.

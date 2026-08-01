@@ -1,7 +1,5 @@
 {
   "schemaVersion": 1,
-  "copilotCli": "1.0.71",
-  "copilotSdk": "1.0.7",
   "electron": {
     "version": "43.1.1",
     "ffmpegRevision": "ad41607c61898cf7150e0fb20fe4bbabd44922a3",
@@ -22,22 +20,11 @@
   "sharpLibvips": {
     "version": "1.2.4"
   },
-  "onnxruntime": {
-    "1.24.3": "v1.24.3",
-    "1.24.0-dev.20251116-b39e144322": "b39e144322",
-    "1.26.0-dev.20260416-b7804b056c": "b7804b056c"
-  },
   "remoteMaterials": {
     "gpl-3.0": "8ceb4b9ee5adedde47b31e975c1d90c73ad27b6b165a1dcd80c7c545eb65b903",
     "lgpl-2.1": "a9bdde5616ecdd1e980b44f360600ee8783b1f99b8cc83a2beb163a0a390e861",
     "lgpl-3.0": "a853c2ffec17057872340eee242ae4d96cbf2b520ae27d903e1b2fef1a5f9d1c",
-    "mpl-2.0": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5",
-    "onnxruntime-1.24.0-dev.20251116-b39e144322-license": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
-    "onnxruntime-1.24.0-dev.20251116-b39e144322-notices": "e9e90971a8e75a9a8ac0c6412e29c1202d079998389915aa485f46c816c3b4cc",
-    "onnxruntime-1.24.3-license": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
-    "onnxruntime-1.24.3-notices": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2",
-    "onnxruntime-1.26.0-dev.20260416-b7804b056c-license": "2f07c72751aed99790b8a4869cf2311df85a860b22ded05fa22803587a48922c",
-    "onnxruntime-1.26.0-dev.20260416-b7804b056c-notices": "0e07b95f3a8d6230037707c5c4a2b554d12c4cb67369669ac255635528ffcee2"
+    "mpl-2.0": "1f256ecad192880510e84ad60474eab7589218784b9a50bc7ceee34c2b91f1d5"
   },
   "sourceMaterials": {
     "electron": "9fa9a84bc0ee0aab5ec7f46de991dc55904e634fb566a75bb3f93599c861c46a",

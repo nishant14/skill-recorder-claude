@@ -7,14 +7,12 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import {
-  assertReviewedCopilotCliVersions,
   buildNativeSourceSpecs,
   deterministicGitConfigArgs,
   findPackageLicenseFiles,
   hasExpectedFileHeader,
   isLicenseFileName,
   legalTextSpecs,
-  onnxRefForVersion,
   reviewedSharpLibvipsLicenseEntry,
   reviewedMaterialHash,
   renderRelinking,
@@ -142,32 +140,16 @@ test("git archives ignore host line-ending and global attribute settings", () =>
   ]);
 });
 
-test("unreviewed ONNX versions fail closed", () => {
-  const policy = { onnxruntime: { "1.24.3": "v1.24.3" } };
-  assert.equal(onnxRefForVersion("1.24.3", policy), "v1.24.3");
-  assert.throws(
-    () => onnxRefForVersion("1.24.4", policy),
-    /has not been reviewed/,
-  );
-});
-
-test("unreviewed GitHub Copilot CLI versions fail closed", () => {
-  const reviewedLock = {
-    packages: {
-      "node_modules/@github/copilot": { version: "1.0.71" },
-      "node_modules/@github/copilot-win32-x64": { version: "1.0.71" },
-    },
-  };
-  assert.doesNotThrow(() =>
-    assertReviewedCopilotCliVersions(reviewedLock, "1.0.71"),
-  );
-
-  const changedLock = structuredClone(reviewedLock);
-  changedLock.packages["node_modules/@github/copilot-win32-x64"].version = "1.0.72";
-  assert.throws(
-    () => assertReviewedCopilotCliVersions(changedLock, "1.0.71"),
-    /have not been reviewed/,
-  );
+test("the purged Copilot and local-ML stack stays out of the dependency tree", async () => {
+  const [manifest, lock, viteConfig] = await Promise.all([
+    readFile(path.join(repoRoot, "package.json"), "utf8"),
+    readFile(path.join(repoRoot, "package-lock.json"), "utf8"),
+    readFile(path.join(repoRoot, "vite.config.ts"), "utf8"),
+  ]);
+  const purged = /@github\/copilot|@huggingface\/|onnxruntime/;
+  assert.doesNotMatch(manifest, purged);
+  assert.doesNotMatch(lock, purged);
+  assert.doesNotMatch(viteConfig, purged);
 });
 
 test("platform Sharp/libvips packages use the reviewed LGPL text", () => {
@@ -334,9 +316,7 @@ test("source and release instructions remain compliance-preserving", async () =>
   assert.match(windowsInstaller, /SHASUMS256\.txt/);
   assert.match(windowsInstaller, /Get-AuthenticodeSignature/);
   assert.match(windowsInstaller, /OpenJS Foundation/);
-  assert.match(windowsInstaller, /GitHub, Inc\\\./);
-  assert.match(windowsInstaller, /@github\\copilot\\LICENSE\.md/);
-  assert.match(windowsInstaller, /@github\\copilot-win32-\$architecture/);
+  assert.doesNotMatch(windowsInstaller, /copilot|onnxruntime|huggingface/i);
   assert.match(windowsInstaller, /node_modules\\electron\\dist\\LICENSES\.chromium\.html/);
   assert.match(windowsInstaller, /third_party\\compliance-policy\.json/);
   assert.match(windowsInstaller, /Assert-ReviewedElectronDistribution/);
@@ -396,7 +376,7 @@ test("source and release instructions remain compliance-preserving", async () =>
   assert.match(unixInstaller, /"\$NPM" run compliance:licenses/);
   assert.match(unixInstaller, /"\$NPM" run build/);
   assert.match(unixInstaller, /\.compliance\/licenses\/LGPL-3\.0\.txt/);
-  assert.match(unixInstaller, /@github\/copilot-\$\{PLATFORM\}-\$\{ARCHITECTURE\}/);
+  assert.doesNotMatch(unixInstaller, /copilot|onnxruntime|huggingface/i);
   assert.doesNotMatch(
     unixInstaller,
     /github\.com\/microsoft\/skill-recorder\/releases\/download/i,

@@ -508,7 +508,6 @@ $versionsRoot = Join-Path $InstallRoot "versions"
 $cacheRoot = Join-Path $InstallRoot "cache"
 $sourceDirectory = Join-Path $versionsRoot $Commit
 $metadataPath = Join-Path $sourceDirectory ".skill-recorder-install.json"
-$platformPackage = "@github\copilot-win32-$architecture"
 
 New-Item -ItemType Directory -Path $versionsRoot -Force | Out-Null
 
@@ -642,9 +641,6 @@ if (Test-Path -LiteralPath $sourceDirectory -PathType Container) {
     Assert-RequiredPaths -Root $buildDirectory -RelativePaths @(
       ".compliance\COMPLIANCE-README.md",
       ".compliance\THIRD-PARTY-LICENSES.txt",
-      ".compliance\onnxruntime",
-      "node_modules\@github\copilot\LICENSE.md",
-      "node_modules\$platformPackage\LICENSE.md",
       "node_modules\electron\dist\LICENSE",
       "node_modules\electron\dist\LICENSES.chromium.html",
       "dist",
@@ -652,11 +648,6 @@ if (Test-Path -LiteralPath $sourceDirectory -PathType Container) {
     )
 
     $buildElectron = Get-ElectronExecutable -SourceDirectory $buildDirectory
-    $buildCopilot = Join-Path $buildDirectory "node_modules\$platformPackage\copilot.exe"
-    Assert-TrustedSignature `
-      -Path $buildCopilot `
-      -PublisherPattern "GitHub, Inc\." `
-      -PublisherName "GitHub"
 
     $metadata = [ordered]@{
       schemaVersion = 1
@@ -692,8 +683,6 @@ Assert-RequiredPaths -Root $sourceDirectory -RelativePaths @(
   "THIRD-PARTY-NOTICES.md",
   ".compliance\COMPLIANCE-README.md",
   ".compliance\THIRD-PARTY-LICENSES.txt",
-  "node_modules\@github\copilot\LICENSE.md",
-  "node_modules\$platformPackage\LICENSE.md",
   "node_modules\electron\dist\LICENSE",
   "node_modules\electron\dist\LICENSES.chromium.html",
   "dist",
@@ -701,15 +690,10 @@ Assert-RequiredPaths -Root $sourceDirectory -RelativePaths @(
 )
 
 $electronExecutable = Get-ElectronExecutable -SourceDirectory $sourceDirectory
-$copilotExecutable = Join-Path $sourceDirectory "node_modules\$platformPackage\copilot.exe"
 $electronHash = (Get-FileHash -LiteralPath $electronExecutable -Algorithm SHA256).Hash.ToLowerInvariant()
 if ($electronHash -ne [string]$metadata.electronExecutableSha256) {
   throw "The installed Electron executable has changed since its checksum-verified download."
 }
-Assert-TrustedSignature `
-  -Path $copilotExecutable `
-  -PublisherPattern "GitHub, Inc\." `
-  -PublisherName "GitHub"
 
 $startMenuShortcut = $null
 $desktopShortcut = $null

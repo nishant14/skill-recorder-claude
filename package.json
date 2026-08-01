@@ -31,8 +31,6 @@
     "start": "electron ."
   },
   "dependencies": {
-    "@github/copilot-sdk": "^1.0.6",
-    "@huggingface/transformers": "^4.2.0",
     "archiver": "^7.0.1",
     "koffi": "^3.1.1",
     "react": "^19.2.5",
@@ -83,10 +81,7 @@
       "node_modules/sharp/**",
       "node_modules/@img/**",
       "node_modules/koffi/**",
-      "node_modules/@koromix/**",
-      "node_modules/@github/copilot-*/**",
-      "node_modules/@huggingface/transformers/**",
-      "node_modules/onnxruntime-node/**"
+      "node_modules/@koromix/**"
     ],
     "mac": {
       "icon": "build/icon.png",

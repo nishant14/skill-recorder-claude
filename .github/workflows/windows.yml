@@ -74,9 +74,12 @@ jobs:
             throw "Expected Node ${{ matrix.arch }}"
           }
           npm ci
-          node -e "require('sharp'); require('onnxruntime-node'); require('koffi')"
+          node -e "require('sharp'); require('koffi')"
           if (Select-String -Path package-lock.json -Pattern 'ffmpeg-static' -Quiet) {
             throw "ffmpeg-static remains in the lockfile"
+          }
+          if (Select-String -Path package-lock.json -Pattern '@github/copilot|@huggingface/|onnxruntime' -Quiet) {
+            throw "A purged Copilot or local-ML package remains in the lockfile"
           }
 
       - name: Generate license inventory

@@ -15,33 +15,11 @@ BlueOak-1.0.0) and compatible with distributing this application under MIT.
 Those components remain under their own terms; the generated
 `THIRD-PARTY-LICENSES.txt` preserves their license and attribution text.
 
-## Optional downloaded model
-
-### OpenAI Whisper small — `Xenova/whisper-small`
-- The multilingual model is downloaded from
-  [`Xenova/whisper-small`](https://huggingface.co/Xenova/whisper-small) only
-  after explicit user approval; its weights are not bundled with Skill Recorder.
-- The Transformers.js-compatible ONNX conversion is published by Xenova
-  (Joshua Lochner) from OpenAI's
-  [`openai/whisper-small`](https://huggingface.co/openai/whisper-small)
-  checkpoint.
-- The Hugging Face model metadata declares **Apache-2.0**. OpenAI's
-  [Whisper repository](https://github.com/openai/whisper) also states that its
-  code and model weights are released under the **MIT License**. The downloaded
-  model remains subject to its publisher's applicable terms and does not change
-  Skill Recorder's MIT license.
-
 ## Bundled runtime components
 
-### GitHub Copilot CLI — `@github/copilot` (+ platform binary `@github/copilot-<platform>-<arch>`)
-- License: **GitHub Copilot CLI License** (proprietary) — see
-  `node_modules/@github/copilot/LICENSE.md`.
-- Pulled in by `@github/copilot-sdk` (MIT) and spawned as a separate process.
-- Redistribution is permitted **only** as an unmodified copy bundled as part of
-  this application, with the license and all copyright/attribution notices
-  retained. The license explicitly states it does not restrict this
-  application's own license, including distribution under an open-source (MIT)
-  license.
+No speech model or local inference runtime ships with, or is downloaded by, Skill
+Recorder. Narration is transcribed and skills are derived by the user's own Azure
+AI Foundry deployment, which is not distributed with this application.
 
 ### Electron / Chromium media codecs
 - License: Electron is **MIT**. Its Chromium runtime includes `ffmpeg.dll`
@@ -79,13 +57,6 @@ Those components remain under their own terms; the generated
   fontconfig, FreeType, libpng, libtiff, zlib, and related permissive terms.
   The exact upstream table is distributed as
   `resources/compliance/NATIVE-THIRD-PARTY-NOTICES.md`.
-
-### ONNX Runtime
-
-`onnxruntime-node`, `onnxruntime-web`, and `onnxruntime-common` are MIT. Their npm
-packages omit standalone license and third-party-notice files, so exact notices
-from each pinned source revision are included under
-`resources/compliance/onnxruntime/`.
 
 ### Copyleft release materials
 

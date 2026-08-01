@@ -93,13 +93,11 @@ unavailable on this platform", or a reduced-capture notice).
 ## Packaging
 
 `package.json` configures electron-builder for macOS and Windows NSIS. Native
-modules (`koffi`, `@koromix/*`, `sharp`, `@img/*`,
-`@huggingface/transformers`, `onnxruntime-node`, and Copilot platform packages)
-are listed under `asarUnpack` so
-their binaries load from disk rather than from inside the asar archive. No speech
-model ships or downloads: narration is transcribed by the user's Azure AI Foundry
-deployment, so `@huggingface/transformers`, `onnxruntime-node`, and the Copilot
-platform packages are unused at runtime and leave the package in Workstream E.
+modules (`koffi`, `@koromix/*`, `sharp`, `@img/*`) are listed under `asarUnpack`
+so their binaries load from disk rather than from inside the asar archive. No
+speech model ships or downloads: narration is transcribed by the user's Azure AI
+Foundry deployment, and `scripts/verify-windows-package.mjs` fails the build if a
+`@github/copilot*`, `@huggingface/*`, or `onnxruntime*` payload reappears.
 
 Build each Windows installer on its matching native machine or CI runner so npm
 selects the correct optional packages:

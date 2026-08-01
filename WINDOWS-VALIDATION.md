@@ -11,8 +11,6 @@ and runs on GitHub's `windows-latest` and native `windows-11-arm` images.
 | Electron 43 | Yes | Yes | Official Electron archives |
 | Koffi / foreground-window FFI | Yes | Yes | Prebuilt N-API packages; no compiler |
 | Sharp / libvips | Yes | Yes | `@img/sharp-win32-*` packages |
-| ONNX Runtime | Yes | Yes | Both payloads ship in `onnxruntime-node` — **unused at runtime since transcription moved to Azure AI Foundry; removed in Workstream E** |
-| GitHub Copilot CLI | Yes | Yes | `@github/copilot-win32-*` packages — **unused at runtime; removed in Workstream E** |
 | TypeScript, Rolldown, Lightning CSS | Yes | Yes | Native development packages exist for both |
 | Standalone FFmpeg / `ffmpeg-static` | No | No | Chromium replaced all current media uses |
 | Electron `ffmpeg.dll` codec library | Yes | Yes | LGPL-2.1+; standard Electron component and notices |
@@ -42,11 +40,12 @@ Azure AI Foundry transcription deployment.
 For each Windows architecture, CI:
 
 1. Installs native Node 24 and runs `npm ci`.
-2. Loads Sharp, ONNX Runtime, and Koffi.
+2. Loads Sharp and Koffi.
 3. Runs unit tests and the production build.
 4. Builds the architecture-specific NSIS installer.
-5. Verifies the packaged PE machine type and the Sharp, ONNX, Koffi, and Copilot
-   payload architecture.
+5. Verifies the packaged PE machine type and the Sharp and Koffi payload
+   architecture, and that no `@github/copilot*`, `@huggingface/*`, or
+   `onnxruntime*` payload is present at any architecture.
 6. Inspects loose and `app.asar` paths, fails if `ffmpeg-static` or a standalone
    FFmpeg executable appears, and verifies Electron's codec DLL and license notices.
 
@@ -66,7 +65,7 @@ node scripts/verify-windows-package.mjs arm64
 Use `dist:win:x64` and `x64` for the x64 package. Building each installer on its
 native runner ensures npm selects the correct optional native packages. The package
 scripts reject cross-architecture builds instead of producing an installer containing
-host-architecture Koffi, Sharp, or Copilot binaries.
+host-architecture Koffi or Sharp binaries.
 
 ## Manual Windows ARM64 smoke test
 

@@ -127,14 +127,13 @@ the one-time warnings (e.g. the persistent-`undefined` watchdog, which prints th
 ## Packaging
 
 `package.json` configures electron-builder for macOS, Windows NSIS, and a Linux
-AppImage. Native modules (`koffi`, `@koromix/*`, `sharp`, `@img/*`,
-`@huggingface/transformers`, `onnxruntime-node`, and Copilot platform packages) are
-listed under `asarUnpack` so their binaries load from disk rather than from inside the
-asar archive. `build.linux.files` additionally excludes `node_modules/get-windows/**`,
-which Linux does not use. No speech model ships or downloads: narration is transcribed by
-the user's Azure AI Foundry deployment, so `@huggingface/transformers`,
-`onnxruntime-node`, and the Copilot platform packages are unused at runtime and leave the
-package in Workstream E.
+AppImage. Native modules (`koffi`, `@koromix/*`, `sharp`, `@img/*`) are listed under
+`asarUnpack` so their binaries load from disk rather than from inside the asar archive.
+`build.linux.files` additionally excludes `node_modules/get-windows/**`, which Linux does
+not use. No speech model ships or downloads: narration is transcribed by the user's Azure
+AI Foundry deployment, and `scripts/verify-linux-package.mjs` derives its payload
+manifest from `package.json`, so a reintroduced `@github/copilot*`, `@huggingface/*`, or
+`onnxruntime*` payload fails the build.
 
 Build the AppImage on a native x64 Linux machine or CI runner so npm selects the
 correct optional packages:

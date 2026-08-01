@@ -269,7 +269,7 @@ append) and `github-issue-triage-skill` (the gh-vs-browser case as a skill — m
 `gh`, forbid the browser, and drive the mutating comment/label actions), plus the four
 API-grounded variants (below). Three target
 **copilot-studio**, a hosted agent with **no shell, no filesystem, and no browser** —
-each asserts the right `Connector.Action` is reached for while playwright/`click`, the
+each asserts the right `Connector.Action` is reached while playwright/`click`, the
 web hosts, and any device-shell command (`bash`, `gh `) are forbidden:
 `copilot-studio-teams-digest` (read a channel then post via `Teams.*`),
 `copilot-studio-outlook-reply` (triage the mailbox then reply via `Outlook.*`), and

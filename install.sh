@@ -182,13 +182,10 @@ install_node_runtime() {
 
 required_install_files() {
   local source_directory="$1"
-  local copilot_package="@github/copilot-${PLATFORM}-${ARCHITECTURE}"
   local files="
 LICENSE
 THIRD-PARTY-NOTICES.md
 third_party/compliance-policy.json
-node_modules/@github/copilot/LICENSE.md
-node_modules/$copilot_package/LICENSE.md
 node_modules/electron/dist/LICENSE
 node_modules/electron/dist/LICENSES.chromium.html
 .compliance/COMPLIANCE-README.md
@@ -216,12 +213,6 @@ electron_executable() {
   fi
 }
 
-copilot_executable() {
-  local source_directory="$1"
-  printf '%s\n' \
-    "$source_directory/node_modules/@github/copilot-${PLATFORM}-${ARCHITECTURE}/copilot"
-}
-
 validate_existing_install() {
   local source_directory="$1"
   [ "$(cat "$source_directory/.skill-recorder-commit" 2>/dev/null || true)" = "$COMMIT" ] ||
@@ -231,15 +222,11 @@ validate_existing_install() {
   [ "$(cat "$source_directory/.skill-recorder-lock-sha256" 2>/dev/null || true)" = "$lock_hash" ] ||
     die "The existing installation's package-lock.json has changed."
 
-  local electron copilot
+  local electron
   electron="$(electron_executable "$source_directory")"
-  copilot="$(copilot_executable "$source_directory")"
   [ -x "$electron" ] || die "The installed Electron executable is missing."
-  [ -x "$copilot" ] || die "The installed GitHub Copilot CLI is missing."
   [ "$(cat "$source_directory/.skill-recorder-electron-sha256")" = "$(sha256_file "$electron")" ] ||
     die "The installed Electron executable has changed."
-  [ "$(cat "$source_directory/.skill-recorder-copilot-sha256")" = "$(sha256_file "$copilot")" ] ||
-    die "The installed GitHub Copilot CLI has changed."
   required_install_files "$source_directory"
 }
 
@@ -306,23 +293,18 @@ build_source_install() {
   [ "$(cat node_modules/electron/dist/version)" = "$electron_version" ] ||
     die "The installed Electron runtime version is not $electron_version."
 
-  local copilot_package="@github/copilot-${PLATFORM}-${ARCHITECTURE}"
   for required in \
     LICENSE \
     THIRD-PARTY-NOTICES.md \
     third_party/compliance-policy.json \
-    node_modules/@github/copilot/LICENSE.md \
-    "node_modules/$copilot_package/LICENSE.md" \
     node_modules/electron/dist/LICENSE \
     node_modules/electron/dist/LICENSES.chromium.html; do
     [ -f "$required" ] || die "Dependency installation is missing required legal file: $required."
   done
 
-  local electron copilot
+  local electron
   electron="$(electron_executable "$STAGING_DIR")"
-  copilot="$(copilot_executable "$STAGING_DIR")"
   [ -x "$electron" ] || die "Electron did not install its native executable."
-  [ -x "$copilot" ] || die "GitHub Copilot CLI did not install its native executable."
   if [ "$PLATFORM" = "linux" ] && have ldd; then
     local missing_libraries
     missing_libraries="$(ldd "$electron" | awk '/not found/ { print $1 }')"
@@ -352,7 +334,6 @@ build_source_install() {
   printf '%s\n' "$COMMIT" > .skill-recorder-commit
   sha256_file package-lock.json > .skill-recorder-lock-sha256
   sha256_file "$electron" > .skill-recorder-electron-sha256
-  sha256_file "$copilot" > .skill-recorder-copilot-sha256
 
   [ ! -e "$source_directory" ] ||
     die "Installation directory appeared while building: $source_directory."

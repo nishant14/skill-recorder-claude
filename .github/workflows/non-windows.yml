@@ -144,9 +144,13 @@ jobs:
       - name: Install native dependencies
         run: |
           npm ci
-          node -e "require('sharp'); require('onnxruntime-node'); require('koffi')"
+          node -e "require('sharp'); require('koffi')"
           if grep -q 'ffmpeg-static' package-lock.json; then
             echo "ffmpeg-static remains in the lockfile" >&2
+            exit 1
+          fi
+          if grep -qE '@github/copilot|@huggingface/|onnxruntime' package-lock.json; then
+            echo "A purged Copilot or local-ML package remains in the lockfile" >&2
             exit 1
           fi
 

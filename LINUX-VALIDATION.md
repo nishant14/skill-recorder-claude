@@ -21,18 +21,15 @@ session and reports it honestly in the doctor rows instead of emitting partial d
 | Koffi FFI | Yes | `@koromix/koffi-linux-x64/linux_x64/koffi.node` prebuild; no compiler |
 | Sharp | Yes | `@img/sharp-linux-x64/lib/sharp-linux-x64.node` |
 | libvips | Yes | `@img/sharp-libvips-linux-x64/lib/libvips-cpp.so.*` |
-| ONNX Runtime | Yes | `onnxruntime-node/bin/napi-v6/linux/x64/` — **until Workstream E** |
-| `@huggingface/transformers` | Yes | Pure JS over ONNX Runtime — **until Workstream E** |
-| GitHub Copilot CLI | Yes | `@github/copilot-linux-x64/copilot` — **until Workstream E** |
 | `get-windows` | No | Excluded from the Linux package; Linux uses the in-repo X11 provider |
 | Standalone FFmpeg / `ffmpeg-static` | No | Chromium replaced all current media uses |
 
 `scripts/verify-linux-package.mjs` derives the expected native payload set from
 `package.json` **at verify time**. A payload is required while its declaring dependency
-is present and forbidden once that dependency is removed, so the three rows marked
-"until Workstream E" flip from *required* to *forbidden* automatically when
+is present and forbidden once that dependency is removed. Workstream E removed
 `@github/copilot-sdk`, `@huggingface/transformers`, and (transitively)
-`onnxruntime-node` leave `dependencies`. No verifier edit is needed.
+`onnxruntime-node` from `dependencies`, so their payloads are now forbidden with no
+verifier edit.
 
 `get-windows` remains an optional dependency for macOS only. Its Linux code path is
 plain JavaScript shelling out to `xprop`, yet the package compiles a native macOS
@@ -98,7 +95,7 @@ node scripts/verify-linux-package.mjs x64
 
 `dist:linux:x64` rejects cross-platform and cross-architecture builds
 (`scripts/assert-native-linux-arch.mjs`) instead of producing an AppImage containing
-host-platform Koffi, Sharp, or Copilot binaries.
+host-platform Koffi or Sharp binaries.
 
 ## Manual smoke checklist
 

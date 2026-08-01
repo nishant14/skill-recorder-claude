@@ -251,15 +251,6 @@ export async function hasExpectedFileHeader(fileName, file) {
   }
 }
 
-export function onnxRefForVersion(version, policy) {
-  const configured = policy.onnxruntime?.[version];
-  if (configured) return configured;
-  throw new Error(
-    `ONNX Runtime ${version} has not been reviewed. Add its exact source ref to ` +
-      "third_party/compliance-policy.json.",
-  );
-}
-
 export function reviewedMaterialHash(id, hashes, kind) {
   const hash = hashes?.[id];
   if (/^[a-f0-9]{64}$/.test(hash ?? "")) return hash;
@@ -479,7 +470,6 @@ export async function prepareCompliance({
   const remoteMaterials = await prepareRemoteMaterials({
     outputDir,
     rootDir,
-    packages,
     policy,
     fetchImpl,
   });
@@ -702,8 +692,6 @@ function collectProductionPackages(rootDir, lock) {
 }
 
 function validateReviewedVersions(packages, lock, policy) {
-  assertInstalledVersion(packages, "@github/copilot-sdk", policy.copilotSdk);
-  assertReviewedCopilotCliVersions(lock, policy.copilotCli);
   assertInstalledVersion(packages, "sharp", policy.sharp);
 
   const electronVersion = lock.packages?.["node_modules/electron"]?.version;
@@ -726,31 +714,6 @@ function validateReviewedVersions(packages, lock, policy) {
       `Sharp/libvips package versions have not been reviewed: ${[
         ...sharpLibvipsVersions,
       ].join(", ")}.`,
-    );
-  }
-
-  for (const pkg of packages.filter(({ name }) => name.startsWith("onnxruntime-"))) {
-    onnxRefForVersion(pkg.version, policy);
-  }
-}
-
-export function assertReviewedCopilotCliVersions(lock, expected) {
-  const versions = new Set(
-    Object.entries(lock.packages ?? {})
-      .filter(
-        ([lockPath]) =>
-          lockPath === "node_modules/@github/copilot" ||
-          /^node_modules\/@github\/copilot-(?:darwin|linux|linuxmusl|win32)-/.test(
-            lockPath,
-          ),
-      )
-      .map(([, entry]) => entry.version),
-  );
-  if (versions.size !== 1 || !versions.has(expected)) {
-    throw new Error(
-      `GitHub Copilot CLI versions have not been reviewed: ${
-        [...versions].join(", ") || "(missing)"
-      }; expected ${expected}.`,
     );
   }
 }
@@ -801,26 +764,8 @@ function buildLicenseInventory(rootDir, packages, policy) {
       };
     }
 
-    if (pkg.name === "@github/copilot-sdk") {
-      if (pkg.version !== policy.copilotSdk) {
-        throw new Error(`No reviewed Copilot SDK license override exists for ${pkg.version}.`);
-      }
-      return overrideEntry(
-        pkg,
-        path.join(rootDir, "third_party", "package-licenses", "github-copilot-sdk-MIT.txt"),
-      );
-    }
-
     if (pkg.name.startsWith("@img/sharp-libvips-")) {
       return reviewedSharpLibvipsLicenseEntry(pkg, policy);
-    }
-
-    if (pkg.name.startsWith("onnxruntime-")) {
-      onnxRefForVersion(pkg.version, policy);
-      return overrideEntry(
-        pkg,
-        path.join(rootDir, "third_party", "package-licenses", "onnxruntime-MIT.txt"),
-      );
     }
 
     if (pkg.license === "MIT") {
@@ -857,18 +802,6 @@ export function reviewedSharpLibvipsLicenseEntry(pkg, policy) {
       "bundle at licenses/LGPL-3.0.txt. Native dependency notices and corresponding",
       "source are identified separately in the same bundle.",
     ].join("\n"),
-  };
-}
-
-function overrideEntry(pkg, file) {
-  if (!existsSync(file)) throw new Error(`Missing reviewed license override ${file}.`);
-  return {
-    name: pkg.name,
-    version: pkg.version,
-    license: pkg.license,
-    packagePath: pkg.lockPath,
-    licenseSource: path.relative(repositoryRoot, file).replaceAll("\\", "/"),
-    text: readFileSync(file, "utf8").trim(),
   };
 }
 
@@ -961,47 +894,11 @@ function collectNativeComponents(packages) {
   };
 }
 
-async function prepareRemoteMaterials({
-  outputDir,
-  rootDir,
-  packages,
-  policy,
-  fetchImpl,
-}) {
+async function prepareRemoteMaterials({ outputDir, rootDir, policy, fetchImpl }) {
   const specs = legalTextSpecs.map((spec) => ({
     ...spec,
     outputPath: `licenses/${spec.fileName}`,
   }));
-
-  const onnxVersions = [
-    ...new Set(
-      packages
-        .filter(({ name }) => name.startsWith("onnxruntime-"))
-        .map(({ version }) => version),
-    ),
-  ].sort();
-  for (const version of onnxVersions) {
-    const ref = onnxRefForVersion(version, policy);
-    const safeVersion = version.replaceAll(/[^A-Za-z0-9._-]/g, "_");
-    specs.push(
-      {
-        id: `onnxruntime-${version}-license`,
-        fileName: `onnxruntime-${safeVersion}-LICENSE.txt`,
-        outputPath: `onnxruntime/onnxruntime-${safeVersion}-LICENSE.txt`,
-        url: `https://raw.githubusercontent.com/microsoft/onnxruntime/${ref}/LICENSE`,
-        marker: "MIT License",
-      },
-      {
-        id: `onnxruntime-${version}-notices`,
-        fileName: `onnxruntime-${safeVersion}-ThirdPartyNotices.txt`,
-        outputPath: `onnxruntime/onnxruntime-${safeVersion}-ThirdPartyNotices.txt`,
-        url:
-          `https://raw.githubusercontent.com/microsoft/onnxruntime/${ref}/` +
-          "ThirdPartyNotices.txt",
-        marker: "THIRD PARTY SOFTWARE NOTICES AND INFORMATION",
-      },
-    );
-  }
 
   return mapLimit(specs, 4, async (spec) => {
     const target = path.join(outputDir, ...spec.outputPath.split("/"));
@@ -1366,7 +1263,6 @@ function renderComplianceReadme(includeSources) {
     "",
     "- `THIRD-PARTY-LICENSES.txt` contains per-package license and attribution text.",
     "- `NATIVE-THIRD-PARTY-NOTICES.md` identifies libraries embedded in native payloads.",
-    "- `onnxruntime/` contains exact ONNX Runtime third-party notices.",
     includeSources
       ? "- `electron/` contains the exact Electron and Chromium notices from this build."
       : "- Electron notices are added when a redistributable build is prepared.",
