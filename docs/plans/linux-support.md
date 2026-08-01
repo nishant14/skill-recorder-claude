@@ -1,5 +1,9 @@
 # Full Linux support (Ubuntu-validated) for Skill Recorder
 
+Status: **L1–L3 implemented (2026-08-01)**; the GL1/GL2 live desktop checklist and GL3's
+clean-VM install test are pending with the user — see
+[`LINUX-VALIDATION.md`](../../LINUX-VALIDATION.md).
+
 ## Context
 
 Linux is currently an *installable* platform with silently broken capture. The G3(C)

@@ -4,16 +4,21 @@
 
 Skill Recorder captures a real work session on your screen: the clicks, the app and
 window switches, the pages you visit, and (if you want) your spoken narration. It then uses
-the **GitHub Copilot CLI** to reconstruct *what you actually did* as a clear **intent plus
-an ordered list of steps**. From there, one step turns that single run into something an
-agent can reuse:
+**your own Azure AI Foundry deployment** to reconstruct *what you actually did* as a clear
+**intent plus an ordered list of steps**. From there, one step turns that single run into
+something an agent can reuse:
 
 - a **Skill**: a `SKILL.md` procedure an agent runs on demand, or
 - an **Automation**: the same procedure on a schedule or trigger.
 
+Either can be installed into **Skill Recorder's own library** or exported as a bundle for
+a **Copilot Studio agent**.
+
 Both prefer the agent's **native tools** (like the `gh` CLI or `web_fetch`) over replaying
 UI clicks, and generalize from your one example, so recording yourself submitting *one*
-form can teach the agent to submit *all* of them.
+form can teach the agent to submit *all* of them. Attach the target application's **API
+reference** (an OpenAPI JSON spec, or just its written docs) to a recording and the steps
+are grounded in real API operations instead of UI clicks.
 
 <p align="center">
   <img src="docs/images/recorder.png" alt="Skill Recorder capture window: a record button, timer, an optional narration toggle with language and microphone settings, and readiness checks" width="420">
@@ -28,8 +33,8 @@ form can teach the agent to submit *all* of them.
 2. 🎛️ **Control.** While recording, a small always-on-top bar shows capture and
    microphone state. Mute, unmute, or switch mics on the fly, then finish, or discard
    (with a confirmation) if the take didn't go to plan.
-3. 🧠 **Analyze.** Click Analyze and GitHub Copilot reconstructs one overall intent and
-   an ordered list of steps. Review and edit until it reads right.
+3. 🧠 **Analyze.** Click Analyze and your Azure AI Foundry deployment reconstructs one
+   overall intent and an ordered list of steps. Review and edit until it reads right.
 4. ✨ **Create.** From an approved analysis, generate a reusable **Skill** and/or a
    scheduled **Automation**.
 
@@ -37,8 +42,13 @@ form can teach the agent to submit *all* of them.
 
 Skill Recorder is published as a **source release**: one command downloads a pinned Node.js
 runtime, builds the exact release commit on your machine, and adds a **Skill Recorder (Source)**
-app you can relaunch anytime. Nothing is installed globally. You'll need a GitHub account with
-**Copilot access**; the Copilot CLI ships with the app.
+app you can relaunch anytime. Nothing is installed globally.
+
+Analysis and skill-building run on **your own Azure AI Foundry resource**, so you'll need
+its endpoint and an API key, plus three deployments on it: `gpt-5.3-codex` (builds skills
+and automations), `gpt-5.2` (analyzes recordings), and `gpt-4o-transcribe` (narration).
+Enter them in the app the first time you Analyze, or put them in
+`~/.skill-recorder/foundry.json`.
 
 macOS is the primary target. Windows 11 (x64 and ARM64) is supported too (see
 [`WINDOWS-VALIDATION.md`](WINDOWS-VALIDATION.md)), as is Ubuntu 22.04/24.04 x64 on an
@@ -79,14 +89,16 @@ This adds **Skill Recorder (Source)** shortcuts to your desktop and Start Menu.
 1. **Grant Screen Recording.** On first launch, macOS asks for Screen Recording permission;
    grant it and you're ready to record.
 2. **Record, Analyze, Create.** Do your task, then Analyze. The first time you Analyze,
-   Skill Recorder offers **Sign in to Copilot** if you aren't signed in yet.
+   Skill Recorder shows a connection form for your Azure AI Foundry endpoint, API key,
+   and deployment if you haven't set one up yet.
 
 To inspect the script before running it, set install options, update, or uninstall, see
 [`INSTALL.md`](INSTALL.md).
 
 > ⚠️ **Keep secrets out of your recordings.** Don't record, type, paste, or narrate
 > passwords, tokens, API keys, or other confidential info. Choosing *Analyze* sends
-> recording data to GitHub's cloud. Skill Recorder reminds you before every recording.
+> recording data to your Azure AI Foundry deployment, and so does transcribing narration.
+> Skill Recorder reminds you before every recording.
 > Details in [What gets captured](#what-gets-captured).
 
 ---
@@ -95,11 +107,11 @@ To inspect the script before running it, set install options, update, or uninsta
 
 ## What gets captured
 
-Recording, storage, frame extraction, and optional narration transcription all happen
-**on your computer**; nothing leaves while you record. Only when you choose **Analyze**
-does Skill Recorder send the event timeline (window/document titles, URLs, and clipboard
-previews), extracted screen images, and narration text to GitHub's cloud for Copilot to
-process.
+Recording, storage, and frame extraction all happen **on your computer**; nothing leaves
+while you record. Only when you choose **Analyze** does Skill Recorder send the event
+timeline (window/document titles, URLs, and clipboard previews), extracted screen images,
+and narration text to **your Azure AI Foundry deployment** for the model to process.
+Narration audio is sent to that same resource to be transcribed.
 
 The in-app "Records your screen and activity" panel spells out exactly what's collected:
 
@@ -108,8 +120,8 @@ The in-app "Records your screen and activity" panel spells out exactly what's co
 - **Screen video:** recorded by Chromium; low-rate snapshots are kept only when the
   screen changes or a heartbeat is due.
 - **Clipboard:** short previews of copied text that tie steps together.
-- **Narration** *(optional)*: spoken commentary, transcribed **on-device** in any of
-  Whisper's 99 supported languages (a one-time ~252 MB model download on first use).
+- **Narration** *(optional)*: spoken commentary, sent to your Azure AI Foundry
+  transcription deployment and transcribed in any of its 99 supported languages.
 
 > ⚠️ **Please don't capture secrets.** Passwords, access tokens, API keys, credentials, and
 > other confidential information should never be recorded, typed, pasted, shown, copied,
@@ -133,7 +145,7 @@ assets, or releases must follow [`RELEASING.md`](RELEASING.md).
 
 ## Evals
 
-The Copilot **describer** and **builders** have a fixture-based eval suite; see
+The **describer** and **builders** have a fixture-based eval suite; see
 [`evals/README.md`](evals/README.md).
 
 ```bash

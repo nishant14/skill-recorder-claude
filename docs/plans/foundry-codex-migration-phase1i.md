@@ -1,7 +1,7 @@
 # Phase 1i in detail — Workstream I: cloud transcription on Foundry
 
 Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md) (Workstream I) · Tracker: [`progress.md`](./progress.md)
-Status: **approved — implementing**
+Status: **implemented — gate G6 passed 4/4 (2026-08-01)**
 
 ## Scope and definition of done
 

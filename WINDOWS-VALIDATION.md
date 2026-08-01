@@ -11,8 +11,8 @@ and runs on GitHub's `windows-latest` and native `windows-11-arm` images.
 | Electron 43 | Yes | Yes | Official Electron archives |
 | Koffi / foreground-window FFI | Yes | Yes | Prebuilt N-API packages; no compiler |
 | Sharp / libvips | Yes | Yes | `@img/sharp-win32-*` packages |
-| ONNX Runtime | Yes | Yes | Both payloads ship in `onnxruntime-node` |
-| GitHub Copilot CLI | Yes | Yes | `@github/copilot-win32-*` packages |
+| ONNX Runtime | Yes | Yes | Both payloads ship in `onnxruntime-node` — **unused at runtime since transcription moved to Azure AI Foundry; removed in Workstream E** |
+| GitHub Copilot CLI | Yes | Yes | `@github/copilot-win32-*` packages — **unused at runtime; removed in Workstream E** |
 | TypeScript, Rolldown, Lightning CSS | Yes | Yes | Native development packages exist for both |
 | Standalone FFmpeg / `ffmpeg-static` | No | No | Chromium replaced all current media uses |
 | Electron `ffmpeg.dll` codec library | Yes | Yes | LGPL-2.1+; standard Electron component and notices |
@@ -34,7 +34,8 @@ deduplicates those JPEGs without decoding the WebM.
 
 Narration no longer shells out to FFmpeg either. A hidden Chromium renderer
 decodes Opus/WebM with `AudioContext`, downmixes/resamples to 16 kHz mono, and the
-main process performs silence detection before Whisper transcription.
+main process performs silence detection before uploading the audio to the user's
+Azure AI Foundry transcription deployment.
 
 ## Automated gate
 

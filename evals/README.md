@@ -1,7 +1,7 @@
 # Skill Recorder — Evals
 
 Repeatable evals for the part of the system with real variance: the multi-turn
-**Copilot describer** that turns captured signals into an *overall intent* + an
+**describer** that turns captured signals into an *overall intent* + an
 *ordered list of steps*. Each eval feeds the describer a fixed, synthetic
 recording and scores its analysis against a rubric.
 
@@ -27,8 +27,9 @@ npm run eval -- --model=<model-id> # override the describer model
 npm run eval -- --repeat=3         # run every scenario 3× (mean score, tokens, latency)
 ```
 
-Requires GitHub Copilot CLI to be signed in (same auth the app uses). Exit code
-is non-zero if any scenario fails. Full results are written to
+Requires a configured Azure AI Foundry connection (the same credentials the app
+uses: `~/.skill-recorder/foundry.json`, or the `AZURE_OPENAI_*` environment
+variables, which take precedence). Exit code is non-zero if any scenario fails. Full results are written to
 `evals/results/<timestamp>.json` (git-ignored).
 
 Under the hood the runner uses Node's TypeScript support
@@ -68,7 +69,7 @@ For each scenario the harness:
 
 A forbidden-noise hit fails the scenario outright; otherwise pass = ≥80% of checks.
 
-`--judge` adds an optional second opinion: a separate Copilot agent grades
+`--judge` adds an optional second opinion: a separate agent session grades
 faithfulness 0–5 against the scenario's ground truth (`judge.ts`). Off by default
 to keep runs deterministic.
 
@@ -78,7 +79,10 @@ Which general GPT deployment should the describer run on — say `gpt-5.3` vs `g
 The suite answers it with numbers: `--repeat=N` runs every scenario N times and records
 the **tokens each run billed** (from the Responses `usage` object, accumulated per agent
 session), so a results file carries mean score, mean latency **and** mean cost inputs.
-`evals/compare.ts` then puts two such files side by side.
+`evals/compare.ts` then puts two such files side by side. This is how the shipping
+describer deployment was chosen (`gpt-5.2`: 100.0% at $0.049/analysis, against
+`gpt-5.6-sol`'s 99.6% at $0.141 — 2.9× cheaper at equal-or-better quality); the two
+evidence files are committed under `evals/results/`.
 
 1. In the Azure AI Foundry portal, create **two general-model deployments** on the same
    resource (one per candidate model) and note each one's price per 1M input and output
@@ -326,12 +330,21 @@ L2–L4 attach the real files from `tools/testbed/docs/` (read with `node:fs` at
 app used for the matching **manual** experiment, so the scored evals and
 `tools/testbed/README.md` cannot drift into describing two different APIs.
 
-**Gate GJ** (live, credentialed) is the first scenario; the matrix is the follow-on:
+**Gate GJ** (live, credentialed) is the first scenario; the matrix is the follow-on. Both
+passed on 2026-08-01 — **100% at all four documentation levels**:
 
 ```bash
 npm run eval:skill -- --only=api-sales-order
 npm run eval:skill -- --only=api-sales-order,api-sales-order-minimal,api-sales-order-docs,api-sales-order-partial
 ```
+
+Two findings from that run are worth keeping in mind when you add a level. First, a
+docs-only reference needs the **search-first** brief, not the operation-grounding one:
+while both shared a brief, the builder read "name `api:<operationId>` steps", found no
+operation ids in prose, and fell back to UI replay — a prompt bug that looked like a model
+failure. Second, the builder **hoists API base URLs into `{{values}}`**, which is correct
+generalization, so a rubric must accept a value-factored endpoint rather than demanding a
+literal URL in the step text.
 
 ## Mock pages (`evals/mocks/`)
 

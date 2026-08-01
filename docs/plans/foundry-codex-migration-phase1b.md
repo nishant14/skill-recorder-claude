@@ -1,7 +1,7 @@
 # Phase 1b in detail — Workstream B: swap the agent flows onto the Foundry runtime
 
 Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md) · Tracker: [`progress.md`](./progress.md)
-Status: **approved — implementing**
+Status: **implemented — gate G2 passed (2026-08-01)**
 
 ## Scope and definition of done
 

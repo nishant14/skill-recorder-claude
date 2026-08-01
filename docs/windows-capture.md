@@ -15,7 +15,7 @@ before trusting a Windows build.
 | Browser URLs | UI Automation address bar read (`powershell.exe` host) | Functional, not byte exact | None |
 | Clipboard | Electron clipboard | Full | None |
 | Screen video + frames | `desktopCapturer` + Chromium snapshots + Sharp | Full | Screen capture |
-| Voice narration (opt-in) | hidden-window `getUserMedia` + `MediaRecorder`; Chromium decode + offline Whisper | Full | Microphone |
+| Voice narration (opt-in) | hidden-window `getUserMedia` + `MediaRecorder`; Chromium decode, then the Azure AI Foundry transcription deployment | Full | Microphone |
 
 Notes:
 
@@ -33,7 +33,9 @@ Notes:
 2. **Windows PowerShell.** `powershell.exe` (Windows PowerShell 5.1, in-box on
    every Windows 10/11) is used to host the UI Automation URL reader. No install
    needed.
-3. **Copilot CLI** on `PATH` for the describer (`copilot`).
+3. **An Azure AI Foundry connection** (endpoint + API key + deployments) for the
+   describer, the builders, and narration transcription. Configured in the app or in
+   `~/.skill-recorder/foundry.json`; nothing is installed on `PATH`.
 4. No system media package is needed for new recordings.
 
 ## Doctor signals
@@ -68,12 +70,13 @@ Run a real recording on Windows and verify each source lands in the session's
    session/video offsets should preserve the boundary. Disconnecting the active
    device must stop microphone capture with a visible error rather than silently
    recording from another input; reconnecting it should restore the saved preference
-   when Chromium can identify it. If the model is not installed, starting analysis
-   approves the one-time ~252 MB Whisper download. Confirm `narration.json` records
+   when Chromium can identify it. Transcription needs a configured Azure AI Foundry
+   connection; without one, analysis reports "not configured" instead of failing
+   obscurely. Confirm `narration.json` records
    the chosen language and contains the original-language words with `atMs` offsets.
    Exercise representative languages, including English and a non-Latin script.
-   Later runs are offline. On Windows the mic grant is requested by the OS on first
-   use.
+   Transcription requires network access. On Windows the mic grant is requested by
+   the OS on first use.
 7. **Recording controls.** Confirm the floating bar stays above the active app,
    its microphone menu and discard confirmation expand above the fixed bar, it can
    be dragged without making its buttons unclickable, and it does not appear in
@@ -93,14 +96,10 @@ unavailable on this platform", or a reduced-capture notice).
 modules (`koffi`, `@koromix/*`, `sharp`, `@img/*`,
 `@huggingface/transformers`, `onnxruntime-node`, and Copilot platform packages)
 are listed under `asarUnpack` so
-their binaries load from disk rather than from inside the asar archive. The
-Whisper model itself is not bundled. It downloads to the app's user-data
-`models` folder only after the user approves the one-time ~252 MB download from
-the HUD or Sessions; recording and core session processing do not wait for it.
-The multilingual q8 files total about 251.9 MB versus 251.2 MB for the previous
-English-only checkpoint. Both use the same Whisper `small` architecture, so
-runtime memory and transcription speed are expected to remain effectively
-unchanged.
+their binaries load from disk rather than from inside the asar archive. No speech
+model ships or downloads: narration is transcribed by the user's Azure AI Foundry
+deployment, so `@huggingface/transformers`, `onnxruntime-node`, and the Copilot
+platform packages are unused at runtime and leave the package in Workstream E.
 
 Build each Windows installer on its matching native machine or CI runner so npm
 selects the correct optional packages:
@@ -122,8 +121,8 @@ PE architecture and packaged native payloads.
   approach is tracked in issue #7.
 - Semantic UI events (focus/invoke/value via UI Automation) are not implemented
   on either platform yet.
-- `onnxruntime-node` ships prebuilt binaries for `win32-x64` and
-  `win32-arm64`, so narration transcription needs no compiler.
+- Narration transcription is a network call to the user's Azure AI Foundry deployment, so
+  it needs no local model, no compiler, and no offline path.
 - A standalone system FFmpeg is consulted only for frame extraction from recordings
   created before `video-frames.json` existed. It is never bundled or downloaded;
   Electron's standard LGPL `ffmpeg.dll` codec component remains in the runtime.

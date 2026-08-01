@@ -1,30 +1,47 @@
 # Foundry Codex migration — progress tracker
 
 Per-phase status and evidence for the plans in
-[`foundry-codex-migration.md`](./foundry-codex-migration.md) (workstreams A–H, the G0–G5
-gate ladder) and [`foundry-codex-migration-phase1a.md`](./foundry-codex-migration-phase1a.md)
-(the Workstream A runtime spec). This file tracks *where we are*; the plans stay
+[`foundry-codex-migration.md`](./foundry-codex-migration.md) (workstreams A–J, the G0–G6 +
+GJ gate ladder), its per-phase specs (`phase1a`–`phase1d`, `phase1i`), and
+[`foundry-codex-migration-workstream-j.md`](./foundry-codex-migration-workstream-j.md)
+(API-grounded skills). This file tracks *where we are*; the plans stay
 authoritative for *what to build*.
 
 ## ▶ RESUME HERE
 
-- **Position (2026-08-01, evening):** Workstreams **A, B, and I are implemented on
-  `main`** (`4c5a538`, `94b810d`, `0b38fab`). Every LLM call — describer, both builders,
-  eval judge — and narration transcription now goes through the Foundry runtime. Local
-  Whisper is deleted; the Copilot SDK is unused at runtime (dependency leaves in E).
-- **Gates:** G1 **passed 3/3**; G2 **passed** (live describer eval, 100%); G6 **3/4 —
-  blocked on the user**: the resource has no `gpt-4o-transcribe` deployment (HTTP 404).
-  Unblock: create a transcription deployment in the Foundry portal (gpt-4o-transcribe /
-  gpt-4o-mini-transcribe / whisper) or set `transcriptionDeployment` in
-  `~/.skill-recorder/foundry.json`, then rerun the smoke.
-- **Workstream C implemented** (`a884963`): connection form + live Test, doctor tile,
-  truthful runtime copy, Copilot plumbing deleted. **G3(C)'s manual UI checklist is the
-  user's** (spec §G3(C)). **Workstream D done** (`418181c`): outputs retarget to
-  `copilot-studio` + `app`, G3(D) live rounds 3/3 at 100%. **Workstream J done**
-  (J1–J3): API-grounded skills — attach an OpenAPI spec/docs, builders ground steps in
-  `api:` operations; gate GJ live half next. **Remaining: Workstream E** (dependency
-  purge, gate G4) then G5; Phase 2: G (declarative agents), H (in-app runner).
-- **Describer-model comparison: MEASURED, decision pending (user's call).** Run
+- **Position (2026-08-01):** Workstreams **A, B, C, D, I and J are all implemented on
+  `main`** (`4c5a538`, `94b810d`, `a884963`, `418181c`, `0b38fab`, `1ad9146`…`5090f44`).
+  Every LLM call — describer, both builders, eval judge — and narration transcription goes
+  through the Foundry runtime, against **three required deployments** on the resource:
+  `gpt-5.3-codex` (builders + judge), `gpt-5.2` (describer), `gpt-4o-transcribe`
+  (narration). Local Whisper is deleted; the Copilot SDK is **fully unused at runtime**
+  (the dependency, the bundled binary, and `@huggingface/transformers`/`onnxruntime-node`
+  all leave in E).
+- **NEXT STEP: Workstream E** — drop `@github/copilot-sdk`, `@huggingface/transformers`
+  and `onnxruntime-node` from `package.json`/`asarUnpack`/`vite.config.ts`, strip the
+  Copilot blocks from `install.sh`/`install.ps1`, invert the copilot assertions in
+  `scripts/verify-windows-package.mjs`, clean the compliance policy and regenerate
+  `THIRD-PARTY-NOTICES.md` (plan §Workstream E + §I4). Gate **G4** closes it; then the
+  **G5** full-suite sweep closes Phase 1. Phase 2 after that: **G** (declarative agent
+  bundles), **H** (in-app runner).
+- **Gates:** G0 **green** (tests 248/248, typecheck + typecheck:evals exit 0); G1 **3/3**;
+  G2 **100%**; G3(D) **live 3/3 at 100%** + migration tests green; G6 **4/4**; GJ
+  **passed**, including all four documentation levels at 100%. **G3(C)'s manual UI
+  checklist is still the user's** (spec §G3(C)); G4 and G5 are pending behind E.
+- **Workstream J (added after the original plan, sequenced between D and E; own plan
+  [`workstream-j`](./foundry-codex-migration-workstream-j.md)):** a recording can carry an
+  attached API reference — OpenAPI JSON first-class, unstructured docs a fallback — and the
+  builders ground steps as `api:<operationId>` via `list_api_operations` /
+  `get_api_operation` / `search_api_docs`, hard-rejecting unknown ids at propose time and
+  warning at create time. `BuiltSkill.apiReference` + `api/openapi.json` ship inside every
+  install/export, so Copilot Studio imports the spec as a custom connector and Workstream
+  H's runner can execute against it.
+- **`tools/testbed` (new):** a dependency-free CRUD sales app (`npm run testbed`,
+  `127.0.0.1:8787`) whose HTML UI is deliberately decoupled from its `X-Api-Key` JSON API,
+  plus four descriptions of that API (full / minimal / prose / partial) and four scored
+  eval scenarios that attach the same files. **Live 4-level result: all 100%** — after two
+  real findings, below.
+- **Describer-model comparison: MEASURED and DECIDED — the describer runs on `gpt-5.2`.** Run
   2026-08-01, 9 scenarios × 3 reps per model, deterministic rubric, judge off, prices
   user-supplied (`gpt-5.6-sol` $5/$30 per 1M in/out; `gpt-5.2` $1.75/$14):
   `gpt-5.6-sol` mean score 99.6% (spread 88.9–100%), 24,226 tokens in, 13.0s, **$0.141
@@ -41,7 +58,10 @@ authoritative for *what to build*.
   deployments.
 - **Parallel initiative — Linux support (own plan: [`linux-support.md`](./linux-support.md)):
   phases L1–L3 all implemented** (X11 capture provider replacing get-windows, AT-SPI URL
-  provider, packaging/CI/validation parity). Human-pending: GL1/GL2 live checklist on a
+  provider, packaging/CI/validation parity). Live on this X11 box: `readLinuxActiveWindow`
+  returns real windows, and the AT-SPI host reports READY in 92 ms. Known limitation,
+  documented rather than worked around: snap Firefox does not export AT-SPI unless
+  accessibility is enabled at launch. Human-pending: GL1/GL2 live checklist on a
   desktop (X11 recording run, Wayland degradation check, snap-Firefox
   `GNOME_ACCESSIBILITY=1` experiment) and GL3's clean-VM install test; the `package-linux`
   CI job proves the automated half on push.
@@ -58,25 +78,25 @@ authoritative for *what to build*.
 | B | Swap Describer / SkillBuilder / AutomationBuilder / evals-judge onto the runtime | **done** (`94b810d`; spec [`phase1b`](./foundry-codex-migration-phase1b.md)) | G2 — **passed** | live eval `--only=directory-lookup` 2026-08-01: PASS, score 100%, 5 steps, 11.3s vs `gpt-5.3-codex`; typecheck/typecheck:evals 0; tests 111/111 |
 | C | Auth/config UX + IPC (replaces GitHub sign-in) | **implemented** (`a884963`; spec [`phase1c`](./foundry-codex-migration-phase1c.md)) | G3(C) — **awaiting the user's manual UI checklist** (spec §G3(C); tile note = endpoint host) | typecheck/typecheck:evals 0; tests 125/125; `rg -i copilot src/` = 0 hits; no source file imports the SDK; `copilot-cli-path.ts` + `copilot-signin.ts` deleted |
 | D | Retarget outputs to `copilot-studio` + `app` architectures | **done** (`418181c` + rubric fix `592c02e`; spec [`phase1d`](./foundry-codex-migration-phase1d.md)) | G3(D) — **passed** (live rounds); G3 closes with C's manual checklist | migration tests green (no legacy id survives parsing); live 2026-08-01: `github-issue-triage-skill` 100%, `copilot-studio-teams-digest` 100% (connector-annotated steps), `directory-lookup` automation 100% after rubric-vocabulary fix; tests 168/168 at commit |
-| E | Packaging, install scripts, compliance, privacy copy | not started | G4 (exit of E) | — |
-| F | The gate ladder itself (verification strategy) | ladder defined; G0/G1 in force | G0–G5, G6 | see gate ledger below |
+| E | Packaging, install scripts, compliance, privacy copy | **not started — next up** (also carries I4's `@huggingface/transformers` + `onnxruntime-node` removals) | G4 (exit of E) | — |
+| F | The gate ladder itself (verification strategy) | ladder defined; G0–G3(D), G6, GJ in force | G0–G5, G6, GJ | see gate ledger below |
 | I | Cloud transcription on Foundry (retires local Whisper) — Phase 1, parallelizable after A | **done** (`0b38fab` + audio-route fix; spec [`phase1i`](./foundry-codex-migration-phase1i.md)) | G6 — **passed 4/4** | smoke 4/4 on 2026-08-01 vs `gpt-4o-transcribe`: known phrase round-tripped exactly ("Skill recorder test phrase."), `verbose_json→json` downgrade fired as designed; tests 124/124 |
 | G | Phase 2 — Copilot Studio declarative agent export | not started | G-phase gate TBD (real Copilot Studio import) | — |
 | H | Phase 2 — in-app skill runner on the Foundry deployment | not started | G-phase gate TBD (runner eval + safety UX) | — |
-| J | API-grounded skills (attach an OpenAPI spec / docs → plan steps name `api:` operations) — plan [`workstream-j`](./foundry-codex-migration-workstream-j.md) | **done (J1+J2+J3)** | GJ — **passed** | tests 223/223; live 2026-08-01: `api-sales-order` PASS 100%, 15.0s — plan grounded in `api:listCustomers` → `api:createSalesOrder` with input validation and ambiguity handling, zero UI-replay steps |
+| J | API-grounded skills (attach an OpenAPI spec / docs → plan steps name `api:` operations) — plan [`workstream-j`](./foundry-codex-migration-workstream-j.md) | **done (J1+J2+J3)** + `tools/testbed` (`c8416f0`) and the docs-only brief fix (`5090f44`) | GJ — **passed (both halves)** | tests 248/248; live 2026-08-01: `api-sales-order` PASS 100%, 15.0s — plan grounded in `api:listCustomers` → `api:createSalesOrder` with input validation and ambiguity handling, zero UI-replay steps; the full documentation-level matrix (full / minimal / prose / partial) then passed **4/4 at 100%** |
 
 ## Gate ledger
 
 | Gate | Runs | State | Who runs it |
 |---|---|---|---|
-| G0 | `npm run typecheck` + `npm run typecheck:evals` + `npm test`, every commit | **green as of `0b38fab`**: typecheck exit 0, typecheck:evals exit 0, tests 111/111, on Node v22.23.2 | CI-able (no credentials) |
+| G0 | `npm run typecheck` + `npm run typecheck:evals` + `npm test`, every commit | **green as of `5090f44`**: typecheck exit 0, typecheck:evals exit 0, tests **248/248** | CI-able (no credentials) |
 | G1 | Phase 1a unit matrix + live contract smoke `scripts/foundry-smoke.ts` (plain completion, tool round-trip, image round-trip) | **PASSED 3/3, 2026-08-01**, endpoint `https://skills-recorder-resource.services.ai.azure.com`, deployment `gpt-5.3-codex`: completion → `"ready"`; tool round-trip → `"The token is alpha7-confirmed"`; image round-trip → `"red"` | human + credentials |
 | G2 | one live describer eval, `npm run eval -- --only=<slug>` | **PASSED 2026-08-01**: `directory-lookup` PASS, score 100%, 5 steps, 11.3s, full tool loop (`get_timeline` + `get_events` → `submit_analysis`) vs `gpt-5.3-codex` | human + credentials |
 | G3 | manual UI checklist (configure, bad-key path, analyze, build, install/export) + unit tests for the `scout→app` / `cowork→copilot-studio` schema migration | **D half passed 2026-08-01** (migration tests green; live builder rounds 3/3 at 100% — one per architecture + automation); **C half awaits the user's formal UI checklist** (substance already exercised live during the Linux debugging session) | human for the UI half; migration tests CI-able |
 | G4 | `npm run compliance:test` + a `npm run dist` build; packaged artifact contains no `@github/copilot*` | pending (exit of E) | CI-able |
 | G6 | transcription contract smoke — `scripts/foundry-smoke.ts` check 4: known-phrase clip round-trip (espeak-ng-generated), assert phrase + segment timestamps | **PASSED 4/4, 2026-08-01** after the audio-route fix: the v1 audio route 404s (`DeploymentNotFound`) on this resource class — audio lives on the legacy route (`/openai/deployments/{d}/audio/transcriptions?api-version=2024-10-21`, probe-confirmed on three api-versions); transcript = "Skill recorder test phrase.", `verbose_json→json` downgrade exercised live | human + credentials |
-| G5 | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. the Copilot-era baseline, else absolute rubric thresholds | pending (pre-merge) | human + credentials |
-| GJ | CI half: full `npm test` green incl. `common/api-reference.test.ts`, `electron/builders/api-reference-{store,tools}.test.ts`, `electron/skillbuilder/export.test.ts`. Live half: `npm run eval:skill -- --only=api-sales-order` passes scored (plan must name `api:createSalesOrder` + a customer lookup, and avoid click/browser/navigate-to) | CI half **green**: typecheck 0, typecheck:evals 0, tests 223/223. Live half **pending** | CI-able half is CI-able; the eval is human + credentials |
+| GJ | CI half: full `npm test` green incl. `common/api-reference.test.ts`, `electron/builders/api-reference-{store,tools}.test.ts`, `electron/skillbuilder/export.test.ts`. Live half: `npm run eval:skill -- --only=api-sales-order` passes scored (plan must name `api:createSalesOrder` + a customer lookup, and avoid click/browser/navigate-to), then the documentation-level matrix `-minimal,-docs,-partial` | **PASSED both halves, 2026-08-01.** CI: typecheck 0, typecheck:evals 0, tests 248/248. Live: `api-sales-order` 100%, and after the two findings below the full matrix scores **100% at all four documentation levels** — full spec, spec without `operationId`s (synthesized ids), prose-only guide (endpoint named in step text, no fabricated `api:` refs), and partial spec (grounds the lookup, falls back honestly for the undocumented order step) | CI-able half is CI-able; the evals are human + credentials |
+| G5 | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. the Copilot-era baseline, else absolute rubric thresholds | **pending — runs after E**, as the last Phase 1 gate before merge | human + credentials |
 
 Standing rule: a measured result is recorded here **with its number and how it was
 obtained**. A confident summary of an unverified result is worse than no summary.
@@ -128,5 +148,18 @@ obtained**. A confident summary of an unverified result is worse than no summary
   `BuiltSkill.apiReference` plus a copy of the spec at `api/openapi.json` inside every
   exported/installed skill (and copilot-studio automation bundle), so an installed skill
   survives deleting the recording and a maker can import the spec as a custom connector.
+- **2026-08-01 — the testbed's documentation-level matrix found two real things** (
+  `tools/testbed`, four live builds over one approved analysis). (1) **Docs-only references
+  got the operation-grounding brief**, which tells the model to name `api:<operationId>`
+  steps; with prose-only documentation there are no operation ids to name, so the model
+  rationally concluded the reference was unusable and fell back to UI replay. Fixed by
+  branching the brief: a docs-only reference now gets a **search-first** brief that tells
+  the builder to retrieve endpoints from the chunks and name them in the step text
+  (`5090f44`). The failure was in *our* prompt, not the model's judgment — worth
+  remembering the next time a level "just doesn't ground". (2) **The model hoists API base
+  URLs into `{{values}}`**, which is correct generalization, so a rubric that expects a
+  literal `https://host/api/v1/orders` in the step text fails a *better* plan; rubrics must
+  accept value-factored endpoints. Both fixes landed before the matrix scored 100% at all
+  four levels — the numbers are post-fix.
 - **In-app execution deferred to Phase 2 (Workstream H).** Phase 1 ships the `app` target
   as library-only so the backend migration isn't blocked on shell-execution safety UX.

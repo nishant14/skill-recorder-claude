@@ -1,7 +1,7 @@
 # Phase 1d in detail — Workstream D: retarget outputs to Copilot Studio + the app
 
 Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md) (Workstream D) · Tracker: [`progress.md`](./progress.md)
-Status: **approved — awaiting implementation go**
+Status: **implemented — gate G3(D) passed live 3/3 (2026-08-01)**
 
 ## Scope and definition of done
 

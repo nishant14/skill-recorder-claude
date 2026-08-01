@@ -1,5 +1,10 @@
 # Workstream J — API-grounded skills
 
+Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md) (Workstream J) · Tracker: [`progress.md`](./progress.md)
+Status: **implemented (J1–J3) — gate GJ passed live, including all four documentation
+levels (2026-08-01)**. The runnable app behind the manual experiment and the
+documentation-level fixtures lives in [`tools/testbed`](../../tools/testbed/README.md).
+
 ## Context
 
 User-validated concept: once a recording's analysis captures *semantic intent* ("created

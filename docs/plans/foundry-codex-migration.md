@@ -1,16 +1,26 @@
 # Migration plan: GitHub Copilot CLI → GPT-5.3 Codex on Azure AI Foundry
 
-Status: **Workstream A implemented and merged; gate G1 passed 3/3 (2026-08-01). Workstreams
-B–H not started.** Per-phase status and evidence: [`progress.md`](./progress.md).
+Status (2026-08-01): **Workstreams A, B, C, D, I and J are implemented on `main`** — every
+LLM call (describer, both builders, eval judge) and narration transcription runs on Azure
+AI Foundry. Gates **G1 3/3**, **G2 100%**, **G3(D) live 3/3**, **G6 4/4** and **GJ** are
+passed; **G3(C)'s manual UI checklist is still pending with the user**. **Remaining in
+Phase 1: Workstream E** (dependency/packaging purge, gate G4) then the **G5** full-suite
+sweep. **Phase 2: G** (declarative agent bundles) and **H** (in-app runner) are not
+started. [`progress.md`](./progress.md) is the status authority — this file stays
+authoritative for *what to build*, not for where we are.
 Branch: work lands on `main`. The historical feature branch
 `claude/gpt-5.6-codex-foundry-migration-u1csnc` is merged; the "5.6" in its name is a
 naming artifact — the deployment is `gpt-5.3-codex`.
 
 ## Locked decisions
 
-1. **Model/runtime**: every agentic feature moves to a single **GPT-5.3 Codex deployment on
+1. **Model/runtime**: every agentic feature moves to a **GPT-5.3 Codex deployment on
    Azure AI Foundry** (vision-capable — accepts image + text, so the frame-reading describer
    keeps working on the same deployment).
+   *Amended 2026-08-01:* the resource now hosts **three required deployments** — the
+   builders and the eval judge stay on `gpt-5.3-codex`, the **describer runs on `gpt-5.2`**
+   (a measured A/B: 100.0% at $0.049/analysis vs `gpt-5.6-sol`'s 99.6% at $0.141), and
+   narration transcription uses `gpt-4o-transcribe` (Workstream I).
 2. **Auth**: endpoint + API key (+ deployment name), entered in an in-app connection form or
    via environment variables. No Entra ID flow in this phase.
 3. **Output targets**: built skills/automations target **(a) Copilot Studio agents** and
@@ -20,9 +30,12 @@ naming artifact — the deployment is `gpt-5.3-codex`.
    the Copilot Studio export from repurposed `SKILL.md` to a **declarative agent** bundle
    (Workstream G).
 
-## Current state (what we're replacing)
+## Starting state (historical — what we replaced)
 
-The only AI backend is the GitHub Copilot CLI, driven via `@github/copilot-sdk` from four
+> Written before Workstream A. As of 2026-08-01 none of this is live any more: nothing
+> instantiates the SDK at runtime, and only the unused dependency remains (it leaves in E).
+
+The only AI backend was the GitHub Copilot CLI, driven via `@github/copilot-sdk` from four
 places: `Describer` (analysis with vision tools), `SkillBuilder` + `AutomationBuilder` (via
 the shared `AgentBuilder`), and the eval judge (`evals/judge.ts`). The SDK provides: a
 spawned CLI process (shipped in `node_modules/@github/copilot-<platform>-<arch>`), GitHub
@@ -227,6 +240,7 @@ infra and this migration doesn't justify building one).
 | G3 | exit of C + D | manual UI checklist (configure connection, bad-key error path, analyze, build, install/export both architectures) + unit tests for the `scout→app` / `cowork→copilot-studio` schema migration | flows and existing user data intact? | yes (UI part) |
 | G4 | exit of E | `npm run compliance:test` + a `dist` build; packaged artifact contains no `@github/copilot*` | packaging/compliance clean? | no |
 | G6 | exit of I | transcription contract smoke (`scripts/foundry-smoke.ts` check 4: known-phrase clip round-trip + segment timestamps) | does the transcription deployment honor our wire assumptions? | yes (credentials) |
+| GJ | exit of J | full `npm test` (API-reference unit + store/tools/export tests) + the scored `api-sales-order` skill eval and its documentation-level variants | do attached API references actually ground the plan, and does grounding degrade honestly as documentation thins? | yes (the eval half) |
 | G5 | pre-merge | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. a Copilot-era baseline where numbers exist, else absolute rubric thresholds | did output quality regress? | yes |
 
 ## Workstream I (Phase 1, parallelizable after A) — Cloud transcription on Foundry
@@ -313,6 +327,23 @@ a known phrase, round-trip it through the transcription deployment, and assert b
 phrase comes back and that segment timestamps are present. Live + credentialed, human-run,
 never wired into `npm test` — same posture as G1.
 
+## Workstream J (Phase 1, inserted between D and E) — API-grounded skills
+
+> Full plan: [`foundry-codex-migration-workstream-j.md`](./foundry-codex-migration-workstream-j.md)
+
+Added after this plan was written, and sequenced **strictly after D** because it rewrites
+the same builders/instructions/`Library.tsx` lines and keys on D's architecture enum. A
+user attaches the target application's **API reference** to a recording — OpenAPI JSON is
+the first-class grounded path, unstructured docs (md/txt/html) a best-effort fallback — and
+the builders gain `list_api_operations` / `get_api_operation` / `search_api_docs`, so plan
+steps ground as `api:<operationId>` instead of replaying UI clicks. Mapping happens at
+**plan** time, where the review tiles are the human checkpoint: an unknown operation id is
+hard-rejected at propose time and warned at create time. `BuiltSkill.apiReference` plus a
+copy of the spec at `api/openapi.json` ship inside every install/export, so Copilot Studio
+can import it as a custom connector and Workstream H's runner can execute against it. Zero
+new npm dependencies. Gate **GJ** (see the ladder above) passed live, including all four
+documentation levels of the `tools/testbed` matrix.
+
 ## Workstream G (Phase 2) — Copilot Studio declarative agent export
 
 Rationale: pasting a `SKILL.md` body into an agent's Instructions can't grant tools and
@@ -376,9 +407,11 @@ read-only one.
 
 ## Sequencing
 
-Phase 1: A → B → C → D → E → F, one commit per workstream on `main`. **I** runs in parallel
+Phase 1: A → B → C → D → **J** → E → F, one commit per workstream on `main` (J was added
+after this plan and slotted in after D, whose files it rewrites). **I** runs in parallel
 any time after A (it needs only `FoundryConfig`), but its packaging removals (I4) land with
-E, so E waits for I's module work if the two are in flight together.
+E, so E waits for I's module work if the two are in flight together. As of 2026-08-01
+everything through J is done; **E** (and then G5) is what is left.
 Phase 2: G and H (independent of each other; H depends on A only, G on D only).
 
 ## Risks / notes

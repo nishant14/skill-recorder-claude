@@ -20,7 +20,7 @@ Wayland story.
 | Browser URLs | AT-SPI2 accessibility tree via a persistent `python3` + `pyatspi` host | Best effort, not byte exact | Browser accessibility must be on |
 | Clipboard | Electron clipboard | Full | None |
 | Screen video + frames | `desktopCapturer` + Chromium snapshots + Sharp | Full on X11 | None on X11; portal prompt on Wayland |
-| Voice narration (opt-in) | hidden-window `getUserMedia` + `MediaRecorder`; Chromium decode + offline Whisper | Full | Microphone |
+| Voice narration (opt-in) | hidden-window `getUserMedia` + `MediaRecorder`; Chromium decode, then the Azure AI Foundry transcription deployment | Full | Microphone |
 
 Notes:
 
@@ -67,7 +67,9 @@ Notes:
    doctor reports a Wayland session.
 4. **Browser accessibility.** Snap Firefox needs `GNOME_ACCESSIBILITY=1` set *at
    launch*; Chromium needs `--force-renderer-accessibility`.
-5. **Copilot CLI** on `PATH` for the describer (`copilot`).
+5. **An Azure AI Foundry connection** (endpoint + API key + deployments) for the
+   describer, the builders, and narration transcription. Configured in the app or in
+   `~/.skill-recorder/foundry.json`; nothing is installed on `PATH`.
 6. No system media package is needed for new recordings.
 
 ## Doctor signals
@@ -129,8 +131,10 @@ AppImage. Native modules (`koffi`, `@koromix/*`, `sharp`, `@img/*`,
 `@huggingface/transformers`, `onnxruntime-node`, and Copilot platform packages) are
 listed under `asarUnpack` so their binaries load from disk rather than from inside the
 asar archive. `build.linux.files` additionally excludes `node_modules/get-windows/**`,
-which Linux does not use. The Whisper model is not bundled; it downloads to the app's
-user-data `models` folder only after the user approves the one-time ~252 MB download.
+which Linux does not use. No speech model ships or downloads: narration is transcribed by
+the user's Azure AI Foundry deployment, so `@huggingface/transformers`,
+`onnxruntime-node`, and the Copilot platform packages are unused at runtime and leave the
+package in Workstream E.
 
 Build the AppImage on a native x64 Linux machine or CI runner so npm selects the
 correct optional packages:
@@ -159,8 +163,8 @@ Linux packaging is deferred.
 - Terminal capture is not currently implemented; a recorded-terminal (PTY) approach is
   tracked in issue #7.
 - Semantic UI events (focus/invoke/value) are not implemented on any platform yet.
-- `onnxruntime-node` ships a prebuilt `linux-x64` binary, so narration transcription
-  needs no compiler.
+- Narration transcription is a network call to the user's Azure AI Foundry deployment, so
+  it needs no local model, no compiler, and no offline path.
 - A standalone system FFmpeg is consulted only for frame extraction from recordings
   created before `video-frames.json` existed. It is never bundled or downloaded;
   Electron's standard LGPL `libffmpeg.so` codec component remains in the runtime.

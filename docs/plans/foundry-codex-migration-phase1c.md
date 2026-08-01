@@ -1,7 +1,7 @@
 # Phase 1c in detail — Workstream C: Foundry connection UX (auth/config/IPC)
 
 Parent plan: [`foundry-codex-migration.md`](./foundry-codex-migration.md) · Tracker: [`progress.md`](./progress.md)
-Status: **approved — implementing**
+Status: **implemented — G3(C) manual UI checklist pending with the user**
 
 ## Scope and definition of done
 

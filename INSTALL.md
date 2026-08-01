@@ -2,8 +2,10 @@
 
 Skill Recorder can run directly from an exact source revision on Windows, macOS,
 or Ubuntu. These methods do not download a prebuilt Skill Recorder application.
-Node.js, Electron, native dependencies, and the GitHub Copilot CLI are obtained
-directly from their publishers and assembled locally.
+Node.js, Electron, and native dependencies are obtained directly from their
+publishers and assembled locally. The build still pulls the GitHub Copilot CLI
+package, which the app no longer uses at runtime (it is removed in an upcoming
+release).
 
 The generated build is for local execution only. Do not redistribute the build,
 `node_modules`, or downloaded runtimes. Release binaries must use the
@@ -57,9 +59,12 @@ The source installers:
    Launchpad, and the Dock) on macOS; and a launcher plus desktop entry on Ubuntu.
 9. Print a final confirmation listing the shortcuts that were created.
 
-No administrator access, global Node.js installation, or global Copilot CLI
-installation is required. GitHub Copilot authentication, entitlement, and
-network access are still required.
+No administrator access or global Node.js installation is required. An **Azure
+AI Foundry** endpoint, API key, and deployments are still required, along with
+network access: analysis, skill building, and narration transcription all run on
+that resource. Configure it in the app the first time you Analyze, or write
+`~/.skill-recorder/foundry.json`. The installer neither asks for nor stores those
+credentials.
 
 Piping a downloaded script directly to a shell gives you no opportunity to
 inspect it first and may be disabled by enterprise policy. The inspect-first
