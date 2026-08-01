@@ -1,0 +1,635 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Northwind Testbed Sales API",
+    "version": "1.0.0",
+    "description": "Customers, products and sales orders for the Northwind Testbed app (tools/testbed/server.mjs). Documentation level L1: every operation carries an operationId, request and response schemas are declared through components/$ref, and the apiKey scheme is named. This is the grounded path — a plan built against this file can name operations exactly."
+  },
+  "servers": [
+    {
+      "url": "http://127.0.0.1:8787/api/v1",
+      "description": "The local testbed server."
+    }
+  ],
+  "security": [
+    {
+      "apiKeyAuth": []
+    }
+  ],
+  "tags": [
+    {
+      "name": "orders",
+      "description": "Sales orders"
+    },
+    {
+      "name": "customers",
+      "description": "Customer accounts"
+    },
+    {
+      "name": "catalog",
+      "description": "Product catalog"
+    }
+  ],
+  "paths": {
+    "/customers": {
+      "get": {
+        "operationId": "listCustomers",
+        "summary": "List or search customer accounts",
+        "description": "Returns every customer account, or only those whose name or account id contains `q`. This is how you resolve a customer's name to the customerId a sales order needs.",
+        "tags": [
+          "customers"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Free-text match on the account name or the account id.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching customer accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Customer"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createCustomer",
+        "summary": "Create a customer account",
+        "description": "Adds a new customer account. The account id is assigned by the server.",
+        "tags": [
+          "customers"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CustomerCreate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created customer account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/customers/{customerId}": {
+      "parameters": [
+        {
+          "name": "customerId",
+          "in": "path",
+          "required": true,
+          "description": "The account id, e.g. `CUST-1001`.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Get one customer account by id",
+        "description": "Returns a single customer account. Use it once you already know the account id.",
+        "tags": [
+          "customers"
+        ],
+        "responses": {
+          "200": {
+            "description": "The customer account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Customer"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "summary": "List or search catalog products",
+        "description": "Returns the catalog, or only products whose name or SKU contains `q`. Line items on an order are priced from this catalog.",
+        "tags": [
+          "catalog"
+        ],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Free-text match on the product name or SKU.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching products.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/Product"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "operationId": "listOrders",
+        "summary": "List sales orders",
+        "description": "Returns every sales order, optionally filtered by customer and/or status.",
+        "tags": [
+          "orders"
+        ],
+        "parameters": [
+          {
+            "name": "customerId",
+            "in": "query",
+            "required": false,
+            "description": "Only orders placed for this customer account.",
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "name": "status",
+            "in": "query",
+            "required": false,
+            "description": "Only orders in this status.",
+            "schema": {
+              "$ref": "#/components/schemas/OrderStatus"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching sales orders.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/SalesOrder"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      },
+      "post": {
+        "operationId": "createSalesOrder",
+        "summary": "Create a sales order for a customer",
+        "description": "Places a sales order with one or more line items. Each line names a catalog SKU and a quantity; the server prices the lines from the catalog and computes the order total. This is the operation the app's New order form is equivalent to.",
+        "tags": [
+          "orders"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SalesOrderRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created sales order, priced and totalled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrder"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          }
+        }
+      }
+    },
+    "/orders/{orderId}": {
+      "parameters": [
+        {
+          "name": "orderId",
+          "in": "path",
+          "required": true,
+          "description": "The order number, e.g. `SO-10001`.",
+          "schema": {
+            "type": "string"
+          }
+        }
+      ],
+      "get": {
+        "operationId": "getOrder",
+        "summary": "Get one sales order by order number",
+        "tags": [
+          "orders"
+        ],
+        "responses": {
+          "200": {
+            "description": "The sales order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrder"
+                }
+              }
+            }
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "patch": {
+        "operationId": "updateOrder",
+        "summary": "Update a sales order's status or notes",
+        "description": "Changes the order's status and/or its free-text fields. Line items cannot be edited after the order is placed.",
+        "tags": [
+          "orders"
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/OrderUpdate"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "The updated sales order.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SalesOrder"
+                }
+              }
+            }
+          },
+          "400": {
+            "$ref": "#/components/responses/BadRequest"
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      },
+      "delete": {
+        "operationId": "deleteOrder",
+        "summary": "Delete a sales order",
+        "description": "Removes the order outright. There is no undo.",
+        "tags": [
+          "orders"
+        ],
+        "responses": {
+          "204": {
+            "description": "The order was deleted."
+          },
+          "401": {
+            "$ref": "#/components/responses/Unauthorized"
+          },
+          "404": {
+            "$ref": "#/components/responses/NotFound"
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Api-Key",
+        "description": "The testbed API key, sent on every request. Ask the operator for the value — never write a key into a skill, a plan, or an exported bundle."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request was rejected (unknown customer, unknown SKU, or no line items).",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "Unauthorized": {
+        "description": "The API key was missing or wrong.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      },
+      "NotFound": {
+        "description": "No such resource.",
+        "content": {
+          "application/json": {
+            "schema": {
+              "$ref": "#/components/schemas/Error"
+            }
+          }
+        }
+      }
+    },
+    "schemas": {
+      "OrderStatus": {
+        "type": "string",
+        "description": "Where the order is in its lifecycle.",
+        "enum": [
+          "draft",
+          "submitted",
+          "shipped",
+          "cancelled"
+        ]
+      },
+      "Customer": {
+        "type": "object",
+        "description": "A customer account an order can be placed for.",
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "description": "Account id, e.g. `CUST-1001`."
+          },
+          "name": {
+            "type": "string",
+            "description": "Account name as it appears in the app."
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "city": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        }
+      },
+      "CustomerCreate": {
+        "type": "object",
+        "description": "A new customer account. The account id is assigned by the server.",
+        "required": [
+          "name"
+        ],
+        "properties": {
+          "name": {
+            "type": "string",
+            "description": "Account name."
+          },
+          "email": {
+            "type": "string",
+            "format": "email"
+          },
+          "city": {
+            "type": "string"
+          },
+          "country": {
+            "type": "string"
+          }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "description": "One catalog item.",
+        "properties": {
+          "sku": {
+            "type": "string",
+            "description": "Catalog SKU, e.g. `NW-1140`."
+          },
+          "name": {
+            "type": "string"
+          },
+          "category": {
+            "type": "string"
+          },
+          "listPrice": {
+            "type": "number",
+            "format": "double",
+            "description": "Price per unit, in USD."
+          },
+          "inStock": {
+            "type": "integer",
+            "format": "int32"
+          }
+        }
+      },
+      "OrderLineItem": {
+        "type": "object",
+        "description": "One requested line on a new order.",
+        "required": [
+          "sku",
+          "quantity"
+        ],
+        "properties": {
+          "sku": {
+            "type": "string",
+            "description": "Catalog SKU of the product ordered."
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Units ordered; a whole number of 1 or more."
+          }
+        }
+      },
+      "SalesOrderLine": {
+        "type": "object",
+        "description": "One priced line on a placed order.",
+        "properties": {
+          "sku": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "quantity": {
+            "type": "integer",
+            "format": "int32"
+          },
+          "unitPrice": {
+            "type": "number",
+            "format": "double"
+          },
+          "lineTotal": {
+            "type": "number",
+            "format": "double"
+          }
+        }
+      },
+      "SalesOrderRequest": {
+        "type": "object",
+        "description": "What it takes to place a sales order.",
+        "required": [
+          "customerId",
+          "items"
+        ],
+        "properties": {
+          "customerId": {
+            "type": "string",
+            "description": "Account id of the customer the order is for — resolve a name to an id with listCustomers."
+          },
+          "items": {
+            "type": "array",
+            "description": "One entry per line item; at least one is required.",
+            "items": {
+              "$ref": "#/components/schemas/OrderLineItem"
+            }
+          },
+          "purchaseOrderRef": {
+            "type": "string",
+            "description": "The customer's own PO reference, when they gave one."
+          },
+          "notes": {
+            "type": "string",
+            "description": "Free-text note kept with the order."
+          }
+        }
+      },
+      "SalesOrder": {
+        "type": "object",
+        "description": "A placed sales order, priced and totalled by the server.",
+        "properties": {
+          "orderId": {
+            "type": "string",
+            "description": "Order number, e.g. `SO-10001`."
+          },
+          "customerId": {
+            "type": "string"
+          },
+          "customerName": {
+            "type": "string"
+          },
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "items": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/SalesOrderLine"
+            }
+          },
+          "total": {
+            "type": "number",
+            "format": "double",
+            "description": "Sum of the line totals, in USD."
+          },
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "purchaseOrderRef": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "OrderUpdate": {
+        "type": "object",
+        "description": "The fields of a placed order that may still be changed.",
+        "properties": {
+          "status": {
+            "$ref": "#/components/schemas/OrderStatus"
+          },
+          "purchaseOrderRef": {
+            "type": "string"
+          },
+          "notes": {
+            "type": "string"
+          }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Every non-2xx response body.",
+        "properties": {
+          "error": {
+            "type": "string",
+            "description": "Machine-readable code, e.g. `not_found`."
+          },
+          "message": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          }
+        }
+      }
+    }
+  }
+}

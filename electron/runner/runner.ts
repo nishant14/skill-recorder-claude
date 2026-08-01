@@ -29,9 +29,12 @@ import {
  *   `~/.skill-recorder/runs/<skill>/<timestamp>.json` *as it happens*, so a crashed or
  *   canceled run still leaves a record of what it did to the machine.
  * - **Redaction.** Everything persisted or streamed goes through {@link redactEntry}
- *   first. Today that covers the values of `runner.json.headers` (where API credentials
- *   live); Workstream H-b widens it. The Foundry key never gets this far — it is
- *   scrubbed out of the child environment in `tools.ts` and never enters a tool result.
+ *   first, which replaces the values of `runner.json.headers` — the API credentials
+ *   `call_api` sends — wherever they appear: a tool's arguments, its result text, a
+ *   confirmation's detail. It is substring-based rather than key-based on purpose: an
+ *   API that echoes its own key back inside a response body must not be able to write
+ *   it into the record. The Foundry key never gets this far — it is scrubbed out of the
+ *   child environment in `tools.ts` and never enters a tool result.
  * - **The gates.** `interactive` relays confirmations to the UI (wired in H-c);
  *   `auto-approve` — the smoke/eval path only — approves silently but still records
  *   every decision, so an unattended run is as auditable as a watched one.
@@ -191,8 +194,10 @@ function redactValue(value: unknown, secrets: readonly string[]): unknown {
 
 /**
  * The single choke point every transcript entry and progress event passes through.
- * H-b extends the secret set; the *shape* — one function, one call site — is what
- * keeps a later widening from missing a path.
+ * Every field that can carry model- or server-supplied text is covered (`text`,
+ * `detail`, `args`); the rest are ours (`type`, `name`, `decision`, timestamps). The
+ * *shape* — one function, one call site — is what keeps a later widening from missing
+ * a path.
  */
 export function redactEntry(entry: TranscriptEntry, secrets: readonly string[]): TranscriptEntry {
   if (secrets.length === 0) return entry;
@@ -383,10 +388,16 @@ export class SkillRunner {
   /** The execution toolset, wrapped so every call and result lands in the transcript. */
   private buildTools(run: ActiveRun, policy: RunPolicy): Tool[] {
     const gates = this.gatesFor(run, policy);
+    const skill = run.skill;
     const tools = createExecutionTools({
       allowlist: run.allowlist,
       confirm: gates.confirm,
       ask: gates.ask,
+      // `call_api` exists only for a skill that actually carries an operation index;
+      // the credentials it sends are the user's `runner.json`, read at load time.
+      ...(skill.indexFile
+        ? { api: { indexFile: skill.indexFile, specFile: skill.specFile, config: skill.runnerConfig } }
+        : {}),
       ...(this.seams.tools ?? {}),
     });
     return tools.map((tool) => this.instrument(run, tool));

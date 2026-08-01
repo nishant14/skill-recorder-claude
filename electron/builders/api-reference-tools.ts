@@ -1,11 +1,11 @@
 import { readFileSync } from "node:fs";
 
 import {
-  findOperation,
-  normalizeApiRef,
+  lookupOperation,
+  nearMissOperations,
+  operationRow,
   resolveOperationDetail,
   scoreChunks,
-  type ApiOperation,
   type ApiReferenceSummary,
 } from "../../common/api-reference";
 import type { SkillArchitecture } from "../../common/skill";
@@ -33,8 +33,6 @@ import { loadIndex, specPath } from "./api-reference-store";
 export const MAX_LISTED_OPERATIONS = 100;
 /** Ceiling on `search_api_docs`'s `limit`, whatever the model asks for. */
 export const MAX_SEARCH_RESULTS = 10;
-/** How many "did you mean" operations an unknown-id failure offers. */
-const MAX_NEAR_MISSES = 8;
 
 export interface ApiReferenceToolsContext {
   /** The session directory (the same one `loadIndex`/`specPath` take). */
@@ -45,58 +43,6 @@ export interface ApiReferenceToolsContext {
 
 function str(value: unknown): string {
   return typeof value === "string" ? value : "";
-}
-
-/** `operationId  METHOD /path — summary [tags]`, the compact table row. */
-function row(op: ApiOperation): string {
-  let line = `${op.operationId}  ${op.method} ${op.path}`;
-  if (op.summary) line += ` — ${op.summary}`;
-  if (op.tags.length) line += ` [${op.tags.join(", ")}]`;
-  if (op.deprecated) line += " (deprecated)";
-  return line;
-}
-
-/** Split a requested id into comparable words: `makeSalesOrder` → make, sales, order. */
-function words(raw: string): string[] {
-  return raw
-    .replace(/^api:/i, "")
-    .split(/[^A-Za-z0-9]+|(?=[A-Z])/)
-    .map((w) => w.toLowerCase())
-    .filter((w) => w.length >= 3);
-}
-
-/**
- * Resolve what the model asked for. Both `api:` conventions are accepted, and so are
- * the bare forms (`createSalesOrder`, `POST /sales/orders`) — the model writing the id
- * with or without the prefix is not a mistake worth a failure turn.
- */
-function lookup(operations: readonly ApiOperation[], requested: string): ApiOperation | null {
-  const text = requested.trim();
-  if (!text) return null;
-  const ref = normalizeApiRef(text) ?? normalizeApiRef(`api:${text}`);
-  return ref ? findOperation(operations, ref) : null;
-}
-
-/**
- * Operations that look like what was asked for. The point is self-correction: a model
- * that guessed `createSalesOrders` should see `createSalesOrder` in the failure and fix
- * itself, instead of listing every operation again.
- */
-function nearMisses(operations: readonly ApiOperation[], requested: string): ApiOperation[] {
-  const needle = requested.trim().toLowerCase().replace(/^api:/, "").trim();
-  const terms = words(requested);
-  const scored: { op: ApiOperation; score: number }[] = [];
-  for (const op of operations) {
-    const hay = `${op.operationId} ${op.method} ${op.path} ${op.summary}`.toLowerCase();
-    let score = 0;
-    if (needle && (hay.includes(needle) || needle.includes(op.operationId.toLowerCase()))) score += 5;
-    for (const term of terms) if (hay.includes(term)) score += 1;
-    if (score > 0) scored.push({ op, score });
-  }
-  return scored
-    .sort((a, b) => b.score - a.score)
-    .slice(0, MAX_NEAR_MISSES)
-    .map((s) => s.op);
 }
 
 /**
@@ -163,7 +109,7 @@ export function createApiReferenceTools(ctx: ApiReferenceToolsContext): Tool[] {
       const shown = matches.slice(0, MAX_LISTED_OPERATIONS);
       const lines = [
         `${matches.length} operation(s)${scope ? ` matching ${scope}` : ""} in the attached API reference:`,
-        ...shown.map(row),
+        ...shown.map(operationRow),
       ];
       if (matches.length > shown.length) {
         lines.push(`… ${matches.length - shown.length} more — narrow with filter.`);
@@ -193,13 +139,13 @@ export function createApiReferenceTools(ctx: ApiReferenceToolsContext): Tool[] {
     handler: (raw) => {
       const requested = str((raw as Record<string, unknown> | null)?.operationId).trim();
       progress(`Reading the API operation ${requested || "(unnamed)"}…`);
-      const op = requested ? lookup(index.operations, requested) : null;
+      const op = requested ? lookupOperation(index.operations, requested) : null;
       if (!op) {
-        const suggestions = requested ? nearMisses(index.operations, requested) : [];
+        const suggestions = requested ? nearMissOperations(index.operations, requested) : [];
         const lines = [
           `There is no operation "${requested}" in the attached API reference.`,
           suggestions.length
-            ? "Did you mean one of these?\n" + suggestions.map((s) => `- ${row(s)}`).join("\n")
+            ? "Did you mean one of these?\n" + suggestions.map((s) => `- ${operationRow(s)}`).join("\n")
             : "Call list_api_operations to see what is actually available.",
         ];
         return { textResultForLlm: lines.join("\n"), resultType: "failure" };
@@ -209,7 +155,7 @@ export function createApiReferenceTools(ctx: ApiReferenceToolsContext): Tool[] {
       if (!detail) {
         // The spec is gone or unreadable; the index row is still true and useful.
         return (
-          `Only the indexed summary is available for this operation:\n${row(op)}\n` +
+          `Only the indexed summary is available for this operation:\n${operationRow(op)}\n` +
           "Describe the request from the documentation (search_api_docs) or the step's evidence."
         );
       }

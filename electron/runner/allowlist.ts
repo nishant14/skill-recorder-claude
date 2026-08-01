@@ -171,7 +171,23 @@ export function capabilityRefusal(list: CompiledAllowlist, capability: RunnerCap
   );
 }
 
-/** True when the skill may call `api:<operationId>` (H-b's `call_api` reads this). */
+/**
+ * True when the skill may call `api:<operationId>`. A skill that named **no** `api:`
+ * entry is not restricted to an empty set — it simply has no API rule, and `call_api`
+ * is then bounded by the reference the skill carries (and by confirmation).
+ */
 export function allowsApiOperation(list: CompiledAllowlist, operationId: string): boolean {
-  return list.apiOps === null || list.apiOps.has(operationId);
+  if (list.apiOps === null) return true;
+  const wanted = operationId.trim().toLowerCase();
+  for (const op of list.apiOps) if (op.toLowerCase() === wanted) return true;
+  return false;
+}
+
+/** The in-band refusal for an operation this skill's `api:` entries never named. */
+export function apiOperationRefusal(list: CompiledAllowlist, operationId: string): string {
+  const allowed = [...(list.apiOps ?? [])].map((op) => `api:${op}`).join(", ");
+  return (
+    `This skill's allowed-tools do not include api:${operationId} — it may only call: ${allowed || "nothing"}. ` +
+    "Use one of those operations, or finish and report what is missing."
+  );
 }

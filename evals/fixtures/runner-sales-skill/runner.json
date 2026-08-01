@@ -1,0 +1,6 @@
+{
+  "apiBase": "PATCHED-AT-RUNTIME",
+  "headers": {
+    "X-Api-Key": "demo-key-123"
+  }
+}

@@ -1,0 +1,97 @@
+{
+  "version": 1,
+  "operations": [
+    {
+      "operationId": "listCustomers",
+      "method": "GET",
+      "path": "/customers",
+      "summary": "List or search customer accounts",
+      "tags": [
+        "customers"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "createCustomer",
+      "method": "POST",
+      "path": "/customers",
+      "summary": "Create a customer account",
+      "tags": [
+        "customers"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "getCustomer",
+      "method": "GET",
+      "path": "/customers/{customerId}",
+      "summary": "Get one customer account by id",
+      "tags": [
+        "customers"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "listProducts",
+      "method": "GET",
+      "path": "/products",
+      "summary": "List or search catalog products",
+      "tags": [
+        "catalog"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "listOrders",
+      "method": "GET",
+      "path": "/orders",
+      "summary": "List sales orders",
+      "tags": [
+        "orders"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "createSalesOrder",
+      "method": "POST",
+      "path": "/orders",
+      "summary": "Create a sales order for a customer",
+      "tags": [
+        "orders"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "getOrder",
+      "method": "GET",
+      "path": "/orders/{orderId}",
+      "summary": "Get one sales order by order number",
+      "tags": [
+        "orders"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "deleteOrder",
+      "method": "DELETE",
+      "path": "/orders/{orderId}",
+      "summary": "Delete a sales order",
+      "tags": [
+        "orders"
+      ],
+      "sourceId": "spec"
+    },
+    {
+      "operationId": "updateOrder",
+      "method": "PATCH",
+      "path": "/orders/{orderId}",
+      "summary": "Update a sales order's status or notes",
+      "tags": [
+        "orders"
+      ],
+      "sourceId": "spec"
+    }
+  ],
+  "chunks": [],
+  "updatedAt": 1785616194349
+}

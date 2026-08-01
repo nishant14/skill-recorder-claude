@@ -29,6 +29,8 @@ const ENV_VARS = ["SKILL_RECORDER_CONFIG_DIR", "SKILL_RECORDER_RUNS_DIR"];
 interface Harness {
   /** The temp directory the tools are scoped to. */
   home: string;
+  /** Every registered tool name, in order. */
+  names: string[];
   tool(name: string): Tool;
   call(name: string, args: unknown): Promise<ToolResult>;
   /** Text of a tool result, whether it came back as a string or an object. */
@@ -97,6 +99,7 @@ async function withTools(options: Options, body: (h: Harness) => Promise<void>):
   try {
     await body({
       home,
+      names: tools.map((t) => t.name),
       shells,
       confirms,
       fetches,
@@ -123,11 +126,14 @@ async function withTools(options: Options, body: (h: Harness) => Promise<void>):
 
 // --- surface ----------------------------------------------------------------
 
-test("the toolset is the five execution tools (call_api arrives with H-b)", async () => {
+test("a skill with no API reference gets the five general tools and no call_api", async () => {
   await withTools({}, async (h) => {
     for (const name of ["run_shell", "read_file", "write_file", "fetch_url", "ask_user"]) {
       assert.equal(h.tool(name).name, name);
     }
+    // `call_api` is registered only for a skill carrying `api/index.json` — see
+    // `call-api.test.ts`, which drives it against the committed fixture reference.
+    assert.equal(h.names.includes("call_api"), false);
   });
 });
 

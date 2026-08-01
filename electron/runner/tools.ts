@@ -3,15 +3,25 @@ import { existsSync, mkdirSync, readFileSync, realpathSync, statSync, writeFileS
 import os from "node:os";
 import path from "node:path";
 
-import type { Tool } from "../foundry/agent";
+import {
+  ApiReferenceIndexSchema,
+  lookupOperation,
+  nearMissOperations,
+  operationRow,
+  type ApiOperation,
+} from "../../common/api-reference";
+import type { Tool, ToolResult } from "../foundry/agent";
 import { foundryConfigFile } from "../foundry/config";
 import {
+  allowsApiOperation,
   allowsCapability,
+  apiOperationRefusal,
   capabilityRefusal,
   matchesShell,
   shellRefusal,
   type CompiledAllowlist,
 } from "./allowlist";
+import type { SkillRunnerConfig } from "./library";
 
 /**
  * The tools a skill run executes with: shell, files, web, and a way to ask the user a
@@ -38,7 +48,12 @@ import {
  * Everything the guards can't do in-process — the shell, `fetch`, the confirmation UI —
  * is an injected seam, which is what lets the whole file be unit-tested offline.
  *
- * `call_api` (the API-grounded half) is Workstream H-b and lives beside these.
+ * `call_api` is the API-grounded half and the one tool that carries credentials: it
+ * resolves an operation out of the skill's own `api/index.json`, builds the request
+ * from `runner.json` (`apiBase` + `headers`), and executes it. The credential path is
+ * deliberately one-way — the values come *out* of `runner.json` into the request and
+ * never into a tool argument, a result, or the transcript (`redactEntry` in
+ * `runner.ts` is the choke point that proves the last part).
  */
 
 /** Per-command wall clock. Long enough for a build, short enough to notice a hang. */
@@ -49,9 +64,11 @@ const SHELL_OUTPUT_CAP = 20_000;
 const READ_CAP_BYTES = 200 * 1024;
 /** A skill writes documents, not disk images. */
 const WRITE_CAP_BYTES = 1024 * 1024;
-/** Response body cap and deadline for `fetch_url`. */
+/** Response body cap and deadline for `fetch_url` and `call_api` alike. */
 const FETCH_CAP_BYTES = 200 * 1024;
 const FETCH_TIMEOUT_MS = 30_000;
+/** How many operation ids `call_api`'s description names before it stops being a list. */
+const MAX_DESCRIBED_OPERATIONS = 40;
 
 /** The exact in-band answer to a denied side effect. A denial is an instruction. */
 export const DECLINED_MESSAGE = "The user declined this action.";
@@ -95,11 +112,27 @@ export interface ShellSpec {
 
 export type RunShellFn = (spec: ShellSpec) => Promise<ShellOutcome>;
 
+/**
+ * The API reference a skill carries (Workstream J's `api/` folder) plus the user's
+ * `runner.json`. Present ⇒ the run gets `call_api`; absent ⇒ it never sees the tool,
+ * because a skill with no operation index has nothing for it to call.
+ */
+export interface ApiExecutionContext {
+  /** Absolute path of the skill's `api/index.json` — the menu of callable operations. */
+  indexFile: string;
+  /** Absolute path of the skill's `api/openapi.json`, read lazily for `servers[0]`. */
+  specFile?: string | null;
+  /** The user's per-skill config: the base URL override and the credential headers. */
+  config?: SkillRunnerConfig | null;
+}
+
 export interface ExecutionToolsContext {
   /** Compiled `allowed-tools` — the enforcement half. */
   allowlist: CompiledAllowlist;
   confirm: ConfirmGate;
   ask: AskGate;
+  /** The skill's API reference + `runner.json`. Absent ⇒ no `call_api`. */
+  api?: ApiExecutionContext | null;
   /** Test seam: run a child process. Defaults to `child_process.spawn`. */
   runShell?: RunShellFn;
   /** Test seam: the HTTP client. Defaults to the global `fetch`. */
@@ -259,6 +292,57 @@ function shellFor(command: string): { file: string; args: string[] } {
 function oneLine(text: string, max = 120): string {
   const flat = text.replace(/\s+/g, " ").trim();
   return flat.length > max ? `${flat.slice(0, max - 1)}…` : flat;
+}
+
+/* --- call_api helpers -------------------------------------------------------- */
+
+/**
+ * The operations a skill's stored index carries. An index that is missing, corrupt, or
+ * empty yields `[]`, which suppresses the tool entirely — a `call_api` that can only
+ * ever answer "nothing here" is worse than no tool at all.
+ */
+function loadIndexedOperations(file: string): ApiOperation[] {
+  try {
+    return ApiReferenceIndexSchema.parse(JSON.parse(readFileSync(file, "utf8"))).operations;
+  } catch {
+    return [];
+  }
+}
+
+/** The spec's first declared server URL — the fallback when `runner.json` sets none. */
+function firstServerUrl(spec: unknown): string | null {
+  const servers = (spec as { servers?: unknown } | null)?.servers;
+  if (!Array.isArray(servers)) return null;
+  for (const entry of servers) {
+    const url = (entry as { url?: unknown } | null)?.url;
+    if (typeof url === "string" && url.trim()) return url.trim();
+  }
+  return null;
+}
+
+function asRecord(value: unknown): Record<string, unknown> {
+  return value && typeof value === "object" && !Array.isArray(value) ? (value as Record<string, unknown>) : {};
+}
+
+/** Scalars only: an object where a path parameter belongs is a mistake, not a value. */
+function scalar(value: unknown): string | null {
+  if (typeof value === "string") return value;
+  if (typeof value === "number" || typeof value === "boolean") return String(value);
+  return null;
+}
+
+/**
+ * Pretty-print a JSON response so the model reads fields rather than one long line.
+ * Anything that isn't JSON — or is too big to re-serialize safely — passes through
+ * verbatim and is capped by the caller.
+ */
+function prettyJson(text: string): string {
+  if (!text.trim() || text.length > FETCH_CAP_BYTES) return text;
+  try {
+    return JSON.stringify(JSON.parse(text), null, 2) ?? text;
+  } catch {
+    return text;
+  }
 }
 
 /**
@@ -493,6 +577,192 @@ export function createExecutionTools(ctx: ExecutionToolsContext): Tool[] {
     },
   };
 
+  /**
+   * The API-grounded tool, or null when this skill carries no usable operation index.
+   * Everything it needs is resolved once, here: the operations, the lazily-read spec,
+   * and the operation menu quoted in the description.
+   */
+  const buildCallApiTool = (): Tool | null => {
+    const api = ctx.api;
+    if (!api) return null;
+    const operations = loadIndexedOperations(api.indexFile);
+    if (operations.length === 0) return null;
+
+    // The spec is only needed for `servers[0]`, and only when runner.json sets no
+    // apiBase — a portal spec can be megabytes, so don't read it to build the tool.
+    let spec: unknown = null;
+    let specRead = false;
+    const readSpec = (): unknown => {
+      if (specRead) return spec;
+      specRead = true;
+      try {
+        spec = api.specFile ? JSON.parse(readFileSync(api.specFile, "utf8")) : null;
+      } catch {
+        spec = null; // an unreadable spec just means "no server fallback"
+      }
+      return spec;
+    };
+
+    // Prefer the skill's own `api:` entries: those are the operations it was approved
+    // for, so naming anything else in the description would only invite a refusal.
+    const declared = allowlist.apiOps ? [...allowlist.apiOps] : operations.map((o) => o.operationId);
+    const menu = declared.slice(0, MAX_DESCRIBED_OPERATIONS).join(", ");
+    const more = declared.length > MAX_DESCRIBED_OPERATIONS ? `, and ${declared.length - MAX_DESCRIBED_OPERATIONS} more` : "";
+
+    const failure = (text: string): ToolResult => ({ textResultForLlm: text, resultType: "failure" });
+
+    return {
+      name: "call_api",
+      description:
+        "Call one operation of this skill's own API by its operationId. The base URL and the " +
+        "credentials come from the skill's configuration — never pass, ask for, or print them. " +
+        "Anything that changes data is shown to the user for approval first. " +
+        `Operations this skill may call: ${menu}${more}.`,
+      parameters: {
+        type: "object",
+        properties: {
+          operationId: {
+            type: "string",
+            description: 'The operationId as the reference spells it ("createSalesOrder"); a "METHOD /path" route also works.',
+          },
+          pathParams: {
+            type: "object",
+            description: 'Values for the `{...}` placeholders in the operation\'s path, e.g. {"orderId": "SO-10003"}.',
+            additionalProperties: true,
+          },
+          query: {
+            type: "object",
+            description: 'Query-string parameters, e.g. {"q": "Contoso"}. Arrays are repeated as separate values.',
+            additionalProperties: true,
+          },
+          body: {
+            type: "object",
+            description: "The JSON request body, for operations that take one. Sent as application/json.",
+            additionalProperties: true,
+          },
+        },
+        required: ["operationId"],
+        additionalProperties: false,
+      },
+      handler: async (args) => {
+        const { operationId, pathParams, query, body } = (args ?? {}) as {
+          operationId?: unknown;
+          pathParams?: unknown;
+          query?: unknown;
+          body?: unknown;
+        };
+        const requested = typeof operationId === "string" ? operationId.trim() : "";
+        if (!requested) return "Pass an `operationId` — which of this skill's API operations to call.";
+
+        const op = lookupOperation(operations, requested);
+        if (!op) {
+          const suggestions = nearMissOperations(operations, requested);
+          return failure(
+            `There is no operation "${requested}" in this skill's API reference.\n` +
+              (suggestions.length
+                ? `Did you mean one of these?\n${suggestions.map((s) => `- ${operationRow(s)}`).join("\n")}`
+                : `The operations it carries are: ${operations
+                    .slice(0, MAX_DESCRIBED_OPERATIONS)
+                    .map((o) => o.operationId)
+                    .join(", ")}.`),
+          );
+        }
+        if (!allowsApiOperation(allowlist, op.operationId)) {
+          return apiOperationRefusal(allowlist, op.operationId);
+        }
+
+        const base = (api.config?.apiBase ?? firstServerUrl(readSpec()) ?? "").trim();
+        if (!base) {
+          return failure(
+            "This skill has no API base URL: its runner.json sets no `apiBase` and the stored spec declares no " +
+              "`servers`. Tell the user to add one to runner.json beside the SKILL.md, and do this step another way.",
+          );
+        }
+
+        const params = asRecord(pathParams);
+        const missing: string[] = [];
+        const route = op.path.replace(/\{([^}]+)\}/g, (_whole, raw: string) => {
+          const name = raw.trim();
+          const value = scalar(params[name]);
+          if (value === null || value === "") {
+            missing.push(name);
+            return `{${name}}`;
+          }
+          return encodeURIComponent(value);
+        });
+        if (missing.length) {
+          return failure(
+            `${op.operationId} is ${op.method} ${op.path} — pass ${missing.map((m) => `\`${m}\``).join(", ")} in \`pathParams\`.`,
+          );
+        }
+
+        let url: URL;
+        try {
+          url = new URL(`${base.replace(/\/+$/, "")}${route.startsWith("/") ? "" : "/"}${route}`);
+        } catch {
+          return failure(`This skill's API base URL isn't a usable address: ${base}`);
+        }
+        if (url.protocol !== "http:" && url.protocol !== "https:") {
+          return failure("Only http:// and https:// APIs can be called.");
+        }
+        for (const [key, value] of Object.entries(asRecord(query))) {
+          for (const item of Array.isArray(value) ? value : [value]) {
+            const text = scalar(item);
+            if (text !== null) url.searchParams.append(key, text);
+          }
+        }
+
+        // runner.json wins over our default so a user can pin a vendor content type.
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          ...(api.config?.headers ?? {}),
+        };
+        const writes = op.method !== "GET" && op.method !== "HEAD";
+        const payload = writes && body !== undefined && body !== null ? JSON.stringify(body) : undefined;
+
+        if (writes) {
+          // Header *names* only: the values are the credentials, and a confirmation card
+          // is one more place they would otherwise be read (and later, redacted) from.
+          const detail = [
+            `${op.method} ${url.toString()}`,
+            op.summary ? `\n${op.summary}` : "",
+            `\n\nHeaders: ${Object.keys(headers).join(", ")} (values come from this skill's configuration)`,
+            payload === undefined
+              ? "\n\n(no request body)"
+              : `\n\nBody:\n${capText(JSON.stringify(body, null, 2) ?? payload, 4_000)}`,
+          ].join("");
+          const refusal = await gate("api", `Call ${op.operationId} (${op.method} ${url.pathname})`, detail);
+          if (refusal) return refusal;
+        }
+
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
+        try {
+          const response = await doFetch(url.toString(), {
+            method: op.method,
+            headers,
+            ...(payload === undefined ? {} : { body: payload }),
+            signal: controller.signal,
+          });
+          const text = await response.text();
+          const shown = capText(prettyJson(text), FETCH_CAP_BYTES);
+          const result =
+            `HTTP ${response.status} ${response.statusText} · ${op.method} ${op.path}\n\n` +
+            (shown.trim() || "(empty response)");
+          // A 4xx/5xx is information, not a crash: the model reads the body and adapts.
+          return response.ok ? result : failure(result);
+        } catch (err) {
+          if (controller.signal.aborted) {
+            return failure(`That API call took longer than ${FETCH_TIMEOUT_MS / 1000}s and was stopped.`);
+          }
+          return failure(`Could not reach this skill's API: ${msg(err)}`);
+        } finally {
+          clearTimeout(timer);
+        }
+      },
+    };
+  };
+
   const askUserTool: Tool = {
     name: "ask_user",
     description:
@@ -513,5 +783,9 @@ export function createExecutionTools(ctx: ExecutionToolsContext): Tool[] {
     },
   };
 
-  return [runShellTool, readFileTool, writeFileTool, fetchUrlTool, askUserTool];
+  const tools: Tool[] = [runShellTool, readFileTool, writeFileTool, fetchUrlTool];
+  const callApiTool = buildCallApiTool();
+  if (callApiTool) tools.push(callApiTool);
+  tools.push(askUserTool);
+  return tools;
 }

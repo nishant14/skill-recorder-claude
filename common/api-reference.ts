@@ -650,6 +650,69 @@ export function findOperation(
   );
 }
 
+/* --- Asking for an operation by name (shared by the builder tools + the runner) --- */
+
+/** How many "did you mean" operations an unknown-id failure offers. */
+export const MAX_NEAR_MISSES = 8;
+
+/** `operationId  METHOD /path — summary [tags]`, the compact table row. */
+export function operationRow(op: ApiOperation): string {
+  let line = `${op.operationId}  ${op.method} ${op.path}`;
+  if (op.summary) line += ` — ${op.summary}`;
+  if (op.tags.length) line += ` [${op.tags.join(", ")}]`;
+  if (op.deprecated) line += " (deprecated)";
+  return line;
+}
+
+/** Split a requested id into comparable words: `makeSalesOrder` → make, sales, order. */
+function words(raw: string): string[] {
+  return raw
+    .replace(/^api:/i, "")
+    .split(/[^A-Za-z0-9]+|(?=[A-Z])/)
+    .map((w) => w.toLowerCase())
+    .filter((w) => w.length >= 3);
+}
+
+/**
+ * Resolve what a model asked for. Both `api:` conventions are accepted, and so are
+ * the bare forms (`createSalesOrder`, `POST /sales/orders`) — the model writing the id
+ * with or without the prefix is not a mistake worth a failure turn.
+ */
+export function lookupOperation(
+  operations: readonly ApiOperation[],
+  requested: string,
+): ApiOperation | null {
+  const text = requested.trim();
+  if (!text) return null;
+  const ref = normalizeApiRef(text) ?? normalizeApiRef(`api:${text}`);
+  return ref ? findOperation(operations, ref) : null;
+}
+
+/**
+ * Operations that look like what was asked for. The point is self-correction: a caller
+ * that guessed `createSalesOrders` should see `createSalesOrder` in the failure and fix
+ * itself, instead of listing every operation again.
+ */
+export function nearMissOperations(
+  operations: readonly ApiOperation[],
+  requested: string,
+): ApiOperation[] {
+  const needle = requested.trim().toLowerCase().replace(/^api:/, "").trim();
+  const terms = words(requested);
+  const scored: { op: ApiOperation; score: number }[] = [];
+  for (const op of operations) {
+    const hay = `${op.operationId} ${op.method} ${op.path} ${op.summary}`.toLowerCase();
+    let score = 0;
+    if (needle && (hay.includes(needle) || needle.includes(op.operationId.toLowerCase()))) score += 5;
+    for (const term of terms) if (hay.includes(term)) score += 1;
+    if (score > 0) scored.push({ op, score });
+  }
+  return scored
+    .sort((a, b) => b.score - a.score)
+    .slice(0, MAX_NEAR_MISSES)
+    .map((s) => s.op);
+}
+
 /**
  * Every distinct `api:` ref a plan makes, in first-seen order: step tools first, then
  * anything the plan listed in `allowed-tools`. Steps are typed loosely on purpose —

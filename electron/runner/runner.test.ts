@@ -1,9 +1,10 @@
 import assert from "node:assert/strict";
-import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { setTimeout as delay } from "node:timers/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
 
 import { SkillRunner, type RunProgress, type RunTranscript } from "./runner";
 import type { AskGate, ConfirmDecision, ConfirmGate, ShellSpec } from "./tools";
@@ -35,6 +36,18 @@ const ENV_VARS = [
 ];
 
 const SKILL_BODY = "## Steps\n\n1. List the open PRs.\n2. Write them to a report.";
+
+/** The committed API reference the live smoke installs — reused so `call_api` here is
+ *  wired exactly the way a real API-grounded skill wires it. */
+const FIXTURE_API_DIR = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "..",
+  "evals",
+  "fixtures",
+  "runner-sales-skill",
+  "api",
+);
 
 interface WireItem {
   type: string;
@@ -84,6 +97,8 @@ interface Harness {
   progress: RunProgress[];
   requests: RecordedRequest[];
   shells: ShellSpec[];
+  /** Every request the execution tools made through the injected `fetch`. */
+  calls: { url: string; init: RequestInit }[];
   runsDir: string;
   /** The directory standing in for the user's home folder. */
   home: string;
@@ -97,6 +112,10 @@ interface Options {
   ask?: AskGate;
   /** Written beside the SKILL.md as `runner.json` (where API credentials live). */
   runnerConfig?: unknown;
+  /** Copy the fixture's `api/` into the skill folder, which is what registers `call_api`. */
+  withApi?: boolean;
+  /** What the execution tools' injected `fetch` answers with (`fetch_url`, `call_api`). */
+  respond?: (url: string, init: RequestInit) => Response;
   /** Shorten the runner's own interactive-wait deadline (real one is 3 min). */
   interactiveTimeoutMs?: number;
 }
@@ -129,6 +148,9 @@ async function withRunner(
   if (options.runnerConfig !== undefined) {
     writeFileSync(path.join(skillsDir, "pr-report", "runner.json"), JSON.stringify(options.runnerConfig));
   }
+  if (options.withApi) {
+    cpSync(FIXTURE_API_DIR, path.join(skillsDir, "pr-report", "api"), { recursive: true });
+  }
 
   process.env.SKILL_RECORDER_SKILLS_DIR = skillsDir;
   process.env.SKILL_RECORDER_RUNS_DIR = runsDir;
@@ -140,6 +162,7 @@ async function withRunner(
   const requests: RecordedRequest[] = [];
   const progress: RunProgress[] = [];
   const shells: ShellSpec[] = [];
+  const calls: { url: string; init: RequestInit }[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = (async (_input: unknown, init: Record<string, unknown> = {}) => {
     const record: RecordedRequest = {
@@ -161,7 +184,10 @@ async function withRunner(
         shells.push(spec);
         return { code: 0, stdout: "#12 Fix the thing\n", stderr: "", timedOut: false };
       },
-      fetchImpl: (async () => new Response("unused")) as unknown as typeof fetch,
+      fetchImpl: (async (input: unknown, init: RequestInit = {}) => {
+        calls.push({ url: String(input), init });
+        return options.respond?.(String(input), init) ?? new Response("unused");
+      }) as unknown as typeof fetch,
     },
     ...(options.interactiveTimeoutMs === undefined
       ? {}
@@ -174,6 +200,7 @@ async function withRunner(
       progress,
       requests,
       shells,
+      calls,
       runsDir,
       home: root,
       transcript() {
@@ -379,6 +406,83 @@ test("credentials from runner.json never reach the transcript or a progress even
         !JSON.stringify(h.progress).includes("demo-key-123"),
         "nor in anything streamed to the renderer",
       );
+    },
+  );
+});
+
+test("a call_api run sends the credential and records the call without it", async () => {
+  const script = queue(
+    toolReply("c1", "call_api", { operationId: "listCustomers", query: { q: "Contoso" } }),
+    textReply("Found Contoso (CUST-1001)."),
+  );
+
+  await withRunner(
+    script,
+    {
+      allowedTools: ["api:listCustomers"],
+      withApi: true,
+      runnerConfig: { apiBase: "https://api.test/v1", headers: { "X-Api-Key": "demo-key-123" } },
+      // The worst case for redaction: an API that echoes the key back in its own body.
+      respond: () =>
+        new Response(JSON.stringify([{ customerId: "CUST-1001", seenKey: "demo-key-123" }]), { status: 200 }),
+    },
+    async (h) => {
+      await h.runner.run({ name: "pr-report", policy: "auto-approve" });
+
+      // The wire is unredacted: the key has to actually reach the API.
+      assert.equal(h.calls.length, 1);
+      assert.equal(h.calls[0].url, "https://api.test/v1/customers?q=Contoso");
+      assert.equal((h.calls[0].init.headers as Record<string, string>)["X-Api-Key"], "demo-key-123");
+
+      const doc = h.transcript();
+      assert.deepEqual(types(doc), ["tool-call:call_api", "tool-result:call_api", "model", "done"]);
+      assert.match(String(doc.entries[1].text), /HTTP 200/);
+      assert.match(String(doc.entries[1].text), /CUST-1001/, "the useful half of the answer survives");
+
+      const persisted = JSON.stringify(doc);
+      assert.ok(!persisted.includes("demo-key-123"), "the key must not be anywhere in the persisted run");
+      assert.match(persisted, /«redacted»/);
+      assert.ok(
+        !JSON.stringify(h.progress).includes("demo-key-123"),
+        "nor in anything streamed to the renderer",
+      );
+    },
+  );
+});
+
+test("a non-GET call_api is confirmation-gated inside the run, and a denial is in band", async () => {
+  const script = queue(
+    toolReply("c1", "call_api", {
+      operationId: "createSalesOrder",
+      body: { customerId: "CUST-1001", items: [{ sku: "NW-1140", quantity: 2 }] },
+    }),
+    textReply("The user declined the order, so nothing was created."),
+  );
+
+  await withRunner(
+    script,
+    {
+      allowedTools: ["api:createSalesOrder"],
+      withApi: true,
+      runnerConfig: { apiBase: "https://api.test/v1", headers: { "X-Api-Key": "demo-key-123" } },
+      confirm: { request: async () => "deny" },
+    },
+    async (h) => {
+      await h.runner.run({ name: "pr-report", policy: "interactive" });
+      assert.deepEqual(h.calls, [], "a denied API write never left the machine");
+
+      const doc = h.transcript();
+      assert.deepEqual(types(doc), [
+        "tool-call:call_api",
+        "confirm-request:api",
+        "confirm-decision:api",
+        "tool-result:call_api",
+        "model",
+        "done",
+      ]);
+      assert.equal(doc.entries[1].text, "Call createSalesOrder (POST /v1/orders)");
+      assert.match(String(doc.entries[1].detail), /"sku": "NW-1140"/);
+      assert.equal(doc.entries[3].text, "The user declined this action.");
     },
   );
 });
