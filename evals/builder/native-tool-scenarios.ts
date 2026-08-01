@@ -71,7 +71,7 @@ const webToSpreadsheet: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch"], ["xlsx"]],
+    mustUseAny: [["web_fetch", "web access", "fetch", "http"], ["xlsx", "csv", "spreadsheet"]],
     forbidden: [],
   },
 };
@@ -128,7 +128,7 @@ const invoiceExtract: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch", "browser_", "browser automation"], ["xlsx"]],
+    mustUseAny: [["web_fetch", "web access", "fetch", "http", "browser_", "browser automation"], ["xlsx", "csv", "spreadsheet"]],
     forbidden: [],
   },
 };
@@ -184,7 +184,7 @@ const researchCompile: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch"], ["docx", "write", "note", ".md", ".txt"]],
+    mustUseAny: [["web_fetch", "web access", "fetch", "http"], ["docx", "write", "note", ".md", ".txt"]],
     forbidden: [],
   },
 };
@@ -240,7 +240,7 @@ const directoryLookup: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch"], ["xlsx"]],
+    mustUseAny: [["web_fetch", "web access", "fetch", "http"], ["xlsx", "csv", "spreadsheet"]],
     forbidden: ["playwright", "workiq"],
   },
 };
@@ -434,7 +434,7 @@ const windowsDeploy: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["az "], ["az webapp", "az login", "az group", "az account"], ["xlsx"]],
+    mustUseAny: [["az "], ["az webapp", "az login", "az group", "az account"], ["xlsx", "csv", "spreadsheet"]],
     forbidden: ["playwright", "browser_"],
   },
 };
