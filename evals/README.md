@@ -258,12 +258,12 @@ each scenario asserts the shape of the proposed `SkillPlan`:
 - **typed steps** — `minCalculations` / `minActions` require the procedure to be
   split into `calculation` (no side effect) and `action` (changes the world) steps.
 
-**Coverage.** Six scenarios. Three target the **app** (this app's own library, whose
+**Coverage.** Nine scenarios. Six target the **app** (this app's own library, whose
 agent has a shell, files, and web): `price-tracker-skill` (a canonical page URL → a fixed
 **value** referenced as `{{…}}`, `web_fetch` + the `.xlsx` file, calculations then an
 append) and `github-issue-triage-skill` (the gh-vs-browser case as a skill — must use
-`gh`, forbid the browser, and drive the mutating comment/label actions), plus the
-API-grounded `api-sales-order` (below). Three target
+`gh`, forbid the browser, and drive the mutating comment/label actions), plus the four
+API-grounded variants (below). Three target
 **copilot-studio**, a hosted agent with **no shell, no filesystem, and no browser** —
 each asserts the right `Connector.Action` is reached for while playwright/`click`, the
 web hosts, and any device-shell command (`bash`, `gh `) are forbidden:
@@ -291,10 +291,46 @@ name `api:createSalesOrder` plus a customer lookup (`api:listCustomers` /
 step's `tool` field alongside its text and the plan's `allowed-tools`, so `api:` refs are
 scanned with no rubric changes.
 
-**Gate GJ** (live, credentialed) is exactly this scenario:
+#### The documentation-level matrix
+
+Three further variants share that scenario's **one approved analysis** verbatim and differ
+only in what is attached, so the group measures *documentation level* rather than four
+unrelated tasks. Real users attach whatever their vendor published, and how far grounding
+degrades — and whether the builder stays honest about the degradation — is the product
+question:
+
+| slug | attached | indexes to | the plan should | the rubric forbids |
+|---|---|---|---|---|
+| `api-sales-order` | full spec (`evals/mocks/openapi-sales.json`) | 9 operations | `api:createSalesOrder` + `api:listCustomers`/`api:getCustomer` | `click`, `browser`, `navigate to` |
+| `api-sales-order-minimal` | spec with **no** `operationId`s (`tools/testbed/docs/openapi-minimal.json`) | 9 operations, **synthesized** ids | `api:postOrders` (or `api:POST /orders`) + `api:getCustomers` | `click`, `browser`, `navigate to` |
+| `api-sales-order-docs` | prose guide only (`tools/testbed/docs/api-guide.md`) | **chunks only, 0 operations** | name the endpoint in the step text (`/api/v1/orders`) | **`api:`**, `click`, `browser`, `navigate to` |
+| `api-sales-order-partial` | customers+products only (`tools/testbed/docs/openapi-partial.json`) | 4 operations | ground the lookup (`api:listCustomers`/`api:getCustomer`) **and** fall back honestly for the order step | `api:createSalesOrder`, `api:createOrder` |
+
+Three things are worth knowing about the matrix:
+
+- **Synthesized ids are predictable.** `synthesizeOperationId` (`common/api-reference.ts`)
+  turns `POST /orders` into `postOrders` and `GET /customers/{customerId}` into
+  `getCustomersByCustomerId`, so the L2 rubric can assert an exact id even though the spec
+  names none. The route form `api:POST /orders` resolves too, and is accepted.
+- **`api:` as a forbidden token is safe *because of the colon*.** The scorer's match is a
+  case-insensitive substring over step text + step `tool` + `allowed-tools`; `/api/v1/orders`
+  and `X-Api-Key` contain `api` but neither contains `api:`. Unstructured docs yield chunks
+  and no operations, so *any* `api:` ref at L3 is fabricated grounding — which is exactly
+  what that row buys.
+- **L4 forbids no UI vocabulary.** With the order endpoints undocumented, routing that one
+  step through the app's own form is the *correct* answer, not a regression; only the
+  order-create ids the spec never defines are out of bounds.
+
+L2–L4 attach the real files from `tools/testbed/docs/` (read with `node:fs` at module load
+— the harness is plain Node). Those files document `tools/testbed/server.mjs`, the runnable
+app used for the matching **manual** experiment, so the scored evals and
+`tools/testbed/README.md` cannot drift into describing two different APIs.
+
+**Gate GJ** (live, credentialed) is the first scenario; the matrix is the follow-on:
 
 ```bash
 npm run eval:skill -- --only=api-sales-order
+npm run eval:skill -- --only=api-sales-order,api-sales-order-minimal,api-sales-order-docs,api-sales-order-partial
 ```
 
 ## Mock pages (`evals/mocks/`)

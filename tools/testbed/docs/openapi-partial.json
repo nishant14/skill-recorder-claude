@@ -1,0 +1,188 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Northwind Testbed Sales API (partial)",
+    "version": "1.0.0",
+    "description": "Documentation level L4: the customer and catalog half of the API, documented to the same standard as openapi-full.json — and the orders endpoints left out entirely, as often happens when a spec is generated from only the services that were in scope. A plan built against this file should ground the lookups it CAN ground and stay honest about the order step, which this reference simply does not describe."
+  },
+  "servers": [{ "url": "http://127.0.0.1:8787/api/v1", "description": "The local testbed server." }],
+  "security": [{ "apiKeyAuth": [] }],
+  "tags": [
+    { "name": "customers", "description": "Customer accounts" },
+    { "name": "catalog", "description": "Product catalog" }
+  ],
+  "paths": {
+    "/customers": {
+      "get": {
+        "operationId": "listCustomers",
+        "summary": "List or search customer accounts",
+        "description": "Returns every customer account, or only those whose name or account id contains `q`. This is how you resolve a customer's name to their account id.",
+        "tags": ["customers"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Free-text match on the account name or the account id.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching customer accounts.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Customer" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      },
+      "post": {
+        "operationId": "createCustomer",
+        "summary": "Create a customer account",
+        "description": "Adds a new customer account. The account id is assigned by the server.",
+        "tags": ["customers"],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": { "schema": { "$ref": "#/components/schemas/CustomerCreate" } }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created customer account.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Customer" } }
+            }
+          },
+          "400": { "$ref": "#/components/responses/BadRequest" },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    },
+    "/customers/{customerId}": {
+      "parameters": [
+        {
+          "name": "customerId",
+          "in": "path",
+          "required": true,
+          "description": "The account id, e.g. `CUST-1001`.",
+          "schema": { "type": "string" }
+        }
+      ],
+      "get": {
+        "operationId": "getCustomer",
+        "summary": "Get one customer account by id",
+        "description": "Returns a single customer account. Use it once you already know the account id.",
+        "tags": ["customers"],
+        "responses": {
+          "200": {
+            "description": "The customer account.",
+            "content": {
+              "application/json": { "schema": { "$ref": "#/components/schemas/Customer" } }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" },
+          "404": { "$ref": "#/components/responses/NotFound" }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "operationId": "listProducts",
+        "summary": "List or search catalog products",
+        "description": "Returns the catalog, or only products whose name or SKU contains `q`. Use it to turn a product name into the SKU that identifies it.",
+        "tags": ["catalog"],
+        "parameters": [
+          {
+            "name": "q",
+            "in": "query",
+            "required": false,
+            "description": "Free-text match on the product name or SKU.",
+            "schema": { "type": "string" }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Matching products.",
+            "content": {
+              "application/json": {
+                "schema": { "type": "array", "items": { "$ref": "#/components/schemas/Product" } }
+              }
+            }
+          },
+          "401": { "$ref": "#/components/responses/Unauthorized" }
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Api-Key",
+        "description": "The testbed API key, sent on every request. Ask the operator for the value — never write a key into a skill, a plan, or an exported bundle."
+      }
+    },
+    "responses": {
+      "BadRequest": {
+        "description": "The request was rejected.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "Unauthorized": {
+        "description": "The API key was missing or wrong.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      },
+      "NotFound": {
+        "description": "No such resource.",
+        "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } }
+      }
+    },
+    "schemas": {
+      "Customer": {
+        "type": "object",
+        "description": "A customer account an order can be placed for.",
+        "properties": {
+          "customerId": { "type": "string", "description": "Account id, e.g. `CUST-1001`." },
+          "name": { "type": "string", "description": "Account name as it appears in the app." },
+          "email": { "type": "string", "format": "email" },
+          "city": { "type": "string" },
+          "country": { "type": "string" }
+        }
+      },
+      "CustomerCreate": {
+        "type": "object",
+        "description": "A new customer account. The account id is assigned by the server.",
+        "required": ["name"],
+        "properties": {
+          "name": { "type": "string", "description": "Account name." },
+          "email": { "type": "string", "format": "email" },
+          "city": { "type": "string" },
+          "country": { "type": "string" }
+        }
+      },
+      "Product": {
+        "type": "object",
+        "description": "One catalog item.",
+        "properties": {
+          "sku": { "type": "string", "description": "Catalog SKU, e.g. `NW-1140`." },
+          "name": { "type": "string" },
+          "category": { "type": "string" },
+          "listPrice": { "type": "number", "format": "double", "description": "Price per unit, in USD." },
+          "inStock": { "type": "integer", "format": "int32" }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "description": "Every non-2xx response body.",
+        "properties": {
+          "error": { "type": "string", "description": "Machine-readable code, e.g. `not_found`." },
+          "message": { "type": "string", "description": "Human-readable explanation." }
+        }
+      }
+    }
+  }
+}

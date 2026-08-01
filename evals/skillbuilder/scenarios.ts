@@ -17,10 +17,21 @@
 //
 // Both target this app's own library (`app`), whose agent has a shell, files, and web.
 //
-// A third `app` scenario, api-sales-order, is the **API-grounded** case: the recording is
-// ordinary UI work in a sales portal, but an OpenAPI spec is attached to the session, so
-// the plan must name `api:` operations (createSalesOrder + a customer lookup) instead of
-// replaying clicks. Its rubric forbids the UI vocabulary outright.
+// A further four `app` scenarios are the **API-grounded** group. All four share ONE
+// approved analysis — ordinary UI work in a sales portal — and differ only in the
+// documentation attached to the session, so the group measures *documentation level*
+// rather than four unrelated tasks:
+//
+//   • api-sales-order          L1  full spec, real operationIds → api:createSalesOrder
+//   • api-sales-order-minimal  L2  spec with no operationIds    → api:postOrders (synthesized)
+//   • api-sales-order-docs     L3  prose guide only             → endpoints in prose, NO api: ref
+//   • api-sales-order-partial  L4  customers/products only      → grounded lookup + honest fallback
+//
+// L1/L2 forbid the UI vocabulary outright. L3 forbids `api:` itself — with no operations
+// indexed, any such ref is fabricated grounding. L4 forbids only the order-create ids the
+// spec doesn't define, because falling back to the UI there is the *correct* answer.
+// L2–L4 attach the real files from `tools/testbed/docs/`, which document the runnable
+// testbed app (`tools/testbed/server.mjs`) used for the matching manual experiment.
 //
 // A third group targets the **copilot-studio** catalogue — a hosted agent with NO
 // shell, NO filesystem, and NO browser, only connector actions. These three cover the
@@ -31,12 +42,25 @@
 
 import { readFileSync } from "node:fs";
 
+import type { AnalysisSubmission } from "../../common/analysis";
 import type { SkillBuilderScenario } from "./scenario";
 
 /** The fixture spec attached to the API-grounded scenario, parsed once per run. */
 const salesApiSpec = JSON.parse(
   readFileSync(new URL("../mocks/openapi-sales.json", import.meta.url), "utf8"),
 ) as object;
+
+/**
+ * The three **documentation-level** variants attach the real files from
+ * `tools/testbed/docs/`, rather than copies. That folder documents the testbed app
+ * (`tools/testbed/server.mjs`) a human records by hand for the manual experiment, so
+ * reading the same bytes here is what stops the scored eval and the manual protocol
+ * from drifting into describing two different APIs. The harness is plain Node, so a
+ * synchronous read at module load is all it takes.
+ */
+function testbedDoc(name: string): string {
+  return readFileSync(new URL(`../../tools/testbed/docs/${name}`, import.meta.url), "utf8");
+}
 
 /** Read one canonical page, compute a delta, append a dated row to a tracker sheet. */
 const priceTracker: SkillBuilderScenario = {
@@ -192,14 +216,84 @@ const githubIssueTriage: SkillBuilderScenario = {
   },
 };
 
-/* --- API-grounded scenario ------------------------------------------------- */
+/* --- API-grounded scenarios ------------------------------------------------ */
 
 /**
- * The whole point of Workstream J: the recording is pure UI work (browse the portal,
- * fill a form, submit), but the session has the portal's OpenAPI spec attached — so the
- * right generalization drops the UI entirely and names the operations that do the same
- * job. The spec deliberately carries decoys (products, invoices, an order *list*), so
- * reaching for `createSalesOrder` + a customer lookup is a real choice, not the only one.
+ * The one approved analysis every API-grounded variant is built on: pure UI work in a
+ * sales portal (open the new-order form, find the customer, add two line items, submit).
+ * It is shared verbatim so the **only** thing that differs across the four variants is
+ * the documentation attached to the recording — which is what makes the group a
+ * controlled comparison of *documentation level* rather than four unrelated evals.
+ */
+const salesOrderAnalysis: AnalysisSubmission = {
+  title: "Create a sales order for a customer",
+  intent:
+    "Place a sales order in the Northwind sales portal for a named customer: find the customer's " +
+    "account, add each product line (SKU and quantity) to a new order, and submit it.",
+  intentConfidence: "high",
+  intentRationale:
+    "The browser stayed on the Northwind sales portal's New order form; the customer 'Contoso Ltd' " +
+    "was searched for and selected, two SKUs with quantities were entered as line items, and the " +
+    "order was submitted, landing on the confirmation page for order SO-10482.",
+  steps: [
+    {
+      id: "s1",
+      title: "Open the portal's new order form",
+      detail:
+        "Navigated in Chrome to the Northwind sales portal and started a new sales order from the " +
+        "Orders page.",
+      apps: ["Google Chrome"],
+      evidence: [
+        "browser.url https://sales.northwind.example/orders/new",
+        "title 'New order — Northwind Sales'",
+      ],
+      confidence: "high",
+    },
+    {
+      id: "s2",
+      title: "Find the customer account",
+      detail:
+        "Typed the customer's name into the account picker, waited for the matches, and selected " +
+        "the 'Contoso Ltd' account the order is for.",
+      apps: ["Google Chrome"],
+      evidence: [
+        "clipboard 'Contoso Ltd'",
+        "browser.url https://sales.northwind.example/orders/new",
+      ],
+      confidence: "high",
+    },
+    {
+      id: "s3",
+      title: "Add the line items",
+      detail:
+        "Added two line items to the order — SKU NW-1140 × 12 and SKU NW-2207 × 3 — entering each " +
+        "product code and its quantity in the form's item rows.",
+      apps: ["Google Chrome"],
+      evidence: ["clipboard 'NW-1140 qty 12'", "clipboard 'NW-2207 qty 3'"],
+      confidence: "high",
+    },
+    {
+      id: "s4",
+      title: "Submit the order",
+      detail:
+        "Submitted the completed order and landed on the confirmation page showing the new order " +
+        "number SO-10482.",
+      apps: ["Google Chrome"],
+      evidence: [
+        "browser.url https://sales.northwind.example/orders/SO-10482",
+        "title 'Order SO-10482 — Northwind Sales'",
+      ],
+      confidence: "medium",
+    },
+  ],
+};
+
+/**
+ * **L1 — a full spec.** The whole point of Workstream J: the recording is pure UI work,
+ * but the session has the portal's OpenAPI spec attached — so the right generalization
+ * drops the UI entirely and names the operations that do the same job. The fixture
+ * deliberately carries decoys (products, invoices, an order *list*), so reaching for
+ * `createSalesOrder` + a customer lookup is a real choice, not the only one.
  */
 const apiSalesOrder: SkillBuilderScenario = {
   id: "api-sales-order",
@@ -213,72 +307,122 @@ const apiSalesOrder: SkillBuilderScenario = {
     "replay: resolve the customer with listCustomers (or getCustomer once the id is known) and place " +
     "the order with createSalesOrder, passing customerId + items. Clicking through the portal, " +
     "driving a browser, or navigating to the orders page is the wrong answer here.",
-  analysis: {
-    title: "Create a sales order for a customer",
-    intent:
-      "Place a sales order in the Northwind sales portal for a named customer: find the customer's " +
-      "account, add each product line (SKU and quantity) to a new order, and submit it.",
-    intentConfidence: "high",
-    intentRationale:
-      "The browser stayed on the Northwind sales portal's New order form; the customer 'Contoso Ltd' " +
-      "was searched for and selected, two SKUs with quantities were entered as line items, and the " +
-      "order was submitted, landing on the confirmation page for order SO-10482.",
-    steps: [
-      {
-        id: "s1",
-        title: "Open the portal's new order form",
-        detail:
-          "Navigated in Chrome to the Northwind sales portal and started a new sales order from the " +
-          "Orders page.",
-        apps: ["Google Chrome"],
-        evidence: [
-          "browser.url https://sales.northwind.example/orders/new",
-          "title 'New order — Northwind Sales'",
-        ],
-        confidence: "high",
-      },
-      {
-        id: "s2",
-        title: "Find the customer account",
-        detail:
-          "Typed the customer's name into the account picker, waited for the matches, and selected " +
-          "the 'Contoso Ltd' account the order is for.",
-        apps: ["Google Chrome"],
-        evidence: [
-          "clipboard 'Contoso Ltd'",
-          "browser.url https://sales.northwind.example/orders/new",
-        ],
-        confidence: "high",
-      },
-      {
-        id: "s3",
-        title: "Add the line items",
-        detail:
-          "Added two line items to the order — SKU NW-1140 × 12 and SKU NW-2207 × 3 — entering each " +
-          "product code and its quantity in the form's item rows.",
-        apps: ["Google Chrome"],
-        evidence: ["clipboard 'NW-1140 qty 12'", "clipboard 'NW-2207 qty 3'"],
-        confidence: "high",
-      },
-      {
-        id: "s4",
-        title: "Submit the order",
-        detail:
-          "Submitted the completed order and landed on the confirmation page showing the new order " +
-          "number SO-10482.",
-        apps: ["Google Chrome"],
-        evidence: [
-          "browser.url https://sales.northwind.example/orders/SO-10482",
-          "title 'Order SO-10482 — Northwind Sales'",
-        ],
-        confidence: "medium",
-      },
-    ],
-  },
+  analysis: salesOrderAnalysis,
   apiReference: { spec: salesApiSpec },
   rubric: {
     mustUseAny: [["api:createSalesOrder"], ["api:listCustomers", "api:getCustomer"]],
     forbidden: ["click", "browser", "navigate to"],
+    minCalculations: 1,
+    minActions: 1,
+  },
+};
+
+/**
+ * **L2 — a spec with no operationIds.** The same nine operations, written the way a
+ * hand-maintained spec usually is: one-line summaries, inline schemas, and not a single
+ * `operationId`. Grounding must still be exact, but every ref has to use an id
+ * *synthesized* from the method and the path (`synthesizeOperationId` in
+ * `common/api-reference.ts`: `POST /orders` → `postOrders`) — or the route form the same
+ * module accepts, `api:POST /orders`. Both are resolvable; a plan that invents
+ * `createSalesOrder` here would be rejected at propose time, because no such id exists.
+ */
+const apiSalesOrderMinimal: SkillBuilderScenario = {
+  id: "api-sales-order-minimal",
+  title: "Create a sales order (minimal spec — synthesized operation ids)",
+  architecture: "app",
+  platform: "darwin",
+  truth:
+    "The same portal recording, but the attached spec (tools/testbed/docs/openapi-minimal.json) " +
+    "declares no operationIds. The indexer synthesizes them from method + path, so the grounded " +
+    "answer names api:postOrders for placing the order and api:getCustomers (or " +
+    "api:getCustomersByCustomerId) for resolving the account — equivalently the route form, " +
+    "api:POST /orders. Replaying the UI is still the wrong answer; so is quoting a friendly " +
+    "operation name like createSalesOrder, which this spec never defines.",
+  analysis: salesOrderAnalysis,
+  apiReference: { spec: JSON.parse(testbedDoc("openapi-minimal.json")) as object },
+  rubric: {
+    // Each group holds the two forms that actually resolve against this index; the
+    // scorer's match is a case-insensitive substring, so "api:POST /orders" satisfies
+    // "api:post /orders", and "api:getCustomersByCustomerId" satisfies "api:getCustomers".
+    mustUseAny: [
+      ["api:postOrders", "api:post /orders"],
+      ["api:getCustomers", "api:get /customers"],
+    ],
+    forbidden: ["click", "browser", "navigate to"],
+    minCalculations: 1,
+    minActions: 1,
+  },
+};
+
+/**
+ * **L3 — prose documentation only.** No spec at all: the session carries the hand-written
+ * guide, which indexes into searchable *chunks* and zero operations. The builder gets
+ * `search_api_docs` and nothing to resolve an `api:` ref against, so the honest plan
+ * quotes the endpoint it read (`POST /api/v1/orders`) in the step text while leaving the
+ * step's tool ungrounded. `api:` is therefore **forbidden**: any such ref here is
+ * fabricated grounding, which is the exact failure this variant exists to catch.
+ */
+const apiSalesOrderDocs: SkillBuilderScenario = {
+  id: "api-sales-order-docs",
+  title: "Create a sales order (prose docs only — no grounded operations)",
+  architecture: "app",
+  platform: "darwin",
+  truth:
+    "The same portal recording with only prose documentation attached " +
+    "(tools/testbed/docs/api-guide.md). It describes the endpoints in text — POST /api/v1/orders " +
+    "with a customerId and items, GET /api/v1/customers to resolve the account, the X-Api-Key " +
+    "header — but carries no machine-readable operations. The right plan names those endpoints " +
+    "from what it read and still avoids replaying the UI, while emitting NO `api:` operation " +
+    "reference: there is no index for one to resolve against, so an `api:` ref would be invented.",
+  analysis: salesOrderAnalysis,
+  apiReference: { docs: [{ name: "api-guide.md", text: testbedDoc("api-guide.md") }] },
+  rubric: {
+    mustUseAny: [["/api/v1/orders", "POST /api", "create order endpoint", "createSalesOrder"]],
+    // "api:" is safe to forbid *because of the colon*: "/api/v1/orders" and "X-Api-Key"
+    // both contain "api" but neither contains "api:". The one shape that would trip it
+    // falsely is prose punctuation ("the API: POST /api/v1/orders"), which is rare enough
+    // to be worth the check — a fabricated `api:` ref is the failure we're buying.
+    forbidden: ["api:", "click", "browser", "navigate to"],
+    minCalculations: 1,
+    minActions: 1,
+  },
+};
+
+/**
+ * **L4 — a partial spec.** Customers and products are documented to L1 standard; the
+ * orders endpoints are absent entirely, as happens when a spec is generated from only
+ * the services that were in scope. The interesting behaviour is *mixed*: ground the
+ * lookups that can be grounded, and stay honest about the order step by describing the
+ * app's own flow instead of inventing an operation for it. `propose_plan` already
+ * hard-rejects unresolved `api:` refs, so this rubric names the two ids a model would
+ * most plausibly reach for and checks the fallback is a real one.
+ */
+const apiSalesOrderPartial: SkillBuilderScenario = {
+  id: "api-sales-order-partial",
+  title: "Create a sales order (partial spec — orders undocumented)",
+  architecture: "app",
+  platform: "darwin",
+  truth:
+    "The same portal recording with a partial spec attached " +
+    "(tools/testbed/docs/openapi-partial.json): listCustomers, getCustomer, createCustomer and " +
+    "listProducts are fully documented, and nothing about orders is. The right plan grounds the " +
+    "customer lookup on api:listCustomers (or api:getCustomer once the id is known), grounds the " +
+    "SKU lookup on api:listProducts if it needs one, and then says plainly that placing the order " +
+    "goes through the app's own New order form because the reference does not describe an order " +
+    "endpoint. Claiming api:createSalesOrder — an operation this spec never defines — is the " +
+    "failure this variant exists to catch.",
+  analysis: salesOrderAnalysis,
+  apiReference: { spec: JSON.parse(testbedDoc("openapi-partial.json")) as object },
+  rubric: {
+    mustUseAny: [
+      ["api:listCustomers", "api:getCustomer"],
+      // The order step must land somewhere real. Any of these is an honest answer: the
+      // app's form, its page, or a web step — none of them claims a documented operation.
+      ["order form", "/orders", "submit the order", "web"],
+    ],
+    // No UI vocabulary is forbidden here: falling back to the UI for the one undocumented
+    // step is the CORRECT behaviour at this documentation level, not a regression.
+    forbidden: ["api:createSalesOrder", "api:createOrder"],
     minCalculations: 1,
     minActions: 1,
   },
@@ -515,6 +659,9 @@ export const skillScenarios: SkillBuilderScenario[] = [
   priceTracker,
   githubIssueTriage,
   apiSalesOrder,
+  apiSalesOrderMinimal,
+  apiSalesOrderDocs,
+  apiSalesOrderPartial,
   studioTeamsDigest,
   studioOutlookReply,
   studioCalendarSchedule,

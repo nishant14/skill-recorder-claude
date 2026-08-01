@@ -26,9 +26,13 @@ export interface SeedInput {
    * builder maps UI steps onto concrete operations. `spec` is a parsed OpenAPI document;
    * `docs` are plain-text fallback material. Written through the store's own writer, so a
    * seeded session is laid out and indexed exactly like one the user attached in the app.
+   *
+   * Both halves are optional because the *documentation level* is itself under test:
+   * a docs-only reference (no spec) is the "unstructured prose" case, where there are
+   * chunks to search and no operations to resolve an `api:` ref against.
    */
   apiReference?: {
-    spec: object;
+    spec?: object;
     docs?: { name: string; text: string }[];
   };
 }
@@ -39,7 +43,7 @@ export function seedScenario(root: string, scenario: SeedInput): void {
   mkdirSync(dir, { recursive: true });
   if (scenario.apiReference) {
     writeReference(dir, {
-      spec: scenario.apiReference.spec,
+      ...(scenario.apiReference.spec ? { spec: scenario.apiReference.spec } : {}),
       ...(scenario.apiReference.docs ? { docs: scenario.apiReference.docs } : {}),
     });
   }

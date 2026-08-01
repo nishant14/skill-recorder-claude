@@ -1,0 +1,218 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Northwind Testbed Sales API",
+    "version": "1.0.0",
+    "description": "Documentation level L2: the same nine operations as openapi-full.json, but written the way a hand-maintained spec usually is — no operationIds, one-line summaries, loose inline schemas, no components. Grounding still works, but every `api:` ref must use an operationId synthesized from the method and the path (getCustomers, postOrders, getOrdersByOrderId, …)."
+  },
+  "servers": [{ "url": "http://127.0.0.1:8787/api/v1" }],
+  "security": [{ "apiKeyAuth": [] }],
+  "paths": {
+    "/customers": {
+      "get": {
+        "summary": "List or search customer accounts.",
+        "parameters": [{ "name": "q", "in": "query", "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "Customer accounts.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "customerId": { "type": "string" },
+                      "name": { "type": "string" },
+                      "email": { "type": "string" },
+                      "city": { "type": "string" },
+                      "country": { "type": "string" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "summary": "Create a customer account.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["name"],
+                "properties": {
+                  "name": { "type": "string" },
+                  "email": { "type": "string" },
+                  "city": { "type": "string" },
+                  "country": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "201": { "description": "The created account." } }
+      }
+    },
+    "/customers/{customerId}": {
+      "get": {
+        "summary": "Get one customer account.",
+        "parameters": [
+          { "name": "customerId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": {
+          "200": {
+            "description": "The account.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "customerId": { "type": "string" },
+                    "name": { "type": "string" },
+                    "email": { "type": "string" }
+                  }
+                }
+              }
+            }
+          },
+          "404": { "description": "No such customer." }
+        }
+      }
+    },
+    "/products": {
+      "get": {
+        "summary": "List or search catalog products.",
+        "parameters": [{ "name": "q", "in": "query", "schema": { "type": "string" } }],
+        "responses": {
+          "200": {
+            "description": "Products.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "sku": { "type": "string" },
+                      "name": { "type": "string" },
+                      "category": { "type": "string" },
+                      "listPrice": { "type": "number" },
+                      "inStock": { "type": "integer" }
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/orders": {
+      "get": {
+        "summary": "List sales orders.",
+        "parameters": [
+          { "name": "customerId", "in": "query", "schema": { "type": "string" } },
+          { "name": "status", "in": "query", "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "Sales orders." } }
+      },
+      "post": {
+        "summary": "Create a sales order for a customer.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "required": ["customerId", "items"],
+                "properties": {
+                  "customerId": { "type": "string" },
+                  "items": {
+                    "type": "array",
+                    "items": {
+                      "type": "object",
+                      "required": ["sku", "quantity"],
+                      "properties": {
+                        "sku": { "type": "string" },
+                        "quantity": { "type": "integer" }
+                      }
+                    }
+                  },
+                  "purchaseOrderRef": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": {
+          "201": {
+            "description": "The created order, priced and totalled.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "orderId": { "type": "string" },
+                    "customerId": { "type": "string" },
+                    "customerName": { "type": "string" },
+                    "status": { "type": "string" },
+                    "total": { "type": "number" }
+                  }
+                }
+              }
+            }
+          },
+          "400": { "description": "Unknown customer, unknown SKU, or no line items." }
+        }
+      }
+    },
+    "/orders/{orderId}": {
+      "get": {
+        "summary": "Get one sales order.",
+        "parameters": [
+          { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "200": { "description": "The order." }, "404": { "description": "No such order." } }
+      },
+      "patch": {
+        "summary": "Update a sales order's status or notes.",
+        "parameters": [
+          { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "status": { "type": "string" },
+                  "purchaseOrderRef": { "type": "string" },
+                  "notes": { "type": "string" }
+                }
+              }
+            }
+          }
+        },
+        "responses": { "200": { "description": "The updated order." } }
+      },
+      "delete": {
+        "summary": "Delete a sales order.",
+        "parameters": [
+          { "name": "orderId", "in": "path", "required": true, "schema": { "type": "string" } }
+        ],
+        "responses": { "204": { "description": "Deleted." } }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "apiKeyAuth": { "type": "apiKey", "in": "header", "name": "X-Api-Key" }
+    }
+  }
+}
