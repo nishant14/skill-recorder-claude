@@ -63,7 +63,7 @@ authoritative for *what to build*.
 | I | Cloud transcription on Foundry (retires local Whisper) — Phase 1, parallelizable after A | **done** (`0b38fab` + audio-route fix; spec [`phase1i`](./foundry-codex-migration-phase1i.md)) | G6 — **passed 4/4** | smoke 4/4 on 2026-08-01 vs `gpt-4o-transcribe`: known phrase round-tripped exactly ("Skill recorder test phrase."), `verbose_json→json` downgrade fired as designed; tests 124/124 |
 | G | Phase 2 — Copilot Studio declarative agent export | not started | G-phase gate TBD (real Copilot Studio import) | — |
 | H | Phase 2 — in-app skill runner on the Foundry deployment | not started | G-phase gate TBD (runner eval + safety UX) | — |
-| J | API-grounded skills (attach an OpenAPI spec / docs → plan steps name `api:` operations) — plan [`workstream-j`](./foundry-codex-migration-workstream-j.md) | **implemented (J1+J2+J3)**, gate GJ live half pending | GJ — CI half green, live half **pending** | typecheck/typecheck:evals exit 0; tests **223/223**; new: `common/api-reference.ts`, `electron/builders/api-reference-{store,tools}.ts`, `BuiltSkill.apiReference` + `api/openapi.json` export copy, eval scenario `api-sales-order` + fixture `evals/mocks/openapi-sales.json` |
+| J | API-grounded skills (attach an OpenAPI spec / docs → plan steps name `api:` operations) — plan [`workstream-j`](./foundry-codex-migration-workstream-j.md) | **done (J1+J2+J3)** | GJ — **passed** | tests 223/223; live 2026-08-01: `api-sales-order` PASS 100%, 15.0s — plan grounded in `api:listCustomers` → `api:createSalesOrder` with input validation and ambiguity handling, zero UI-replay steps |
 
 ## Gate ledger
 
