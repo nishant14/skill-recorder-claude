@@ -1,4 +1,5 @@
 import type { Analysis, AnalysisFeedback, AnalysisStep, Confidence } from "./analysis";
+import type { ApiReferenceSummary } from "./api-reference";
 import type { AutomationPlan, BuiltAutomation } from "./automation";
 import type { FoundryConnectionInfo } from "./foundry";
 import type { MicrophoneDevice } from "./microphone";
@@ -162,6 +163,26 @@ export interface SkillCreateResult {
   placement?: SkillPlacement;
   /** True when the user dismissed the export destination dialog — a cancel, not an error. */
   canceled?: boolean;
+  error?: string;
+}
+
+/* --- API reference -------------------------------------------------------- */
+
+/**
+ * How a reference is attached: a file the user picks in the main-process open dialog,
+ * or a URL main downloads. The renderer never reads the file itself — the bytes are
+ * indexed and stored beside the recording, not shipped through the bridge.
+ */
+export type ApiReferenceAttachInput = { kind: "file" } | { kind: "url"; url: string };
+
+/** Result of attaching or removing a reference source. */
+export interface ApiReferenceResult {
+  ok: boolean;
+  /** The reference *after* the call — null once nothing is attached. */
+  reference?: ApiReferenceSummary | null;
+  /** True when the user dismissed the file picker — a cancel, not an error. */
+  canceled?: boolean;
+  /** Why the attach was refused, phrased for the user; safe to render verbatim. */
   error?: string;
 }
 
@@ -401,6 +422,9 @@ export const IPC = {
   listSessions: "sessions:list",
   deleteSession: "sessions:delete",
   exportDebugBundle: "sessions:export-debug",
+  attachApiReference: "api-reference:attach",
+  getApiReference: "api-reference:get",
+  removeApiReference: "api-reference:remove",
   buildSkill: "skill:build",
   createSkill: "skill:create",
   getSkill: "skill:get",
@@ -471,6 +495,19 @@ export interface SkillRecorderApi {
    * contains private capture data; the renderer warns before calling this.
    */
   exportDebugBundle(sessionId: string): Promise<DebugBundleResult>;
+  /**
+   * Attach an API reference (an OpenAPI JSON spec, or documentation) to a recording,
+   * so the builders can map action steps onto real API operations. `{kind:"file"}`
+   * opens the main-process file picker; `{kind:"url"}` downloads the address given.
+   */
+  attachApiReference(
+    sessionId: string,
+    input: ApiReferenceAttachInput,
+  ): Promise<ApiReferenceResult>;
+  /** What is attached to this recording, or null when nothing is. */
+  getApiReference(sessionId: string): Promise<ApiReferenceSummary | null>;
+  /** Detach one source, or the whole reference when `sourceId` is omitted. */
+  removeApiReference(sessionId: string, sourceId?: string): Promise<ApiReferenceResult>;
   /**
    * Propose (or refine) a skill from a recording's analysis. Pass `feedback` to
    * revise the current plan in the same multi-turn conversation.

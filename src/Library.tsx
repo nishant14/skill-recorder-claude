@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type { Analysis, AnalysisStep } from "../common/analysis";
+import type { ApiReferenceSummary } from "../common/api-reference";
 import type { FoundryConnectionInfo } from "../common/foundry";
 import {
   DEFAULT_FOUNDRY_DEPLOYMENT,
@@ -10,6 +11,7 @@ import {
 } from "../common/foundry";
 import type {
   AnalyzeProgress,
+  ApiReferenceAttachInput,
   AutomationBuildProgress,
   NarrationStatus,
   SessionSummary,
@@ -722,6 +724,7 @@ function AnalysisWorkspace({
   if (launch === "picker") {
     return (
       <TargetPicker
+        sessionId={sessionId}
         startedAt={summary.startedAt}
         onPick={(t) => {
           setChosenArch(t.architecture);
@@ -977,14 +980,17 @@ function launchFootStatus(summary: SessionSummary): string {
 
 /** "What do you want to build?" — picks both kind and architecture up front. */
 function TargetPicker({
+  sessionId,
   startedAt,
   onPick,
   onClose,
 }: {
+  sessionId: string;
   startedAt: number | null;
   onPick: (target: BuildTarget) => void;
   onClose: () => void;
 }) {
+  const [reference, setReference] = useApiReference(sessionId);
   return (
     <section className="ws">
       <div className="ws-head">
@@ -1012,9 +1018,156 @@ function TargetPicker({
               </button>
             ))}
           </div>
+          <ApiReferenceAttach
+            sessionId={sessionId}
+            reference={reference}
+            onChange={setReference}
+          />
         </div>
       </div>
     </section>
+  );
+}
+
+/* --- API reference -------------------------------------------------------- */
+
+/**
+ * The API reference attached to a recording. It is chosen on the picker sheet — before
+ * any builder conversation exists — because attaching decides which tools the builder
+ * agent is given, and the builder panels open straight into planning.
+ */
+function useApiReference(sessionId: string) {
+  const [reference, setReference] = useState<ApiReferenceSummary | null>(null);
+  useEffect(() => {
+    let live = true;
+    void window.skillRecorder.getApiReference(sessionId).then((r) => {
+      if (live) setReference(r);
+    });
+    return () => {
+      live = false;
+    };
+  }, [sessionId]);
+  return [reference, setReference] as const;
+}
+
+/** "Sales API · 42 operations" — how a builder panel says a reference is in play. */
+function ApiReferenceChip({ reference }: { reference: ApiReferenceSummary | null }) {
+  if (!reference) return null;
+  const count =
+    reference.operationCount > 0
+      ? `${reference.operationCount} operation${reference.operationCount === 1 ? "" : "s"}`
+      : `${reference.chunkCount} doc section${reference.chunkCount === 1 ? "" : "s"}`;
+  return (
+    <span className="pill api-chip" title="This recording has an API reference attached">
+      {reference.name} · {count}
+    </span>
+  );
+}
+
+function ApiReferenceAttach({
+  sessionId,
+  reference,
+  onChange,
+}: {
+  sessionId: string;
+  reference: ApiReferenceSummary | null;
+  onChange: (next: ApiReferenceSummary | null) => void;
+}) {
+  const [url, setUrl] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const attach = useCallback(
+    async (input: ApiReferenceAttachInput) => {
+      setBusy(true);
+      setError(null);
+      const res = await window.skillRecorder.attachApiReference(sessionId, input);
+      setBusy(false);
+      if (res.ok) {
+        onChange(res.reference ?? null);
+        setUrl("");
+      } else if (!res.canceled) {
+        // Main writes these for the user (they name the fix); show them as-is.
+        setError(res.error ?? "Could not attach that reference.");
+      }
+    },
+    [sessionId, onChange],
+  );
+
+  const remove = useCallback(
+    async (sourceId: string) => {
+      setBusy(true);
+      setError(null);
+      const res = await window.skillRecorder.removeApiReference(sessionId, sourceId);
+      setBusy(false);
+      if (res.ok) onChange(res.reference ?? null);
+      else setError(res.error ?? "Could not remove that source.");
+    },
+    [sessionId, onChange],
+  );
+
+  return (
+    <div className="sb-sec api-ref">
+      <span className="eyebrow">API reference (optional)</span>
+      <p className="sb-refine-hint">
+        Attach the target application's OpenAPI spec (JSON) or its documentation, and the plan can
+        call API operations instead of replaying the UI. It's stored with this recording and used
+        only while planning.
+      </p>
+
+      {reference && reference.sources.length > 0 && (
+        <ul className="api-ref-list">
+          {reference.sources.map((s) => (
+            <li key={s.id} className="row">
+              <span className="row-label">{s.name}</span>
+              <span className="row-note">
+                {s.kind === "openapi"
+                  ? `spec · ${s.operationCount} operations`
+                  : `docs · ${s.chunkCount} sections`}
+              </span>
+              <button
+                className="linky"
+                disabled={busy}
+                onClick={() => void remove(s.id)}
+                title="Remove this source"
+              >
+                Remove
+              </button>
+            </li>
+          ))}
+        </ul>
+      )}
+
+      <div className="api-ref-actions">
+        <button className="ghost" disabled={busy} onClick={() => void attach({ kind: "file" })}>
+          Attach file…
+        </button>
+        <input
+          className="fb-input api-ref-url"
+          value={url}
+          placeholder="…or paste a spec / docs URL"
+          aria-label="API reference URL"
+          onChange={(e) => setUrl(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" && url.trim() && !busy) void attach({ kind: "url", url: url.trim() });
+          }}
+        />
+        <button
+          className="ghost"
+          disabled={busy || !url.trim()}
+          onClick={() => void attach({ kind: "url", url: url.trim() })}
+        >
+          Attach URL
+        </button>
+      </div>
+
+      {busy && <span className="sb-muted">Working…</span>}
+      {error && (
+        <div className="analysis-error">
+          <p>{error}</p>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -1047,6 +1200,8 @@ function SkillBuilderView({
   const canceled = useRef(false);
   const inFlight = useRef(false);
   const [placement, setPlacement] = useState<SkillPlacement>("install");
+  // Read-only here: the reference is attached on the picker, before this panel opens.
+  const [reference] = useApiReference(sessionId);
 
   const updatePlan = useCallback((part: Partial<SkillPlan>) => {
     setPlan((prev) => (prev ? { ...prev, ...part } : prev));
@@ -1152,6 +1307,7 @@ function SkillBuilderView({
         <div className="ws-titles">
           <span className="eyebrow">{phase === "done" ? "Skill" : "Create skill"}</span>
           <span className="ws-when">{formatWhen(startedAt)}</span>
+          <ApiReferenceChip reference={reference} />
         </div>
         <button
           className="ghost"
@@ -1326,6 +1482,8 @@ function AutomationBuilderView({
   const [builtName, setBuiltName] = useState("");
   const canceled = useRef(false);
   const inFlight = useRef(false);
+  // Read-only here: the reference is attached on the picker, before this panel opens.
+  const [reference] = useApiReference(sessionId);
 
   const updatePlan = useCallback((part: Partial<AutomationPlan>) => {
     setPlan((prev) => (prev ? { ...prev, ...part } : prev));
@@ -1415,6 +1573,7 @@ function AutomationBuilderView({
         <div className="ws-titles">
           <span className="eyebrow">{phase === "done" ? "Automation" : "Create automation"}</span>
           <span className="ws-when">{formatWhen(startedAt)}</span>
+          <ApiReferenceChip reference={reference} />
         </div>
         <button
           className="ghost"

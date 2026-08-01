@@ -13,6 +13,8 @@ import type {
   AnalysisEditInput,
   AnalysisFeedbackInput,
   AnalyzeResult,
+  ApiReferenceAttachInput,
+  ApiReferenceResult,
   AutomationBuildInput,
   AutomationCreateResult,
   AutomationPlanResult,
@@ -31,6 +33,12 @@ import { IPC } from "../common/ipc";
 import type { AutomationPlan } from "../common/automation";
 import type { NarrationLanguage } from "../common/narration";
 import type { SkillPlan } from "../common/skill";
+import {
+  attachFromFile,
+  attachFromUrl,
+  loadReference,
+  removeSource,
+} from "./builders/api-reference-store";
 import { AutomationBuilder, loadPersistedAutomation } from "./automationbuilder/builder";
 import { buildDebugInfo, writeDebugBundle } from "./debug-bundle";
 import { Describer, loadPersistedAnalysis } from "./describer/describer";
@@ -41,7 +49,7 @@ import { createLogger } from "./logger";
 import type { AudioRecorder } from "./audio/recorder";
 import type { NarrationManager } from "./narration/manager";
 import type { RecorderController } from "./recorder/controller";
-import { isValidSessionId } from "./recorder/session-store";
+import { isValidSessionId, sessionDir } from "./recorder/session-store";
 import { deleteSession, listSessions } from "./sessions";
 import { loadPersistedSkill, SkillBuilder, type SkillTarget } from "./skillbuilder/builder";
 
@@ -328,6 +336,73 @@ export function registerIpc(
       } catch (err) {
         const error = err instanceof Error ? err.message : String(err);
         log.warn("debug bundle failed:", error);
+        return { ok: false, error };
+      }
+    },
+  );
+
+  /**
+   * The reference is part of the builders' *tool set*, which is assembled once per
+   * live agent session. Dropping the pooled agents makes the next `createLive` pick
+   * up (or drop) the API tools and the reference prompt block, so attaching after a
+   * plan already exists behaves the same as attaching before one.
+   */
+  const forgetBuilders = async (sessionId: string): Promise<void> => {
+    await builder.forget(sessionId);
+    await automationBuilder.forget(sessionId);
+  };
+
+  ipcMain.handle(
+    IPC.attachApiReference,
+    async (event, sessionId: string, input: ApiReferenceAttachInput): Promise<ApiReferenceResult> => {
+      if (!isValidSessionId(sessionId)) return { ok: false, error: "Unknown session." };
+      try {
+        let reference;
+        if (input?.kind === "url") {
+          reference = await attachFromUrl(sessionId, input.url);
+        } else {
+          const win = BrowserWindow.fromWebContents(event.sender) ?? undefined;
+          const opts: OpenDialogOptions = {
+            title: "Attach an API reference",
+            defaultPath: path.join(os.homedir(), "Downloads"),
+            properties: ["openFile"],
+            filters: [
+              { name: "API reference", extensions: ["json", "md", "txt", "html"] },
+              { name: "All files", extensions: ["*"] },
+            ],
+          };
+          const picked = win
+            ? await dialog.showOpenDialog(win, opts)
+            : await dialog.showOpenDialog(opts);
+          if (picked.canceled || picked.filePaths.length === 0) return { ok: false, canceled: true };
+          reference = await attachFromFile(sessionId, picked.filePaths[0]);
+        }
+        await forgetBuilders(sessionId);
+        return { ok: true, reference };
+      } catch (err) {
+        // The store's refusals ("…export the spec as JSON…") are written for the user.
+        const error = err instanceof Error ? err.message : String(err);
+        log.warn("attach api reference failed:", error);
+        return { ok: false, error };
+      }
+    },
+  );
+
+  ipcMain.handle(IPC.getApiReference, (_event, sessionId: string) =>
+    isValidSessionId(sessionId) ? loadReference(sessionDir(sessionId)) : null,
+  );
+
+  ipcMain.handle(
+    IPC.removeApiReference,
+    async (_event, sessionId: string, sourceId?: string): Promise<ApiReferenceResult> => {
+      if (!isValidSessionId(sessionId)) return { ok: false, error: "Unknown session." };
+      try {
+        const reference = removeSource(sessionId, sourceId);
+        await forgetBuilders(sessionId);
+        return { ok: true, reference };
+      } catch (err) {
+        const error = err instanceof Error ? err.message : String(err);
+        log.warn("remove api reference failed:", error);
         return { ok: false, error };
       }
     },

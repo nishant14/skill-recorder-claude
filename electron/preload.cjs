@@ -35,6 +35,9 @@ const IPC = {
   listSessions: "sessions:list",
   deleteSession: "sessions:delete",
   exportDebugBundle: "sessions:export-debug",
+  attachApiReference: "api-reference:attach",
+  getApiReference: "api-reference:get",
+  removeApiReference: "api-reference:remove",
   buildSkill: "skill:build",
   createSkill: "skill:create",
   getSkill: "skill:get",
@@ -120,6 +123,11 @@ contextBridge.exposeInMainWorld("skillRecorder", {
   listSessions: () => ipcRenderer.invoke(IPC.listSessions),
   deleteSession: (sessionId) => ipcRenderer.invoke(IPC.deleteSession, sessionId),
   exportDebugBundle: (sessionId) => ipcRenderer.invoke(IPC.exportDebugBundle, sessionId),
+  attachApiReference: (sessionId, input) =>
+    ipcRenderer.invoke(IPC.attachApiReference, sessionId, input),
+  getApiReference: (sessionId) => ipcRenderer.invoke(IPC.getApiReference, sessionId),
+  removeApiReference: (sessionId, sourceId) =>
+    ipcRenderer.invoke(IPC.removeApiReference, sessionId, sourceId),
   buildSkill: (input) => ipcRenderer.invoke(IPC.buildSkill, input),
   createSkill: (sessionId, plan, placement) => ipcRenderer.invoke(IPC.createSkill, sessionId, plan, placement),
   getSkill: (sessionId) => ipcRenderer.invoke(IPC.getSkill, sessionId),

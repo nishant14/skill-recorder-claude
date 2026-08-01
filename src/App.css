@@ -2365,6 +2365,44 @@ button:focus-visible,
   align-self: flex-start;
 }
 
+/* API reference attach row on the target picker, plus the header chip the builder
+   panels show while one is attached. Rows reuse .row / .row-label / .row-note. */
+.api-ref {
+  border-top: 1px solid var(--line);
+  padding-top: 14px;
+}
+
+.api-ref-list {
+  list-style: none;
+  margin: 2px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.api-ref-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 4px;
+}
+
+.api-ref-url {
+  flex: 1;
+  min-width: 200px;
+  font-size: 12px;
+  padding: 6px 9px;
+}
+
+.api-chip {
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Plan view */
 .sb-plan {
   display: flex;
