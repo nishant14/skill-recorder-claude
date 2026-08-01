@@ -519,6 +519,7 @@ export function Recorder() {
             note={doctor.foundry.configured ? endpointHost(doctor.foundry.endpoint) : "not configured"}
           />
           {narrationStatus && <VoiceTranscriptionRow status={narrationStatus} />}
+          <CaptureHealthRows doctor={doctor} />
         </div>
       )}
 
@@ -581,6 +582,50 @@ function Row({
         </button>
       )}
     </div>
+  );
+}
+
+/**
+ * What this computer *can't* capture, and what to do about it. The doctor has always
+ * known this; nothing rendered it, so a Linux user whose window tracking was dead saw
+ * a clean tile and an empty recording.
+ *
+ * Only degradations are rendered — a healthy machine adds no rows at all — and each
+ * capability appears once, so an unsupported source and the provider behind it don't
+ * both claim a line.
+ */
+function CaptureHealthRows({ doctor }: { doctor: DoctorReport }) {
+  const rows: { label: string; note: string }[] = [];
+  const providerNotes = new Set<string>();
+  const add = (label: string, note: string) => {
+    providerNotes.add(note);
+    rows.push({ label, note });
+  };
+
+  if (!doctor.activeWindow.ok) {
+    add(
+      "window tracking",
+      doctor.activeWindow.note ?? doctor.activeWindow.error ?? "Window tracking is unavailable",
+    );
+  }
+  if (!doctor.browserUrl.supported) {
+    add("browser URLs", doctor.browserUrl.note ?? "Not available on this platform");
+  }
+  for (const source of doctor.activeSources) {
+    // A source whose note repeats a provider's is that provider's failure told twice.
+    if (source.supported || providerNotes.has(source.note ?? "")) continue;
+    rows.push({
+      label: source.label.toLowerCase(),
+      note: source.note ?? "Not available on this platform",
+    });
+  }
+
+  return (
+    <>
+      {[...rows.values()].map((row) => (
+        <Row key={row.label} label={row.label} status="warn" note={row.note} />
+      ))}
+    </>
   );
 }
 

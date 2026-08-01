@@ -3,6 +3,7 @@ import { app, BrowserWindow, globalShortcut, ipcMain, Menu, screen } from "elect
 import { FULL_CAPTURE } from "../common/config";
 import { IPC, type RecorderStatus, type StartResult } from "../common/ipc";
 import { createCollectors } from "./collectors";
+import { isWaylandSession } from "./collectors/linux-active-window";
 import { Describer } from "./describer/describer";
 import { processSession } from "./pipeline";
 import { registerIpc } from "./ipc";
@@ -25,6 +26,14 @@ import {
   redockLibrary,
   setRecordingControlsExpanded,
 } from "./window";
+
+// Chromium only offers the xdg-desktop-portal capture path — the sole way
+// desktopCapturer can see a screen under Wayland — when this feature is on, and a
+// command-line switch is only read before the app becomes ready, so it cannot move
+// into whenReady(). Inert on X11, which keeps the X11 path byte-identical.
+if (process.platform === "linux") {
+  app.commandLine.appendSwitch("enable-features", "WebRTCPipeWireCapturer");
+}
 
 const log = createLogger("Main");
 
@@ -269,7 +278,13 @@ app.whenReady().then(async () => {
     void (status.state === "recording" ? recorder.stop() : requestStartRecording());
   };
   if (!globalShortcut.register("CommandOrControl+Shift+R", toggle)) {
-    log.warn("Global shortcut registration failed");
+    // Wayland has no global-hotkey protocol for ordinary clients, so this is
+    // expected there rather than a misconfiguration — say which it is.
+    log.warn(
+      isWaylandSession()
+        ? "Global shortcut unavailable on Wayland — start and stop from the tray or the recorder window."
+        : "Global shortcut registration failed",
+    );
   }
 
   app.on("activate", () => {

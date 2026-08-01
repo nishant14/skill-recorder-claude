@@ -1,4 +1,5 @@
 import type { Collector, CollectorContext } from "../recorder/collector";
+import { linuxCaptureSupport } from "./linux-active-window";
 import { createUrlProvider, type UrlProvider } from "./url-provider";
 import type { ActiveWindowResult } from "./window-info";
 
@@ -14,6 +15,13 @@ const POLL_MS = 1000;
 const POLL_MS_BROWSER = 1600;
 /** Minimum spacing between URL reads while a browser stays frontmost (SPA navs). */
 const URL_MIN_INTERVAL_MS = 1500;
+/**
+ * Consecutive empty polls before we admit capture isn't working. ~10 s at the base
+ * cadence: long enough that a locked screen or a transient focus gap stays quiet,
+ * short enough that a user watching the log learns *during* the recording rather
+ * than from an empty timeline afterwards.
+ */
+const EMPTY_POLLS_BEFORE_WARN = 10;
 
 /** get-windows options for each capture mode. */
 const FULL = { accessibilityPermission: true, screenRecordingPermission: true } as const;
@@ -70,6 +78,9 @@ export class ActiveWindowCollector implements Collector {
   private readonly urlProvider: UrlProvider | null;
   private warned = false;
   private polling = false;
+  private emptyPolls = 0;
+  private emitted = false;
+  private warnedEmpty = false;
 
   private lastApp = "";
   private lastTitle = "";
@@ -115,6 +126,12 @@ export class ActiveWindowCollector implements Collector {
       const { readWindowsActiveWindow } = await import("./windows-active-window");
       return readWindowsActiveWindow();
     }
+    if (process.platform === "linux") {
+      const { readLinuxActiveWindow } = await import("./linux-active-window");
+      return readLinuxActiveWindow();
+    }
+    // macOS only: get-windows compiles a native binding, and its Linux path is a
+    // worse version of the X11 reader above.
     const { activeWindow } = await import(GET_WINDOWS_PACKAGE) as GetWindowsModule;
     return activeWindow(this.mode === "full" ? FULL : DEGRADED);
   }
@@ -123,7 +140,10 @@ export class ActiveWindowCollector implements Collector {
     try {
       return await this.readPlatform();
     } catch (err) {
-      if (process.platform !== "win32" && this.mode === "full") {
+      // macOS only: this retry exists because a *missing TCC grant* makes the full
+      // read throw. Elsewhere a throw means something else entirely, and the
+      // permission wording would be a lie.
+      if (process.platform === "darwin" && this.mode === "full") {
         this.mode = "degraded";
         this.ctx?.log.warn(
           "Reduced capture: window titles/URLs need a screen-capture / accessibility permission.",
@@ -139,7 +159,12 @@ export class ActiveWindowCollector implements Collector {
     this.polling = true;
     try {
       const win = await this.read();
-      if (win) this.process(win);
+      if (win) {
+        this.emptyPolls = 0;
+        this.process(win);
+      } else {
+        this.noteEmptyPoll();
+      }
     } catch (err) {
       if (!this.warned) {
         this.warned = true;
@@ -149,6 +174,24 @@ export class ActiveWindowCollector implements Collector {
       this.polling = false;
       this.scheduleNext();
     }
+  }
+
+  /**
+   * Closes the silent path: a platform read that keeps resolving `undefined` never
+   * throws, so without this the log stays clean while the session records nothing.
+   * Warns once, only while we have never emitted an event — a mid-session gap on a
+   * locked screen is normal and shouldn't nag.
+   */
+  private noteEmptyPoll(): void {
+    if (this.emitted || this.warnedEmpty) return;
+    if (++this.emptyPolls < EMPTY_POLLS_BEFORE_WARN) return;
+    this.warnedEmpty = true;
+    const reason = process.platform === "linux" ? linuxCaptureSupport().reason : undefined;
+    this.ctx?.log.warn(
+      reason
+        ? `No foreground window detected — no app or title events will be recorded. ${reason}`
+        : "No foreground window detected — no app or title events will be recorded.",
+    );
   }
 
   private process(win: ActiveWindowResult): void {
@@ -169,6 +212,7 @@ export class ActiveWindowCollector implements Collector {
     if (appChanged) {
       // New foreground context — allow the URL to re-emit for this app/step.
       this.lastUrl = "";
+      this.emitted = true;
       this.ctx.publish("app.activate", {
         app,
         title,
@@ -178,6 +222,7 @@ export class ActiveWindowCollector implements Collector {
         ...(owner.path ? { path: owner.path } : {}),
       });
     } else if (this.captureTitles && titleChanged) {
+      this.emitted = true;
       this.ctx.publish("app.title-change", { app, title });
     }
 

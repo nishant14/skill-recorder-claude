@@ -331,15 +331,19 @@ export interface FoundryDoctorInfo extends FoundryConnectionInfo {
 /** Which foreground-window provider is available on this platform. */
 export interface ActiveWindowInfo {
   ok: boolean;
-  provider: "koffi" | "get-windows" | "missing";
+  provider: "koffi" | "get-windows" | "x11" | "missing";
   path: string | null;
   error?: string;
+  /** Why tracking is degraded, phrased for the user (e.g. the fix to apply). */
+  note?: string;
 }
 
 /** How, and whether, active-tab URLs can be read on this platform. */
 export interface BrowserUrlInfo {
   kind: "applescript" | "uia" | "none";
   supported: boolean;
+  /** Why URLs are unavailable, phrased for the user. */
+  note?: string;
 }
 
 /** One capture source in the doctor report, annotated with platform support. */

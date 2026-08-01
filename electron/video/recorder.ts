@@ -10,6 +10,7 @@ import {
   type CapturedFrameManifest,
   type CapturedVideoFrame,
 } from "../../common/frames";
+import { isWaylandSession } from "../collectors/linux-active-window";
 import { createLogger } from "../logger";
 
 const log = createLogger("Video");
@@ -159,7 +160,14 @@ export class VideoRecorder {
         thumbnailSize: { width: 0, height: 0 },
       });
       if (sources.length === 0) {
-        log.warn("no screen source available; skipping video");
+        // On Wayland the screen only becomes enumerable once the desktop portal
+        // hands over a stream, so "no sources" there means the portal is missing or
+        // the sharing prompt was dismissed — not that the machine has no display.
+        log.warn(
+          isWaylandSession()
+            ? "no screen source available; skipping video. On Wayland, screen capture goes through xdg-desktop-portal — approve the sharing prompt, or log in with “Ubuntu on Xorg”."
+            : "no screen source available; skipping video",
+        );
         return;
       }
       const source = sources[0];

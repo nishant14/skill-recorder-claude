@@ -169,18 +169,30 @@ export function createDescriberTools(ctx: ToolContext): Tool[] {
   const listFrames: Tool = {
     name: "list_frames",
     description:
-      "List the screen frames already available for this session (file, atMs, source, reason). Returns an empty list when no video was recorded. Use get_frames to actually view frames.",
+      "Report the screen frames available for this session. `capturedFrameCount` and `capturedRangeMs` describe the 1 fps screenshots captured for the whole recording — ALL of them are viewable with get_frames. `frames` lists only the ones already extracted around events, and is often empty; an empty `frames` with a non-zero `capturedFrameCount` still means the whole session was filmed, so call get_frames on any window inside `capturedRangeMs` to look at it. `hasVideo: false` means no video was recorded at all.",
     parameters: { type: "object", properties: {}, additionalProperties: false },
     handler: () => {
       progress("Listing available frames…");
-      if (!extractor) return JSON.stringify({ hasVideo: false, frames: [] });
+      if (!extractor) {
+        return JSON.stringify({ hasVideo: false, capturedFrameCount: 0, capturedRangeMs: null, frames: [] });
+      }
       const frames = extractor.manifest.map((f) => ({
         file: f.file,
         atMs: rel(f.tMs),
         source: f.source,
         reason: f.reason,
       }));
-      return JSON.stringify({ hasVideo: true, frames }, null, 2);
+      const range = extractor.capturedRange;
+      return JSON.stringify(
+        {
+          hasVideo: true,
+          capturedFrameCount: extractor.capturedFrameCount,
+          capturedRangeMs: range ? { fromMs: rel(range.fromMs), toMs: rel(range.toMs) } : null,
+          frames,
+        },
+        null,
+        2,
+      );
     },
   };
 

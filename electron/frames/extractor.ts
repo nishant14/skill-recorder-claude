@@ -169,6 +169,24 @@ export class FrameExtractor {
     return [...this.frames].sort((a, b) => a.tMs - b.tMs);
   }
 
+  /**
+   * How many source snapshots exist on disk, retained or not. The describer needs
+   * this to know that an event-poor session still has screens worth looking at —
+   * the retained manifest can legitimately be empty at that point.
+   */
+  get capturedFrameCount(): number {
+    return this.sourceFrames.length;
+  }
+
+  /** Epoch span covered by the source snapshots, or null when there are none. */
+  get capturedRange(): { fromMs: number; toMs: number } | null {
+    if (this.sourceFrames.length === 0) return null;
+    return {
+      fromMs: this.sourceFrames[0].tMs,
+      toMs: this.sourceFrames[this.sourceFrames.length - 1].tMs,
+    };
+  }
+
   offsetForEpoch(epochMs: number): number {
     return Math.max(0, (epochMs - this.opts.anchorEpochMs) / 1000);
   }

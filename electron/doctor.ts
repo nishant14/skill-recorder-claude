@@ -13,6 +13,7 @@ import type {
   DoctorSource,
   FoundryDoctorInfo,
 } from "../common/ipc";
+import { linuxCaptureSupport } from "./collectors/linux-active-window";
 import { browserUrlProviderKind } from "./collectors/url-provider";
 import { loadFoundryConfig } from "./foundry/config";
 import { sessionsRoot } from "./recorder/session-store";
@@ -58,6 +59,17 @@ function checkActiveWindow(): ActiveWindowInfo {
       require("koffi");
       return { ok: true, provider: "koffi", path: modulePath };
     }
+    if (process.platform === "linux") {
+      // Nothing to resolve: the X11 reader ships in-repo, so what decides whether
+      // window tracking works is the session and the `x11-utils` binaries.
+      const support = linuxCaptureSupport();
+      return {
+        ok: support.ok,
+        provider: "x11",
+        path: null,
+        ...(support.reason ? { note: support.reason } : {}),
+      };
+    }
     const modulePath = require.resolve("get-windows");
     return { ok: existsSync(modulePath), provider: "get-windows", path: modulePath };
   } catch (err) {
@@ -75,10 +87,24 @@ function checkBrowserUrl(): BrowserUrlInfo {
   return { kind, supported: kind !== "none" };
 }
 
-/** Whether a capture source can work at all on the current platform. */
-function sourceSupport(key: string, browserUrl: BrowserUrlInfo): { supported: boolean; note?: string } {
+/**
+ * Whether a capture source can work at all on this computer. Support is a property
+ * of the environment, not just the platform: on Linux the same binary tracks windows
+ * on X11 and cannot on Wayland, so the reason travels with the answer.
+ */
+function sourceSupport(
+  key: string,
+  browserUrl: BrowserUrlInfo,
+  activeWindow: ActiveWindowInfo,
+): { supported: boolean; note?: string } {
   if (key === "browserUrls" && !browserUrl.supported) {
-    return { supported: false, note: "Not available on this platform" };
+    return { supported: false, note: browserUrl.note ?? "Not available on this platform" };
+  }
+  if ((key === "appActivity" || key === "windowTitles") && !activeWindow.ok) {
+    return {
+      supported: false,
+      note: activeWindow.note ?? activeWindow.error ?? "Window tracking is unavailable",
+    };
   }
   return { supported: true };
 }
@@ -87,16 +113,17 @@ function sourceSupport(key: string, browserUrl: BrowserUrlInfo): { supported: bo
 export function runDoctor(): DoctorReport {
   const config = FULL_CAPTURE;
   const browserUrl = checkBrowserUrl();
+  const activeWindow = checkActiveWindow();
 
   const activeSources: DoctorSource[] = CAPTURE_SOURCES.filter((s) => config[s.key]).map((s) => {
-    const support = sourceSupport(s.key, browserUrl);
+    const support = sourceSupport(s.key, browserUrl, activeWindow);
     return { key: s.key, label: s.label, tier: s.tier, cost: s.cost, supported: support.supported, note: support.note };
   });
 
   return {
     platform: process.platform,
     foundry: checkFoundry(),
-    activeWindow: checkActiveWindow(),
+    activeWindow,
     browserUrl,
     sessionsDir: sessionsRoot(),
     activeSources,
