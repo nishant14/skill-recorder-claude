@@ -67,6 +67,13 @@ obtained**. A confident summary of an unverified result is worse than no summary
   (user decision). No project-local credentials file and no `.env`; env vars remain a
   higher-precedence override for evals/CI, and `SKILL_RECORDER_CONFIG_DIR` redirects the
   file for tests. Credentials never enter the repo.
+- **2026-08-01 — LLM-call audit: all five inference call sites are accounted for** by
+  Workstream B (`describer.ts`, both `builder.ts` files, their shared `agent-builder.ts`,
+  and `evals/judge.ts`). Two
+  stragglers were folded into the plans rather than left to discovery: the per-automation
+  `model` override the AutomationBuilder tool schema still invites (→ D) and
+  `scripts/verify-windows-package.mjs`'s assertions that the artifact *contains*
+  `@github/copilot*` (→ E, where it becomes G4's Windows enforcement point).
 - **Outputs retarget to `copilot-studio` + `app`** (user decision): Scout/Cowork are
   replaced by Copilot Studio agent bundles and the app's own library, with a `z.preprocess`
   migration so persisted `scout` / `cowork` artifacts keep loading (Workstream D).

@@ -167,6 +167,16 @@ packaging, asarUnpack, and the compliance pipeline simple.
 - `evals/builder/scenarios.ts`, `evals/skillbuilder/scenarios.ts`: `architecture: "app"`.
 - `common/automation.ts`: de-Scout the comments/doc; keep the schedule/import JSON shape
   (generic enough for both targets).
+- **Per-automation `model` override** (found by the LLM-call audit): the tool schema
+  currently invites the model to pick one (`electron/automationbuilder/tools.ts:169`, named
+  in the `propose_automation_plan` signature at `instructions.ts:104`), and it flows
+  `AutomationPlanSchema` → `BuiltAutomation` → the exported `automation.json`
+  (`common/automation.ts:269`) as a Scout passthrough — so post-retarget it emits
+  Copilot-era model ids that mean nothing to either target. Remove `model` from the tool
+  `parameters` and from the instructions text: it is **engine-owned**, same rule as
+  `architecture`. Keep the field in the zod schemas so persisted plans still parse. Define
+  its semantics per target: **omitted for `copilot-studio`**; for `app`, an optional Foundry
+  deployment name, consumed later by Workstream H's runner.
 
 ## Workstream E — Packaging, install scripts, compliance, docs
 
@@ -175,6 +185,12 @@ packaging, asarUnpack, and the compliance pipeline simple.
 - `vite.config.ts`: remove `@github/copilot-sdk` from rolldown `external`.
 - `install.sh` / `install.ps1`: remove Copilot CLI binary path + sha256 verification blocks
   and the copilot license-file expectations.
+- `scripts/verify-windows-package.mjs`: **invert its copilot assertions.** It currently
+  requires the packaged Windows app to *contain* `@github/copilot-win32-<arch>/` and
+  `copilot.exe` (lines 51-52, in `expectedPayloads`) and only rejects the *other* arch's
+  copy (line 71). Drop the `expectedPayloads` entry and generalize the wrong-arch check to
+  "no `@github/copilot*` path at any arch". This is exactly gate **G4**'s
+  packaged-artifact check, so this script becomes G4's enforcement point on Windows.
 - Compliance: remove `copilotCli`/`copilotSdk` from `third_party/compliance-policy.json`;
   remove `assertReviewedCopilotCliVersions` + the SDK version assertion + the
   `github-copilot-sdk-MIT.txt` license override handling from `scripts/compliance.mjs`
