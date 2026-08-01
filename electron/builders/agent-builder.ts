@@ -1,12 +1,9 @@
-import { CopilotClient, type CopilotSession } from "@github/copilot-sdk";
-
-import { COPILOT_SIGNED_OUT_ERROR } from "../../common/ipc";
-import { copilotConnectionOption, withStartupTimeout } from "../copilot-cli-path";
+import { FoundryClient, type FoundrySession } from "../foundry/agent";
 import { createLogger } from "../logger";
 
 /**
- * Shared plumbing for the final-stage, multi-turn Copilot builders (Skill Builder
- * and Automation Builder). Owns one lazily-started {@link CopilotClient} and a small
+ * Shared plumbing for the final-stage, multi-turn Foundry builders (Skill Builder
+ * and Automation Builder). Owns one lazily-started {@link FoundryClient} and a small
  * pool of live conversations — one per recording — so each build's plan → refine →
  * create flow stays in a single session. Subclasses add the build-specific tools,
  * system prompt, and `build`/`create` turns; everything below is common.
@@ -15,21 +12,21 @@ import { createLogger } from "../logger";
 /** The minimum every live build carries so the pool can manage it. */
 export interface BaseLive {
   sessionId: string;
-  copilot: CopilotSession;
+  agent: FoundrySession;
 }
 
 const MAX_LIVE_SESSIONS = 4;
 
 export abstract class AgentBuilder<TLive extends BaseLive> {
-  private client: CopilotClient | null = null;
-  private clientStart: Promise<CopilotClient> | null = null;
+  private client: FoundryClient | null = null;
+  private clientStart: Promise<FoundryClient> | null = null;
   protected model: string | undefined;
   protected readonly live = new Map<string, TLive>();
   protected readonly active = new Set<string>();
   protected readonly log;
 
-  /** @param name Used for logs and the "not signed in" / startup-timeout messages. */
-  constructor(private readonly name: string) {
+  /** @param name Used as the log prefix for this builder. */
+  constructor(name: string) {
     this.log = createLogger(name);
   }
 
@@ -39,7 +36,7 @@ export abstract class AgentBuilder<TLive extends BaseLive> {
 
   async cancel(sessionId: string): Promise<void> {
     const live = this.live.get(sessionId);
-    if (live) await live.copilot.abort().catch(() => undefined);
+    if (live) await live.agent.abort().catch(() => undefined);
   }
 
   async forget(sessionId: string): Promise<void> {
@@ -50,7 +47,7 @@ export abstract class AgentBuilder<TLive extends BaseLive> {
     for (const [id, live] of this.live) {
       if (this.active.has(id)) continue;
       this.live.delete(id);
-      await live.copilot.disconnect().catch(() => undefined);
+      await live.agent.disconnect().catch(() => undefined);
     }
   }
 
@@ -61,20 +58,17 @@ export abstract class AgentBuilder<TLive extends BaseLive> {
     this.clientStart = null;
   }
 
-  /** Start (once) and return the shared Copilot client, verifying it's signed in. */
-  protected async ensureClient(): Promise<CopilotClient> {
+  /** Start (once) and return the shared Foundry client — `start()` throws when the
+   *  connection isn't configured. */
+  protected async ensureClient(): Promise<FoundryClient> {
     if (this.client) return this.client;
     if (this.clientStart) return this.clientStart;
     this.clientStart = (async () => {
-      const client = new CopilotClient(copilotConnectionOption());
-      await withStartupTimeout(client.start(), `Copilot CLI (${this.name})`);
-      const auth = await client.getAuthStatus();
-      if (!auth.isAuthenticated) {
-        await client.stop().catch(() => undefined);
-        throw new Error(COPILOT_SIGNED_OUT_ERROR);
-      }
+      const client = new FoundryClient();
+      await client.start();
       this.model = process.env.SKILL_RECORDER_MODEL || undefined;
-      this.log.info("Copilot ready", auth.login ? `as ${auth.login}` : "");
+      // Never log the key — the deployment is all that identifies the connection.
+      this.log.info(`Foundry ready · deployment ${this.model ?? client.deployment}`);
       this.client = client;
       return client;
     })();
@@ -94,7 +88,7 @@ export abstract class AgentBuilder<TLive extends BaseLive> {
       if (this.live.size <= MAX_LIVE_SESSIONS) break;
       if (id === live.sessionId || this.active.has(id)) continue;
       this.live.delete(id);
-      void l.copilot.disconnect().catch(() => undefined);
+      void l.agent.disconnect().catch(() => undefined);
     }
   }
 
@@ -102,6 +96,6 @@ export abstract class AgentBuilder<TLive extends BaseLive> {
     const live = this.live.get(sessionId);
     if (!live) return;
     this.live.delete(sessionId);
-    await live.copilot.disconnect().catch(() => undefined);
+    await live.agent.disconnect().catch(() => undefined);
   }
 }

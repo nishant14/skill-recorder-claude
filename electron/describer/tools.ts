@@ -1,7 +1,7 @@
 import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
-import type { Tool } from "@github/copilot-sdk";
+import type { Tool } from "../foundry/agent";
 
 import { AnalysisSubmissionSchema, type AnalysisSubmission } from "../../common/analysis";
 import { MEANINGFUL_EVENT_TYPES } from "../../common/correlation";
@@ -56,9 +56,9 @@ function readNarration(sessionDir: string): NarrationTranscript | null {
 }
 
 /**
- * Build the custom in-process tools exposed to one Copilot session. Handlers run
- * in the Electron main process (dispatched over JSON-RPC by the SDK), read the
- * session's captured signals, and — for frames — return the JPEGs **inline** so
+ * Build the custom in-process tools exposed to one agent session. Handlers run
+ * in the Electron main process (dispatched by the agent runtime's tool loop), read
+ * the session's captured signals, and — for frames — return the JPEGs **inline** so
  * the model can see the screen without any `view`/`bash` tool. `submit_analysis`
  * captures guaranteed-structured output. The whole surface is sandboxed to the
  * one session dir.

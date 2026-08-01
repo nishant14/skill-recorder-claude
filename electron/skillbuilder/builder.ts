@@ -2,8 +2,6 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-import { approveAll, type CopilotSession } from "@github/copilot-sdk";
-
 import {
   BuiltSkillSchema,
   renderSkillMarkdown,
@@ -20,6 +18,7 @@ import type { SkillBuildInput, SkillBuildProgress } from "../../common/ipc";
 import { AgentBuilder, type BaseLive } from "../builders/agent-builder";
 import { createReadTools } from "../builders/read-tools";
 import { loadPersistedAnalysis } from "../describer/describer";
+import type { FoundrySession } from "../foundry/agent";
 import { createLogger } from "../logger";
 import { isValidSessionId, sessionDir } from "../recorder/session-store";
 import { SKILL_BUILDER_INSTRUCTIONS } from "./instructions";
@@ -68,7 +67,7 @@ export type SkillTarget = { kind: "install" } | { kind: "export"; dir: string };
 interface LiveBuild extends BaseLive {
   sessionDir: string;
   architecture: SkillArchitecture;
-  copilot: CopilotSession;
+  agent: FoundrySession;
   holder: { plan: SkillPlan | undefined; submission: SkillSubmission | undefined };
   /** Last plan proposed this build (kept so submit can reference it). */
   lastPlan: SkillPlan | null;
@@ -93,7 +92,7 @@ export function loadPersistedSkill(sessionId: string): BuiltSkill | null {
 }
 
 /**
- * Drives the multi-turn GitHub Copilot CLI agent that turns a recording's analysis
+ * Drives the multi-turn Foundry Codex agent that turns a recording's analysis
  * into a generalized, native-tool-first skill for a target architecture. Shares the
  * {@link AgentBuilder} pool (one live conversation per recording) so the plan →
  * refine → build flow stays in a single session. Streams progress out via a
@@ -158,9 +157,9 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
       this.emit(sessionId, "drafting", "Writing the skill…");
       live.holder.submission = undefined;
       try {
-        await live.copilot.sendAndWait(`${CREATE_PROMPT}\n\n${renderPlanForPrompt(plan)}`, TURN_TIMEOUT_MS);
+        await live.agent.sendAndWait(`${CREATE_PROMPT}\n\n${renderPlanForPrompt(plan)}`, TURN_TIMEOUT_MS);
       } catch (err) {
-        await live.copilot.abort().catch(() => undefined);
+        await live.agent.abort().catch(() => undefined);
         throw new Error(`Skill build failed: ${msg(err)}`);
       }
       const submission = live.holder.submission as SkillSubmission | undefined;
@@ -231,14 +230,9 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     const systemContent = `${SKILL_BUILDER_INSTRUCTIONS}\n\n${catalogue}`.trim();
 
     const client = await this.ensureClient();
-    const copilot = await client.createSession({
-      systemMessage: { mode: "append", content: systemContent },
+    const agent = await client.createSession({
+      instructions: systemContent,
       tools,
-      onPermissionRequest: approveAll,
-      workingDirectory: dir,
-      enableHostGitOperations: false,
-      infiniteSessions: { enabled: false },
-      availableTools: tools.map((t) => t.name),
       ...(this.model ? { model: this.model } : {}),
     });
 
@@ -246,7 +240,7 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
       sessionId,
       sessionDir: dir,
       architecture,
-      copilot,
+      agent,
       holder,
       lastPlan: null,
     };
@@ -258,9 +252,9 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     live.holder.plan = undefined;
     this.emit(live.sessionId, "working", "Thinking…");
     try {
-      await live.copilot.sendAndWait(prompt, TURN_TIMEOUT_MS);
+      await live.agent.sendAndWait(prompt, TURN_TIMEOUT_MS);
     } catch (err) {
-      await live.copilot.abort().catch(() => undefined);
+      await live.agent.abort().catch(() => undefined);
       throw new Error(`Planning failed: ${msg(err)}`);
     }
     const plan = live.holder.plan;

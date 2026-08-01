@@ -1,9 +1,9 @@
-// Optional semantic judge: asks a Copilot agent to rate how faithfully the
+// Optional semantic judge: asks a second agent to rate how faithfully the
 // describer's analysis captures the scenario's ground-truth task. Off by default
 // (`--judge`); the deterministic rubric in scoring.ts is the primary signal. This
 // adds a qualitative, human-like second opinion for the overnight report.
 
-import { approveAll, CopilotClient, type Tool } from "@github/copilot-sdk";
+import { FoundryClient, type Tool } from "../electron/foundry/agent";
 
 import type { Analysis } from "../common/analysis";
 import type { Scenario } from "./scenario";
@@ -44,7 +44,7 @@ export async function judgeAnalysis(
   analysis: Analysis,
   model?: string,
 ): Promise<JudgeResult> {
-  const client = new CopilotClient();
+  const client = new FoundryClient();
   await client.start();
   try {
     const holder: { result: JudgeResult | undefined } = { result: undefined };
@@ -74,11 +74,8 @@ export async function judgeAnalysis(
     };
 
     const session = await client.createSession({
-      systemMessage: { mode: "append", content: JUDGE_INSTRUCTIONS },
+      instructions: JUDGE_INSTRUCTIONS,
       tools: [submit],
-      onPermissionRequest: approveAll,
-      enableHostGitOperations: false,
-      infiniteSessions: { enabled: false },
       ...(model ? { model } : {}),
     });
     await session.sendAndWait(renderPrompt(scenario, analysis), 120_000);

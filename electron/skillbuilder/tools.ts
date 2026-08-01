@@ -1,4 +1,4 @@
-import type { Tool } from "@github/copilot-sdk";
+import type { Tool } from "../foundry/agent";
 
 import {
   SkillPlanSchema,
