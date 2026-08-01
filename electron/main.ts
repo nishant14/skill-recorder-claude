@@ -11,6 +11,8 @@ import { createLogger } from "./logger";
 import { NarrationManager } from "./narration/manager";
 import { RecorderController } from "./recorder/controller";
 import { RecordingPrivacySession } from "./recording-privacy";
+import { createRunGates, RunPrompts } from "./runner/ipc-bridge";
+import { SkillRunner } from "./runner/runner";
 import { deleteSession } from "./sessions";
 import { SkillBuilder } from "./skillbuilder/builder";
 import { AutomationBuilder } from "./automationbuilder/builder";
@@ -88,6 +90,17 @@ const builder = new SkillBuilder((progress) => broadcast(IPC.skillProgress, prog
 const automationBuilder = new AutomationBuilder((progress) =>
   broadcast(IPC.automationProgress, progress),
 );
+/** Confirmations and questions in flight for the active run — the renderer answers them. */
+const runPrompts = new RunPrompts();
+const runner = new SkillRunner((progress) => broadcast(IPC.skillRunProgress, progress), {
+  // Every side effect a run attempts becomes a card in the Skills panel, and the run
+  // blocks on it. The runner keeps its own 3-minute in-band deadline behind this.
+  gates: (ctx) =>
+    createRunGates(runPrompts, ctx, {
+      emitConfirm: (request) => broadcast(IPC.skillRunConfirm, request),
+      emitAsk: (request) => broadcast(IPC.skillRunAsk, request),
+    }),
+});
 
 /** Open, focus, and re-dock the Sessions library window (creating it lazily). */
 function openLibrary(): void {
@@ -226,6 +239,8 @@ app.whenReady().then(async () => {
     automationBuilder,
     narration,
     microphones,
+    runner,
+    runPrompts,
   );
   ipcMain.handle(IPC.start, () => requestStartRecording());
   ipcMain.handle(IPC.startConfirmed, () => startRecording());
@@ -325,5 +340,8 @@ app.on("will-quit", () => {
   void describer.dispose();
   void builder.dispose();
   void automationBuilder.dispose();
+  // A quit answers every card still on screen, then aborts the run behind them.
+  runPrompts.end();
+  void runner.dispose();
   microphones.dispose();
 });

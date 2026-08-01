@@ -10,6 +10,7 @@ import {
   operationRow,
   type ApiOperation,
 } from "../../common/api-reference";
+import type { ConfirmDecision } from "../../common/ipc";
 import type { Tool, ToolResult } from "../foundry/agent";
 import { foundryConfigFile } from "../foundry/config";
 import {
@@ -75,10 +76,11 @@ export const DECLINED_MESSAGE = "The user declined this action.";
 /** The exact in-band answer when an interactive wait timed out. */
 export const NO_RESPONSE_MESSAGE = "The user did not respond — skip this action or finish up.";
 
-export type ConfirmDecision = "approve" | "deny" | "timeout";
+/** The decision travels to the renderer and back, so it is defined in `common/ipc`. */
+export type { ConfirmDecision };
 
-/** What a side-effecting tool asks before it acts. Implemented by the UI (H-c) and the
- *  auto-approve policy; tests inject a fake. */
+/** What a side-effecting tool asks before it acts. Implemented by `ipc-bridge.ts` (the
+ *  run panel's cards) and by the auto-approve policy; tests inject a fake. */
 export interface ConfirmGate {
   /**
    * @param kind    Tool name, so the UI can group "always allow" by capability.

@@ -1,6 +1,7 @@
 import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
+import type { SkillListEntry } from "../../common/ipc";
 import { createLogger } from "../logger";
 import { skillsRoot } from "../skillbuilder/builder";
 
@@ -34,22 +35,8 @@ const API_DIR = "api";
 /** User-authored per-skill config. Never written by us — documented for the user. */
 const RUNNER_CONFIG_FILE = "runner.json";
 
-/** What the renderer lists in the Skills panel. */
-export interface SkillListEntry {
-  /** Frontmatter `name`, or the folder name when the frontmatter has none. */
-  name: string;
-  description: string;
-  /** Absolute path of the skill folder. */
-  dir: string;
-  /** The skill carries a usable API reference (`api/openapi.json` **and** `api/index.json`). */
-  hasApi: boolean;
-  /** A `runner.json` sits beside the SKILL.md (its contents may still be unusable). */
-  hasRunnerConfig: boolean;
-  /** No `allowed-tools` at all — nothing is refused, but always-allow is disabled. */
-  unrestricted: boolean;
-  /** SKILL.md mtime, so the UI can sort by "recently installed". */
-  mtimeMs: number;
-}
+/** What the renderer lists in the Skills panel — a wire shape, defined in `common/ipc`. */
+export type { SkillListEntry };
 
 /**
  * The user's per-skill runner config: where API credentials live. Read tolerantly —

@@ -15,9 +15,14 @@ import type {
   ApiReferenceAttachInput,
   AutomationBuildProgress,
   NarrationStatus,
+  RunAskRequest,
+  RunConfirmRequest,
+  RunProgress,
   SessionSummary,
   SkillBuildProgress,
+  SkillListEntry,
   SkillPlacement,
+  TranscriptEntry,
 } from "../common/ipc";
 import type {
   BuildKind,
@@ -41,12 +46,32 @@ import {
 } from "./plan-edit";
 import { formatBytes, formatDur, formatWhen, shortLabel } from "./format";
 
+/** The two things the library window holds: past recordings, and installed skills. */
+type LibrarySection = "sessions" | "skills";
+
 export function Library() {
   const [sessions, setSessions] = useState<SessionSummary[]>([]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
   const [narrationStatus, setNarrationStatus] = useState<NarrationStatus | null>(null);
+  const [section, setSection] = useState<LibrarySection>("sessions");
+  const [skills, setSkills] = useState<SkillListEntry[]>([]);
+  const [skillsLoaded, setSkillsLoaded] = useState(false);
+  const [selectedSkill, setSelectedSkill] = useState<string | null>(null);
+
+  const loadSkills = useCallback(async () => {
+    const list = await window.skillRecorder.listInstalledSkills();
+    setSkills(list);
+    setSkillsLoaded(true);
+  }, []);
+
+  // Re-read the library on mount and every time the section changes: it is a cheap
+  // directory scan, and skills appear there from outside this window (a build installs
+  // one; the user drops a folder in by hand).
+  useEffect(() => {
+    void loadSkills();
+  }, [section, loadSkills]);
 
   const loadSessions = useCallback(async () => {
     const list = await window.skillRecorder.listSessions();
@@ -90,13 +115,26 @@ export function Library() {
   }, []);
 
   const selected = sessions.find((s) => s.id === selectedId) ?? null;
+  const skill = skills.find((s) => s.name === selectedSkill) ?? null;
 
   return (
     <div className="lib">
       <aside className="lib-list">
-        <div className="lib-list-head">
-          <span className="eyebrow">Sessions</span>
-          <span className="pill">{sessions.length}</span>
+        <div className="lib-list-head lib-tabs">
+          <button
+            className={`lib-tab${section === "sessions" ? " on" : ""}`}
+            onClick={() => setSection("sessions")}
+          >
+            <span className="eyebrow">Sessions</span>
+            <span className="pill">{sessions.length}</span>
+          </button>
+          <button
+            className={`lib-tab${section === "skills" ? " on" : ""}`}
+            onClick={() => setSection("skills")}
+          >
+            <span className="eyebrow">Skills</span>
+            <span className="pill">{skills.length}</span>
+          </button>
         </div>
         {notice && (
           <button className="sess-notice" onClick={() => setNotice(null)} title="Dismiss">
@@ -104,17 +142,38 @@ export function Library() {
           </button>
         )}
         <div className="lib-list-scroll">
-          <SessionsList
-            sessions={sessions}
-            loaded={loaded}
-            selectedId={selectedId}
-            onSelect={setSelectedId}
-            onDelete={deleteSession}
-          />
+          {section === "sessions" ? (
+            <SessionsList
+              sessions={sessions}
+              loaded={loaded}
+              selectedId={selectedId}
+              onSelect={setSelectedId}
+              onDelete={deleteSession}
+            />
+          ) : (
+            <SkillsList
+              skills={skills}
+              loaded={skillsLoaded}
+              selectedName={selectedSkill}
+              onSelect={setSelectedSkill}
+            />
+          )}
         </div>
       </aside>
       <main className="lib-detail">
-        {selected ? (
+        {section === "skills" ? (
+          skill ? (
+            <SkillRunView key={skill.name} skill={skill} />
+          ) : (
+            <div className="detail-empty">
+              <span className="eyebrow">No skill selected</span>
+              <p>
+                Pick an installed skill on the left to run it here. Anything it does to
+                your machine is shown for approval first.
+              </p>
+            </div>
+          )
+        ) : selected ? (
           <AnalysisWorkspace
             key={selected.id}
             summary={selected}
@@ -1748,4 +1807,390 @@ function AutomationBuilderView({
       )}
     </section>
   );
+}
+
+/* --- Skills panel --------------------------------------------------------- */
+
+function SkillsList({
+  skills,
+  loaded,
+  selectedName,
+  onSelect,
+}: {
+  skills: SkillListEntry[];
+  loaded: boolean;
+  selectedName: string | null;
+  onSelect: (name: string) => void;
+}) {
+  if (skills.length === 0) {
+    return (
+      <p className="sessions-empty">
+        {loaded ? "No skills installed yet. Build one from a recording." : "Loading…"}
+      </p>
+    );
+  }
+  return (
+    <ul className="sess-list">
+      {skills.map((s) => (
+        <li key={s.dir}>
+          <button
+            className={`sess${s.name === selectedName ? " on" : ""}`}
+            onClick={() => onSelect(s.name)}
+            title={s.dir}
+          >
+            <div className="sess-top">
+              <span className="skill-name">{s.name}</span>
+              <span className="sess-tags">
+                {s.hasApi && <span className="tag ok">API</span>}
+                {s.unrestricted && <span className="tag risk">unrestricted</span>}
+              </span>
+            </div>
+            {s.description && <div className="sess-intent">{s.description}</div>}
+          </button>
+        </li>
+      ))}
+    </ul>
+  );
+}
+
+/** Whether the run is over, and how — the panel's own state machine. */
+type RunPhase = "idle" | "starting" | "running" | "done" | "error";
+
+/**
+ * One skill's run: kick it off, watch what it does, answer what it asks.
+ *
+ * The main process owns the run — this panel only watches the event stream. Leaving it
+ * therefore never kills a run (it keeps going, and its unanswered confirmations degrade
+ * in band after the runner's own 3-minute deadline), but nothing replays what the panel
+ * missed: coming back mid-run shows the start screen, and starting a second run is
+ * refused with "A skill is already running." until the first one ends. Every entry
+ * arriving here has already been redacted by the runner.
+ */
+function SkillRunView({ skill }: { skill: SkillListEntry }) {
+  const [phase, setPhase] = useState<RunPhase>("idle");
+  const [input, setInput] = useState("");
+  const [runId, setRunId] = useState<string | null>(null);
+  const [entries, setEntries] = useState<TranscriptEntry[]>([]);
+  const [statusLine, setStatusLine] = useState("");
+  const [summary, setSummary] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [transcriptFile, setTranscriptFile] = useState("");
+  const [confirm, setConfirm] = useState<RunConfirmRequest | null>(null);
+  const [alwaysAllow, setAlwaysAllow] = useState(false);
+  const [ask, setAsk] = useState<RunAskRequest | null>(null);
+  const [answer, setAnswer] = useState("");
+  // The live run id, for the event handlers — they are registered once and must not
+  // close over a stale value.
+  const activeRun = useRef<string | null>(null);
+  const tail = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    return window.skillRecorder.onRunProgress((p: RunProgress) => {
+      if (activeRun.current && p.runId !== activeRun.current) return;
+      if (p.transcriptFile) setTranscriptFile(p.transcriptFile);
+      setStatusLine(p.message);
+      const entry = p.entry;
+      if (!entry) return;
+      // The closing report and the run-level failure are the two terminal entries: a
+      // `done`, or an `error` that names no tool (a tool's own error is in-band and the
+      // run keeps going).
+      if (entry.type === "done") {
+        setSummary(entry.text ?? "");
+        setPhase("done");
+        return;
+      }
+      if (entry.type === "error" && !entry.name) {
+        setError(entry.text ?? "The skill run failed.");
+        setPhase("error");
+        return;
+      }
+      setEntries((prev) => [...prev, entry]);
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.skillRecorder.onRunConfirm((request: RunConfirmRequest) => {
+      if (activeRun.current && request.runId !== activeRun.current) return;
+      setAlwaysAllow(false);
+      setConfirm(request);
+    });
+  }, []);
+
+  useEffect(() => {
+    return window.skillRecorder.onRunAsk((request: RunAskRequest) => {
+      if (activeRun.current && request.runId !== activeRun.current) return;
+      setAnswer("");
+      setAsk(request);
+    });
+  }, []);
+
+  // Keep the newest entry in view while the run works.
+  useEffect(() => {
+    tail.current?.scrollIntoView({ block: "end" });
+  }, [entries.length, confirm, ask]);
+
+  const start = useCallback(async () => {
+    setPhase("starting");
+    setEntries([]);
+    setSummary("");
+    setError(null);
+    setConfirm(null);
+    setAsk(null);
+    setStatusLine(`Running ${skill.name}…`);
+    const res = await window.skillRecorder.runSkill({
+      name: skill.name,
+      ...(input.trim() ? { input: input.trim() } : {}),
+    });
+    if (!res.ok || !res.runId) {
+      activeRun.current = null;
+      setError(res.error ?? "Could not start this skill.");
+      setPhase("error");
+      return;
+    }
+    activeRun.current = res.runId;
+    setRunId(res.runId);
+    setPhase("running");
+  }, [skill.name, input]);
+
+  const cancel = useCallback(async () => {
+    setStatusLine("Stopping…");
+    setConfirm(null);
+    setAsk(null);
+    await window.skillRecorder.cancelRun(runId ?? "");
+  }, [runId]);
+
+  const decide = useCallback(
+    async (approved: boolean) => {
+      if (!confirm) return;
+      setConfirm(null);
+      await window.skillRecorder.respondToRun({
+        runId: confirm.runId,
+        callId: confirm.callId,
+        approved,
+        ...(approved && alwaysAllow ? { alwaysAllow: true } : {}),
+      });
+    },
+    [confirm, alwaysAllow],
+  );
+
+  const sendAnswer = useCallback(async () => {
+    if (!ask) return;
+    const text = answer;
+    setAsk(null);
+    setAnswer("");
+    await window.skillRecorder.respondToRun({ runId: ask.runId, callId: ask.callId, text });
+  }, [ask, answer]);
+
+  const busy = phase === "starting" || phase === "running";
+
+  return (
+    <section className="ws">
+      <div className="ws-head">
+        <div className="ws-titles">
+          <span className="eyebrow">Run skill</span>
+          <span className="skill-name">{skill.name}</span>
+          {skill.hasApi && <span className="tag ok">API</span>}
+          {skill.unrestricted && <span className="tag risk">unrestricted</span>}
+        </div>
+      </div>
+
+      <div className="ws-body">
+        {error && <FoundryConnectionError error={error} />}
+
+        {phase === "idle" && (
+          <div className="run-start">
+            {skill.description && <p className="sb-lead">{skill.description}</p>}
+            <p className="run-note">
+              This runs on your computer. Every command it wants to run, file it wants to
+              write, and API call that changes something is shown here for your approval
+              first.
+              {skill.unrestricted &&
+                " This skill lists no allowed tools, so nothing is refused outright — and every single action needs its own approval."}
+            </p>
+            <label className="run-input-label">
+              <span className="edit-label">Anything it should know (optional)</span>
+              <textarea
+                className="ed-input ed-input-multi"
+                rows={3}
+                value={input}
+                placeholder="e.g. the customer and the items to order"
+                onChange={(e) => setInput(e.target.value)}
+              />
+            </label>
+            <button className="record-cta" onClick={() => void start()}>
+              Run skill →
+            </button>
+          </div>
+        )}
+
+        {phase !== "idle" && (
+          <div className="run-log">
+            {entries.map((entry, i) => (
+              <TranscriptLine key={`${entry.at}-${i}`} entry={entry} />
+            ))}
+
+            {confirm && (
+              <div className="run-card" role="alertdialog" aria-label="Approve this action">
+                <div className="run-card-head">
+                  <span className="tag risk">{confirm.kind}</span>
+                  <span className="run-card-title">{confirm.summary}</span>
+                </div>
+                {confirm.detail && (
+                  <details className="analyze-disclosure">
+                    <summary>Show what it will do</summary>
+                    <pre className="run-detail">{confirm.detail}</pre>
+                  </details>
+                )}
+                {confirm.allowAlways && (
+                  <label className="run-always">
+                    <input
+                      type="checkbox"
+                      checked={alwaysAllow}
+                      onChange={(e) => setAlwaysAllow(e.target.checked)}
+                    />
+                    <span>Always allow {confirm.kind} for this run</span>
+                  </label>
+                )}
+                <div className="run-card-actions">
+                  <button className="ghost" onClick={() => void decide(false)}>
+                    Deny
+                  </button>
+                  <button className="record-cta" onClick={() => void decide(true)}>
+                    Approve
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {ask && (
+              <div className="run-card" role="alertdialog" aria-label="The skill has a question">
+                <div className="run-card-head">
+                  <span className="tag">question</span>
+                  <span className="run-card-title">{ask.question}</span>
+                </div>
+                <input
+                  className="ed-input"
+                  autoFocus
+                  value={answer}
+                  placeholder="Your answer"
+                  onChange={(e) => setAnswer(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") void sendAnswer();
+                  }}
+                />
+                <div className="run-card-actions">
+                  <button className="record-cta" onClick={() => void sendAnswer()}>
+                    Send
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {busy && !confirm && !ask && (
+              <div className="status-line">
+                <span className="spinner" />
+                <span className="status-text">{statusLine || "Working…"}</span>
+              </div>
+            )}
+
+            {phase === "done" && (
+              <div className="run-summary">
+                <span className="eyebrow">Result</span>
+                <p>{summary || "The skill finished."}</p>
+              </div>
+            )}
+
+            <div ref={tail} />
+          </div>
+        )}
+      </div>
+
+      {phase !== "idle" && (
+        <div className="ws-foot">
+          <span className="foot-status run-foot-path" title={transcriptFile}>
+            {transcriptFile ? `Transcript: ${transcriptFile}` : ""}
+          </span>
+          <div className="ws-foot-actions">
+            {busy ? (
+              <button className="ghost" onClick={() => void cancel()}>
+                Cancel run
+              </button>
+            ) : (
+              <button className="record-cta" onClick={() => setPhase("idle")}>
+                Run again
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+    </section>
+  );
+}
+
+/** One transcript entry. Each type reads differently, so each type looks different. */
+function TranscriptLine({ entry }: { entry: TranscriptEntry }) {
+  if (entry.type === "model") {
+    return <p className="run-model">{entry.text}</p>;
+  }
+  if (entry.type === "tool-call") {
+    return (
+      <div className="run-line run-call">
+        <span className="run-kind">{entry.name}</span>
+        <code className="run-args">{oneLine(entry.args)}</code>
+      </div>
+    );
+  }
+  if (entry.type === "tool-result") {
+    return (
+      <div className={`run-line run-result${entry.failed ? " failed" : ""}`}>
+        <span className="run-kind">{entry.failed ? "failed" : "result"}</span>
+        <span className="run-text">{entry.text}</span>
+      </div>
+    );
+  }
+  if (entry.type === "confirm-request") {
+    return (
+      <div className="run-line run-asked">
+        <span className="run-kind">asked</span>
+        <span className="run-text">{entry.text}</span>
+      </div>
+    );
+  }
+  if (entry.type === "confirm-decision") {
+    return (
+      <div className={`run-line run-decision ${entry.decision ?? ""}`}>
+        <span className="run-kind">{decisionLabel(entry.decision)}</span>
+        <span className="run-text">{entry.name}</span>
+      </div>
+    );
+  }
+  if (entry.type === "user-input") {
+    return (
+      <div className="run-line run-user">
+        <span className="run-kind">{entry.name === "answer" ? "you" : "asked you"}</span>
+        <span className="run-text">{entry.text}</span>
+      </div>
+    );
+  }
+  // An in-band tool failure: the run carries on, but the record shows it went wrong.
+  return (
+    <div className="run-line run-error">
+      <span className="run-kind">{entry.name ?? "error"}</span>
+      <span className="run-text">{entry.text}</span>
+    </div>
+  );
+}
+
+function decisionLabel(decision: TranscriptEntry["decision"]): string {
+  if (decision === "approve") return "approved";
+  if (decision === "deny") return "denied";
+  return "no answer";
+}
+
+/** A tool call's arguments, flattened to something that fits on one line. */
+function oneLine(args: unknown): string {
+  if (args === undefined || args === null) return "";
+  const text = typeof args === "string" ? args : JSON.stringify(args);
+  const flat = text.replace(/\s+/g, " ").trim();
+  return flat.length > 220 ? `${flat.slice(0, 220)}…` : flat;
 }

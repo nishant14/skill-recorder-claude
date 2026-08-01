@@ -24,6 +24,9 @@ import type {
   FoundryConnectionResult,
   FoundryTestResult,
   MicrophoneSettingsResult,
+  RunRespondInput,
+  RunSkillInput,
+  RunStartResult,
   SkillBuildInput,
   SkillCreateResult,
   SkillPlacement,
@@ -50,6 +53,9 @@ import type { AudioRecorder } from "./audio/recorder";
 import type { NarrationManager } from "./narration/manager";
 import type { RecorderController } from "./recorder/controller";
 import { isValidSessionId, sessionDir } from "./recorder/session-store";
+import type { RunPrompts } from "./runner/ipc-bridge";
+import { listInstalledSkills } from "./runner/library";
+import type { SkillRunner } from "./runner/runner";
 import { deleteSession, listSessions } from "./sessions";
 import { loadPersistedSkill, SkillBuilder, type SkillTarget } from "./skillbuilder/builder";
 
@@ -72,6 +78,9 @@ export function registerIpc(
   automationBuilder: AutomationBuilder,
   narration: NarrationManager,
   microphones: AudioRecorder,
+  runner: SkillRunner,
+  /** The runner's confirmation/question waiters — created with it in `main.ts`. */
+  runPrompts: RunPrompts,
 ): void {
   ipcMain.handle(IPC.stop, () => recorder.stop());
   ipcMain.handle(IPC.discard, () => recorder.discard());
@@ -514,4 +523,59 @@ export function registerIpc(
     if (automation?.exportedPath) shell.showItemInFolder(automation.exportedPath);
     return { ok: true };
   });
+
+  /* --- Skill runner ------------------------------------------------------- */
+
+  ipcMain.handle(IPC.skillsList, () => listInstalledSkills());
+
+  ipcMain.handle(IPC.skillRun, async (_event, input: RunSkillInput): Promise<RunStartResult> => {
+    const name = typeof input?.name === "string" ? input.name.trim() : "";
+    // The renderer's list is a snapshot; re-resolve the name against the library on
+    // disk so a run can only ever name a skill that is installed right now.
+    const entry = listInstalledSkills().find((s) => s.name === name);
+    if (!entry) return { ok: false, error: `No installed skill named "${name}".` };
+    if (runner.isRunning()) return { ok: false, error: "A skill is already running." };
+
+    // A skill that declared no `allowed-tools` gets no "always allow" checkbox: the
+    // individual approvals are the only enforcement it has (H4).
+    runPrompts.arm({ allowAlways: !entry.unrestricted });
+    const running = runner.run({
+      name: entry.name,
+      ...(typeof input?.input === "string" && input.input.trim() ? { input: input.input } : {}),
+      // The UI is the only caller: every side effect is shown to the user. `auto-approve`
+      // exists for the headless smoke and is never reachable from here.
+      policy: "interactive",
+    });
+    // A run outlives this call — completion arrives as a progress event — but the panel
+    // needs the id now, to match the events and to cancel.
+    const runId = runPrompts.runId;
+    // Whatever ends the run (report, failure, cancel), no confirmation card may be left
+    // holding a promise nobody will settle.
+    void running
+      .catch((err) => log.warn("skill run failed:", err instanceof Error ? err.message : String(err)))
+      .finally(() => runPrompts.end());
+    if (!runId) {
+      // The run never got as far as building its tools; its rejection carries the reason.
+      const error = await running.then(
+        () => "Could not start the skill run.",
+        (err: unknown) => (err instanceof Error ? err.message : String(err)),
+      );
+      return { ok: false, error };
+    }
+    return { ok: true, runId };
+  });
+
+  ipcMain.handle(IPC.skillRunCancel, async (_event, runId: string) => {
+    const id = typeof runId === "string" && runId ? runId : undefined;
+    await runner.cancel(id);
+    // Release the card the run may be sitting on rather than waiting for the abort to
+    // travel back through the turn. A stale id (a button from a run that already ended)
+    // cancels nothing, so it must not end the run that is live now.
+    if (!id || id === runPrompts.runId) runPrompts.end();
+    return { ok: true };
+  });
+
+  ipcMain.handle(IPC.skillRunRespond, (_event, input: RunRespondInput) => ({
+    ok: runPrompts.respond(input),
+  }));
 }

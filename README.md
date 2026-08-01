@@ -12,7 +12,8 @@ something an agent can reuse:
 - an **Automation**: the same procedure on a schedule or trigger.
 
 Either can be installed into **Skill Recorder's own library** or exported as a bundle for
-a **Copilot Studio agent**.
+a **Copilot Studio agent**. Skills you install can be **run from the app's Skills panel** —
+side effects require your approval.
 
 Both prefer the agent's **native tools** (like the `gh` CLI or `web_fetch`) over replaying
 UI clicks, and generalize from your one example, so recording yourself submitting *one*

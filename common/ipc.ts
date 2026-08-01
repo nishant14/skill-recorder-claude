@@ -220,6 +220,119 @@ export interface AutomationCreateResult {
   error?: string;
 }
 
+/* --- Skill runner --------------------------------------------------------- */
+
+/** One installed skill, as the Skills panel lists it. */
+export interface SkillListEntry {
+  /** Frontmatter `name`, or the folder name when the frontmatter has none. */
+  name: string;
+  description: string;
+  /** Absolute path of the skill folder. */
+  dir: string;
+  /** The skill carries a usable API reference (`api/openapi.json` **and** `api/index.json`). */
+  hasApi: boolean;
+  /** A `runner.json` sits beside the SKILL.md (its contents may still be unusable). */
+  hasRunnerConfig: boolean;
+  /** No `allowed-tools` at all — nothing is refused, but always-allow is disabled. */
+  unrestricted: boolean;
+  /** SKILL.md mtime, so the UI can sort by "recently installed". */
+  mtimeMs: number;
+}
+
+/** What the user answered when a side effect asked. `timeout` is the in-band no-answer. */
+export type ConfirmDecision = "approve" | "deny" | "timeout";
+
+export type TranscriptEntryType =
+  | "model"
+  | "tool-call"
+  | "tool-result"
+  | "confirm-request"
+  | "confirm-decision"
+  | "user-input"
+  | "error"
+  | "done";
+
+/** One line of the run record. Deliberately flat — the UI renders it as a list. */
+export interface TranscriptEntry {
+  type: TranscriptEntryType;
+  /** Epoch ms. */
+  at: number;
+  /** Tool or confirmation kind, when the entry is about one. */
+  name?: string;
+  /** The human-readable half: model text, tool output, question, error message. */
+  text?: string;
+  /** Full detail behind a confirmation (the command, the path + preview). */
+  detail?: string;
+  /** A tool call's parsed arguments. */
+  args?: unknown;
+  decision?: ConfirmDecision;
+  /** True when the tool reported failure (the model still sees the text). */
+  failed?: boolean;
+}
+
+/** Streamed to the renderer as a skill run happens. `entry` is already redacted. */
+export interface RunProgress {
+  runId: string;
+  skillName: string;
+  phase: "start" | "working" | "confirm" | "done" | "error";
+  message: string;
+  entry?: TranscriptEntry;
+  /** Absolute path of this run's transcript, so the panel can point the user at it. */
+  transcriptFile: string;
+}
+
+/** A side effect asking permission. The run is blocked until the user answers. */
+export interface RunConfirmRequest {
+  runId: string;
+  /** Identifies this one question; echoed back in {@link RunRespondInput}. */
+  callId: string;
+  /** Tool name, so the UI can group "always allow" by capability. */
+  kind: string;
+  /** One line, safe to show as the card's title. */
+  summary: string;
+  /** The full thing being approved (the command, the path + preview, the request). */
+  detail: string;
+  /** False for an unrestricted skill: every side effect needs its own approval. */
+  allowAlways: boolean;
+}
+
+/** `ask_user` reaching the person watching the run. */
+export interface RunAskRequest {
+  runId: string;
+  callId: string;
+  question: string;
+}
+
+/** The user's answer to a confirmation or a question. */
+export interface RunRespondInput {
+  runId: string;
+  callId: string;
+  /** Confirmation only: approve or decline this side effect. */
+  approved?: boolean;
+  /** Confirmation only: approve every later call of this kind, for this run only. */
+  alwaysAllow?: boolean;
+  /** Question only: what the user typed. */
+  text?: string;
+}
+
+/** Start a run of an installed skill. */
+export interface RunSkillInput {
+  /** Frontmatter name of an installed skill. */
+  name: string;
+  /** Optional free text appended to the kickoff prompt. */
+  input?: string;
+}
+
+/**
+ * The answer to "did the run start". A run outlives this call: everything after the
+ * start — transcript entries, the final report, failures — arrives as {@link RunProgress}.
+ */
+export interface RunStartResult {
+  ok: boolean;
+  runId?: string;
+  error?: string;
+}
+
 export interface StartResult {
   ok: boolean;
   sessionId?: string;
@@ -437,6 +550,13 @@ export const IPC = {
   cancelAutomation: "automation:cancel",
   revealAutomation: "automation:reveal",
   automationProgress: "automation:progress",
+  skillsList: "skills:list",
+  skillRun: "skill:run",
+  skillRunCancel: "skill:run-cancel",
+  skillRunRespond: "skill:run-respond",
+  skillRunProgress: "skill:run-progress",
+  skillRunConfirm: "skill:run-confirm",
+  skillRunAsk: "skill:run-ask",
   openLibrary: "ui:open-library",
   closeLibrary: "ui:close-library",
   recordingControlsExpanded: "ui:recording-controls-expanded",
@@ -544,6 +664,21 @@ export interface SkillRecorderApi {
   /** Reveal a session's exported automation bundle in the OS file manager. */
   revealAutomation(sessionId: string): Promise<{ ok: boolean }>;
   onAutomationProgress(cb: (progress: AutomationBuildProgress) => void): () => void;
+  /** Every skill installed in this app's own library, by name. */
+  listInstalledSkills(): Promise<SkillListEntry[]>;
+  /**
+   * Start running an installed skill. Resolves as soon as the run has *started* —
+   * the transcript, the confirmations and the final report all arrive on the three
+   * `onRun*` subscriptions. One run at a time, app-wide.
+   */
+  runSkill(input: RunSkillInput): Promise<RunStartResult>;
+  /** Abort the active run (a stale `runId` is a no-op). */
+  cancelRun(runId: string): Promise<{ ok: boolean }>;
+  /** Answer the confirmation or question the run is blocked on. */
+  respondToRun(input: RunRespondInput): Promise<{ ok: boolean }>;
+  onRunProgress(cb: (progress: RunProgress) => void): () => void;
+  onRunConfirm(cb: (request: RunConfirmRequest) => void): () => void;
+  onRunAsk(cb: (request: RunAskRequest) => void): () => void;
   /** Open (and focus) the Sessions library window, docked to the recorder. */
   openLibrary(): Promise<void>;
   /** Close the Sessions library window from within it. */

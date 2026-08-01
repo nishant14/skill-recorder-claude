@@ -50,6 +50,13 @@ const IPC = {
   cancelAutomation: "automation:cancel",
   revealAutomation: "automation:reveal",
   automationProgress: "automation:progress",
+  skillsList: "skills:list",
+  skillRun: "skill:run",
+  skillRunCancel: "skill:run-cancel",
+  skillRunRespond: "skill:run-respond",
+  skillRunProgress: "skill:run-progress",
+  skillRunConfirm: "skill:run-confirm",
+  skillRunAsk: "skill:run-ask",
   openLibrary: "ui:open-library",
   closeLibrary: "ui:close-library",
   recordingControlsExpanded: "ui:recording-controls-expanded",
@@ -147,6 +154,25 @@ contextBridge.exposeInMainWorld("skillRecorder", {
     const listener = (_event, progress) => cb(progress);
     ipcRenderer.on(IPC.automationProgress, listener);
     return () => ipcRenderer.removeListener(IPC.automationProgress, listener);
+  },
+  listInstalledSkills: () => ipcRenderer.invoke(IPC.skillsList),
+  runSkill: (input) => ipcRenderer.invoke(IPC.skillRun, input),
+  cancelRun: (runId) => ipcRenderer.invoke(IPC.skillRunCancel, runId),
+  respondToRun: (input) => ipcRenderer.invoke(IPC.skillRunRespond, input),
+  onRunProgress: (cb) => {
+    const listener = (_event, progress) => cb(progress);
+    ipcRenderer.on(IPC.skillRunProgress, listener);
+    return () => ipcRenderer.removeListener(IPC.skillRunProgress, listener);
+  },
+  onRunConfirm: (cb) => {
+    const listener = (_event, request) => cb(request);
+    ipcRenderer.on(IPC.skillRunConfirm, listener);
+    return () => ipcRenderer.removeListener(IPC.skillRunConfirm, listener);
+  },
+  onRunAsk: (cb) => {
+    const listener = (_event, request) => cb(request);
+    ipcRenderer.on(IPC.skillRunAsk, listener);
+    return () => ipcRenderer.removeListener(IPC.skillRunAsk, listener);
   },
   openLibrary: () => ipcRenderer.invoke(IPC.openLibrary),
   closeLibrary: () => ipcRenderer.invoke(IPC.closeLibrary),

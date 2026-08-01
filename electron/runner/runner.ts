@@ -1,6 +1,7 @@
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 
+import type { RunProgress, TranscriptEntry } from "../../common/ipc";
 import { FoundryClient, type FoundrySession, type Tool } from "../foundry/agent";
 import { createLogger } from "../logger";
 import { compileAllowlist, type CompiledAllowlist } from "./allowlist";
@@ -35,7 +36,8 @@ import {
  *   API that echoes its own key back inside a response body must not be able to write
  *   it into the record. The Foundry key never gets this far — it is scrubbed out of the
  *   child environment in `tools.ts` and never enters a tool result.
- * - **The gates.** `interactive` relays confirmations to the UI (wired in H-c);
+ * - **The gates.** `interactive` relays confirmations to the UI (wired over IPC by
+ *   `ipc-bridge.ts`);
  *   `auto-approve` — the smoke/eval path only — approves silently but still records
  *   every decision, so an unattended run is as auditable as a watched one.
  *
@@ -81,41 +83,11 @@ const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 export type RunPolicy = "interactive" | "auto-approve";
 
-export type TranscriptEntryType =
-  | "model"
-  | "tool-call"
-  | "tool-result"
-  | "confirm-request"
-  | "confirm-decision"
-  | "user-input"
-  | "error"
-  | "done";
-
-/** One line of the run record. Deliberately flat — the UI renders it as a list. */
-export interface TranscriptEntry {
-  type: TranscriptEntryType;
-  /** Epoch ms. */
-  at: number;
-  /** Tool or confirmation kind, when the entry is about one. */
-  name?: string;
-  /** The human-readable half: model text, tool output, question, error message. */
-  text?: string;
-  /** Full detail behind a confirmation (the command, the path + preview). */
-  detail?: string;
-  /** A tool call's parsed arguments. */
-  args?: unknown;
-  decision?: ConfirmDecision;
-  /** True when the tool reported failure (the model still sees the text). */
-  failed?: boolean;
-}
-
-export interface RunProgress {
-  runId: string;
-  skillName: string;
-  phase: "start" | "working" | "confirm" | "done" | "error";
-  message: string;
-  entry?: TranscriptEntry;
-}
+/**
+ * These shapes are streamed to the renderer verbatim, so they are defined in
+ * `common/ipc` (the four-places rule) and re-exported here for the runner's own callers.
+ */
+export type { RunProgress, TranscriptEntry, TranscriptEntryType } from "../../common/ipc";
 
 /** The persisted document — a whole run in one JSON file. */
 export interface RunTranscript {
@@ -516,6 +488,7 @@ export class SkillRunner {
       phase,
       message: redacted.text ?? redacted.name ?? redacted.type,
       entry: redacted,
+      transcriptFile: run.file,
     });
     return redacted;
   }
@@ -542,6 +515,12 @@ export class SkillRunner {
 
   /** A progress event with no transcript entry behind it (run start). */
   private emit(run: ActiveRun, phase: RunProgress["phase"], message: string): void {
-    this.emitProgress({ runId: run.runId, skillName: run.skill.name, phase, message });
+    this.emitProgress({
+      runId: run.runId,
+      skillName: run.skill.name,
+      phase,
+      message,
+      transcriptFile: run.file,
+    });
   }
 }

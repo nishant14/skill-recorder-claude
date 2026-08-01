@@ -3106,3 +3106,214 @@ button:focus-visible,
   color: var(--brand-ink);
   background: var(--signal-dim);
 }
+
+/* --- Skills panel + skill run --------------------------------------------- */
+
+.lib-tabs {
+  gap: 4px;
+}
+
+.lib-tab {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 4px 8px;
+}
+
+.lib-tab:hover .eyebrow {
+  color: var(--muted);
+}
+
+.lib-tab.on {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+.lib-tab.on .eyebrow {
+  color: var(--text);
+}
+
+.skill-name {
+  font-family: var(--mono);
+  font-size: 12.5px;
+  color: var(--text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A skill that declared no allowed-tools: not an error, but the user should see it. */
+.tag.risk {
+  color: var(--warn);
+}
+
+.tag.risk::before {
+  background: var(--warn);
+}
+
+.run-start {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  max-width: 620px;
+}
+
+.run-note {
+  margin: 0;
+  font-size: 12.5px;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+.run-input-label {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  width: 100%;
+}
+
+.run-log {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.run-model {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+.run-line {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  font-size: 12px;
+  color: var(--muted);
+  min-width: 0;
+}
+
+.run-kind {
+  flex: none;
+  font-family: var(--mono);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: var(--faint);
+}
+
+.run-args,
+.run-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: text;
+}
+
+.run-args {
+  font-family: var(--mono);
+  font-size: 11.5px;
+}
+
+.run-call .run-kind {
+  color: var(--brand-ink);
+}
+
+.run-decision.approve .run-kind {
+  color: var(--go);
+}
+
+.run-decision.deny .run-kind,
+.run-result.failed .run-kind,
+.run-error .run-kind {
+  color: var(--rec);
+}
+
+/* The card the run is blocked on: an approval, or a question it needs answered. */
+.run-card {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  background: var(--surface);
+  border: 1px solid var(--signal);
+  border-radius: 11px;
+  padding: 12px 13px;
+  box-shadow: 0 2px 14px -6px rgba(var(--brand-rgb), 0.45);
+}
+
+.run-card-head {
+  display: flex;
+  align-items: baseline;
+  gap: 9px;
+}
+
+.run-card-title {
+  font-size: 13px;
+  color: var(--text);
+  user-select: text;
+}
+
+.run-detail {
+  margin: 6px 0 0;
+  max-height: 220px;
+  overflow: auto;
+  background: var(--deck);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 9px 10px;
+  font-family: var(--mono);
+  font-size: 11.5px;
+  line-height: 1.5;
+  white-space: pre-wrap;
+  word-break: break-word;
+  user-select: text;
+}
+
+.run-always {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: var(--muted);
+}
+
+.run-card-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.run-summary {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  border-top: 1px solid var(--line);
+  padding-top: 10px;
+}
+
+.run-summary p {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.55;
+  white-space: pre-wrap;
+  user-select: text;
+}
+
+/* The run's footer carries its transcript path, not a success line — quiet it down
+   and keep a long path on one line. */
+.run-foot-path {
+  min-width: 0;
+  font-family: var(--mono);
+  font-size: 11px;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
