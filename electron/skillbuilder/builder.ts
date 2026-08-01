@@ -60,9 +60,11 @@ const msg = (err: unknown) => (err instanceof Error ? err.message : String(err))
 
 /**
  * This app's own skill library — where an installed SKILL.md lands and where the
- * in-app runner (Workstream H) will load skills from. Overridable for dev/tests.
+ * in-app runner loads skills from (`electron/runner/library.ts` imports this rather
+ * than re-deriving the path, so writer and reader can never drift). Overridable for
+ * dev/tests.
  */
-function skillsRoot(): string {
+export function skillsRoot(): string {
   const override = process.env.SKILL_RECORDER_SKILLS_DIR;
   if (override) return path.resolve(override);
   return path.join(os.homedir(), ".skill-recorder", "skills");

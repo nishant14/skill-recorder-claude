@@ -53,7 +53,7 @@ import { abortReason, authHeaders, isRecord, msg, postWithRetry } from "./http";
 
 const log = createLogger("Foundry");
 
-/** Hard stop on a runaway tool loop inside a single turn. */
+/** Hard stop on a runaway tool loop inside a single turn, unless a session raises it. */
 const MAX_ROUNDS_PER_TURN = 32;
 
 /** Asked for so reasoning items come back re-submittable under `store: false`. */
@@ -93,6 +93,14 @@ export interface SessionOptions {
   tools?: Tool[];
   /** Deployment override; defaults to the client's configured deployment. */
   model?: string;
+  /**
+   * Raise (or lower) the per-turn tool-round cap for this session; defaults to
+   * {@link MAX_ROUNDS_PER_TURN}. The skill runner passes a larger number because
+   * *executing* a skill is a longer tool chain than analysing or building one, and the
+   * cap is the only thing standing between a stuck model and an unbounded turn. Values
+   * that aren't a positive number fall back to the default.
+   */
+  maxRoundsPerTurn?: number;
 }
 
 // --- wire shapes ------------------------------------------------------------
@@ -174,6 +182,8 @@ export class FoundrySession {
   private readonly toolsByName: Map<string, Tool>;
   private readonly model: string;
   private readonly instructions: string;
+  /** Effective per-turn round cap — the number the exceeded-message must name. */
+  private readonly maxRounds: number;
   /** The `input` timeline: our items plus every output item echoed back verbatim. */
   private readonly items: ResponseItem[] = [];
   /** Cleared for the session's lifetime if the deployment rejects the include value. */
@@ -190,6 +200,11 @@ export class FoundrySession {
     this.toolsByName = new Map(this.tools.map((t) => [t.name, t]));
     this.model = options.model?.trim() || config.deployment;
     this.instructions = options.instructions?.trim() ?? "";
+    const rounds = options.maxRoundsPerTurn;
+    this.maxRounds =
+      typeof rounds === "number" && Number.isFinite(rounds) && rounds >= 1
+        ? Math.floor(rounds)
+        : MAX_ROUNDS_PER_TURN;
   }
 
   /**
@@ -263,7 +278,7 @@ export class FoundrySession {
   // --- internals ------------------------------------------------------------
 
   private async runTurn(signal: AbortSignal): Promise<string> {
-    for (let round = 0; round < MAX_ROUNDS_PER_TURN; round++) {
+    for (let round = 0; round < this.maxRounds; round++) {
       const output = await this.requestResponse(signal);
       // Echo every output item back into the history verbatim: `store: false` makes each
       // request stateless, so the model only sees its own messages, function calls and
@@ -277,7 +292,7 @@ export class FoundrySession {
       // Only now, once every call_id has its output, may other items follow.
       for (const imageMessage of imageMessages) this.items.push(imageMessage);
     }
-    throw new Error(`The agent exceeded ${MAX_ROUNDS_PER_TURN} tool rounds in one turn.`);
+    throw new Error(`The agent exceeded ${this.maxRounds} tool rounds in one turn.`);
   }
 
   /**

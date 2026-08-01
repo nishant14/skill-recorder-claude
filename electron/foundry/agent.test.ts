@@ -634,6 +634,36 @@ test("a model that only ever calls tools is stopped by the round cap", async () 
   });
 });
 
+test("maxRoundsPerTurn moves the cap, and the message names the cap actually enforced", async () => {
+  const { tool } = echoTool();
+  // The skill runner raises this because executing a skill is a longer tool chain than
+  // building one; a lowered cap is the cheap way to prove the option is wired through.
+  const session = new FoundrySession(CONFIG, { tools: [tool], maxRoundsPerTurn: 3 });
+  const alwaysCalls: Responder = (_request, index) =>
+    toolReply(call(`call_${index}`, "echo", { message: `round ${index}` }));
+
+  await withFetch(alwaysCalls, async ({ requests }) => {
+    await assert.rejects(
+      () => session.sendAndWait("loop forever", 20_000),
+      (err: Error) => {
+        assert.equal(err.message, "The agent exceeded 3 tool rounds in one turn.");
+        return true;
+      },
+    );
+    assert.equal(requests.length, 3, "the loop stops at the session's own cap, not the default");
+  });
+
+  // Junk falls back to the default rather than disabling the guard.
+  const defaulted = new FoundrySession(CONFIG, { tools: [tool], maxRoundsPerTurn: 0 });
+  await withFetch(alwaysCalls, async ({ requests }) => {
+    await assert.rejects(
+      () => defaulted.sendAndWait("loop forever", 60_000),
+      /^Error: The agent exceeded 32 tool rounds in one turn\.$/,
+    );
+    assert.equal(requests.length, 32);
+  });
+});
+
 // --- 11. unconfigured client ------------------------------------------------
 
 const CONFIG_ENV_VARS = [
