@@ -15,6 +15,8 @@ authoritative for *what to build*.
 - **Next step:** detail and implement **Workstream B** — swap `agent-builder.ts`,
   `describer.ts`, both `builder.ts`, and `evals/judge.ts` onto `FoundryClient` /
   `FoundrySession`; the four `tools.ts` files change their import line only.
+- **Workstream I** (cloud transcription, retires local Whisper) is unblocked too — it needs
+  only `FoundryConfig`, so it can run in parallel with B; gate **G6** at its exit.
 - **Gate G2 at B's exit** is one live describer eval (`npm run eval -- --only=<slug>`) —
   needs credentials and a human; plan for it before declaring B done.
 - **Standing constraints:** delegate implementation to subagents (see CLAUDE.md "Model
@@ -31,7 +33,8 @@ authoritative for *what to build*.
 | C | Auth/config UX + IPC (replaces GitHub sign-in) | not started | G3 (exit of C + D) | — |
 | D | Retarget outputs to `copilot-studio` + `app` architectures | not started | G3 (exit of C + D) | — |
 | E | Packaging, install scripts, compliance, privacy copy | not started | G4 (exit of E) | — |
-| F | The gate ladder itself (verification strategy) | ladder defined; G0/G1 in force | G0–G5 | see gate ledger below |
+| F | The gate ladder itself (verification strategy) | ladder defined; G0/G1 in force | G0–G5, G6 | see gate ledger below |
+| I | Cloud transcription on Foundry (retires local Whisper) — Phase 1, parallelizable after A | not started | G6 (exit of I) | — |
 | G | Phase 2 — Copilot Studio declarative agent export | not started | G-phase gate TBD (real Copilot Studio import) | — |
 | H | Phase 2 — in-app skill runner on the Foundry deployment | not started | G-phase gate TBD (runner eval + safety UX) | — |
 
@@ -44,6 +47,7 @@ authoritative for *what to build*.
 | G2 | one live describer eval, `npm run eval -- --only=<slug>` | pending (exit of B) | human + credentials |
 | G3 | manual UI checklist (configure, bad-key path, analyze, build, install/export) + unit tests for the `scout→app` / `cowork→copilot-studio` schema migration | pending (exit of C + D) | human for the UI half; migration tests CI-able |
 | G4 | `npm run compliance:test` + a `npm run dist` build; packaged artifact contains no `@github/copilot*` | pending (exit of E) | CI-able |
+| G6 | transcription contract smoke — `scripts/foundry-smoke.ts` check 4: known-phrase clip round-trip, assert phrase + segment timestamps | pending (exit of I) | human + credentials |
 | G5 | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. the Copilot-era baseline, else absolute rubric thresholds | pending (pre-merge) | human + credentials |
 
 Standing rule: a measured result is recorded here **with its number and how it was
@@ -77,5 +81,11 @@ obtained**. A confident summary of an unverified result is worse than no summary
 - **Outputs retarget to `copilot-studio` + `app`** (user decision): Scout/Cowork are
   replaced by Copilot Studio agent bundles and the app's own library, with a `z.preprocess`
   migration so persisted `scout` / `cowork` artifacts keep loading (Workstream D).
+- **2026-08-01 — narration transcription moves to a Foundry cloud deployment** (user
+  decision, new Workstream I). Org security policy: runtime-downloaded open-source model
+  weights from huggingface.co cannot currently be security-verified, while Foundry-hosted
+  models fall under the org's cloud trust boundary. This **supersedes the "keep Whisper
+  local / not affected" position** in the plans and in CLAUDE.md; voice audio now leaves the
+  machine, so the privacy disclosures must change with it. Local Whisper ships until I lands.
 - **In-app execution deferred to Phase 2 (Workstream H).** Phase 1 ships the `app` target
   as library-only so the backend migration isn't blocked on shell-execution safety UX.

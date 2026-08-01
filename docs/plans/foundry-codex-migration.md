@@ -32,8 +32,13 @@ tool dispatch where handlers return
 screenshots** from `get_frames`. Outputs currently target Scout/Cowork agents and install
 into `~/.copilot/skills` / export to `~/.copilot/automations`.
 
-Not affected: narration transcription (local Whisper via `@huggingface/transformers` +
-onnxruntime), all capture/recorder/frames code, the zod analysis/skill/automation formats.
+Not affected: all capture/recorder/frames code, the zod analysis/skill/automation formats.
+
+> **Superseded by Workstream I:** narration transcription was originally scoped as *not
+> affected* (local Whisper via `@huggingface/transformers` + onnxruntime). It now moves to a
+> Foundry-hosted transcription deployment for supply-chain security — see
+> [Workstream I](#workstream-i-phase-1-parallelizable-after-a--cloud-transcription-on-foundry).
+> Local Whisper ships until I lands.
 
 ## Workstream A — New Foundry runtime (new code, no new npm dependencies)
 
@@ -221,7 +226,90 @@ infra and this migration doesn't justify building one).
 | G2 | exit of B | one live describer eval: `npm run eval -- --only=<slug>` | full loop with real frames/vision, end to end? | yes |
 | G3 | exit of C + D | manual UI checklist (configure connection, bad-key error path, analyze, build, install/export both architectures) + unit tests for the `scout→app` / `cowork→copilot-studio` schema migration | flows and existing user data intact? | yes (UI part) |
 | G4 | exit of E | `npm run compliance:test` + a `dist` build; packaged artifact contains no `@github/copilot*` | packaging/compliance clean? | no |
+| G6 | exit of I | transcription contract smoke (`scripts/foundry-smoke.ts` check 4: known-phrase clip round-trip + segment timestamps) | does the transcription deployment honor our wire assumptions? | yes (credentials) |
 | G5 | pre-merge | full eval suites + judge (`eval`, `eval:builder`, `eval:skill`) vs. a Copilot-era baseline where numbers exist, else absolute rubric thresholds | did output quality regress? | yes |
+
+## Workstream I (Phase 1, parallelizable after A) — Cloud transcription on Foundry
+
+Narration transcription moves off local Whisper (`Xenova/whisper-small` via
+`@huggingface/transformers` + `onnxruntime-node`) onto a **Foundry-hosted transcription
+deployment**. This supersedes the "not affected" note in *Current state* above.
+
+**Rationale — supply-chain security.** The risk class being eliminated is the *runtime
+download of open-source model weights from huggingface.co*: the org cannot currently
+security-verify weights fetched at run time on the user's machine, while Foundry-hosted
+models sit inside the org's cloud trust boundary. Note the scope: npm **code** dependencies
+stay (they are pinned and license-gated by the compliance pipeline) — it is the unverifiable
+runtime weight download that goes.
+
+**Consequences, stated plainly** (all three are real costs, not framing):
+
+1. **Voice audio now leaves the machine.** This is a mandatory privacy-disclosure change
+   under the repo's privacy rule — changing *where* recording data is sent is a disclosure
+   change, not a copy tweak.
+2. **Offline transcription is lost.** Narration requires a configured connection and network.
+3. **Per-run API cost**, where transcription was previously free after the one-time download.
+
+### I1. `electron/foundry/transcribe.ts` (new)
+
+- Direct multipart `POST {endpoint}/openai/v1/audio/transcriptions` using the existing
+  `FoundryConfig` and the same header/error taxonomy as `agent.ts`. Node 22 globals
+  (`fetch` / `FormData` / `Blob`) — **still zero new npm dependencies**.
+- New optional config field `transcriptionDeployment` (env
+  `AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT`), defaulting to `"gpt-4o-transcribe"`; it is
+  separate from the chat deployment, so `config.ts` and `FoundryConnectionInfo` grow one
+  optional field each.
+- Request **timestamped** output (`verbose_json` / segment timestamps). The exact
+  `response_format` and segment shape are a **G6-validated detail** — same tolerance rule as
+  the G1 port: where this text and the shipped code differ, the code and its tests are the
+  contract.
+
+### I2. Rework `electron/narration/`
+
+- **Delete `whisper.ts`** (and its test).
+- `transcribe.ts` calls the new cloud module but **preserves the `NarrationTranscript`
+  shape** (`common/narration.ts:140`): timestamped segments with `atMs` offsets relative to
+  recording start. The describer's `get_narration` tool, the analysis flow, and
+  `narration.json` on disk are all untouched — this is a backend swap behind an unchanged
+  contract.
+- `manager.ts` loses the model download/lifecycle states: `missing` / `downloading` (and the
+  `model-missing` outcome, the cache probe, and partial-download cleanup) collapse away,
+  replaced by a **not-configured** state that reuses the Foundry connection contract
+  (`isFoundryNotConfiguredError`), so Workstream C's connection form covers narration too.
+- **Chunking for the API file-size limit (~25 MB):** split long audio on silence boundaries
+  using the existing pure-DSP `audio-analysis.ts`, transcribe chunks in order, and offset
+  each chunk's segment timestamps back into recording-relative `atMs` before merging.
+
+### I3. UI and disclosures (mandatory, not optional polish)
+
+- `src/WhatsRecorded.tsx` and `src/RecordingPrivacyWarning.tsx` currently promise on-device
+  voice processing — they must say the audio is **sent to your Azure AI Foundry deployment**.
+- Remove the model-download affordances: `src/WhatsRecorded.tsx:100` ("one-time ~252 MB
+  download"), `src/Library.tsx:735` ("downloads the ~250 MB voice model once" — note the two
+  numbers already disagree), and the Recorder's download tile/action.
+- Remove `NARRATION_MODEL_DOWNLOAD_LABEL` (`common/narration.ts:108`) and its IPC/renderer
+  uses.
+
+### I4. Packaging (folded into Workstream E's scope — the two land together)
+
+Dropping the local model removes the app's two heaviest native dependencies:
+
+- `package.json`: drop `@huggingface/transformers` + `onnxruntime-node` from `dependencies`
+  and `asarUnpack`; `vite.config.ts`: remove both from rolldown `external`.
+- Compliance: remove both from `third_party/compliance-policy.json` and delete
+  `third_party/package-licenses/onnxruntime-MIT.txt`; regenerate `THIRD-PARTY-NOTICES.md`.
+- `scripts/verify-windows-package.mjs`: remove the `onnxruntime-node` payload assertions
+  (lines 47-48) alongside the copilot inversion described in E.
+- Tests: rework `whisper.test.ts` (deleted) and `transcribe.test.ts` against a faked
+  multipart `fetch`; **`audio-analysis.ts` and its tests stay** — it is pure DSP code, not a
+  model, and chunking now depends on it.
+
+### I5. Gate G6 (exit of I)
+
+Extend `scripts/foundry-smoke.ts` with a **fourth check**: synthesize a short audio clip of
+a known phrase, round-trip it through the transcription deployment, and assert both that the
+phrase comes back and that segment timestamps are present. Live + credentialed, human-run,
+never wired into `npm test` — same posture as G1.
 
 ## Workstream G (Phase 2) — Copilot Studio declarative agent export
 
@@ -286,7 +374,9 @@ read-only one.
 
 ## Sequencing
 
-Phase 1: A → B → C → D → E → F, one commit per workstream on the branch above.
+Phase 1: A → B → C → D → E → F, one commit per workstream on `main`. **I** runs in parallel
+any time after A (it needs only `FoundryConfig`), but its packaging removals (I4) land with
+E, so E waits for I's module work if the two are in flight together.
 Phase 2: G and H (independent of each other; H depends on A only, G on D only).
 
 ## Risks / notes
