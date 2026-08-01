@@ -11,7 +11,9 @@ import {
 } from "../../common/analysis";
 import type { AnalyzeProgress } from "../../common/ipc";
 import type { SessionMeta } from "../../common/types";
+import { DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT } from "../../common/foundry";
 import { FoundryClient, type FoundrySession } from "../foundry/agent";
+import { loadFoundryConfig } from "../foundry/config";
 import { FrameExtractor } from "../frames/extractor";
 import { createLogger } from "../logger";
 import { sessionsRoot, sessionDir, isValidSessionId } from "../recorder/session-store";
@@ -204,11 +206,18 @@ export class Describer {
     this.clientStart = (async () => {
       const client = new FoundryClient();
       await client.start();
-      // No model selection to make: the single codex deployment is also the vision
-      // model, so only the explicit override can point elsewhere.
-      this.model = process.env.SKILL_RECORDER_MODEL || undefined;
+      // The describer runs on its own deployment: interpreting evidence and reading
+      // frames is a general-model task, so it does not follow the builders onto the
+      // codex deployment (decided 2026-08-01 by a measured cost/quality A/B — see
+      // DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT). `SKILL_RECORDER_MODEL` still wins: the
+      // evals' `--model` flag exists to retarget *this* agent.
+      const override = process.env.SKILL_RECORDER_MODEL?.trim();
+      this.model =
+        override ||
+        loadFoundryConfig()?.config.describerDeployment ||
+        DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT;
       // Never log the key — the deployment is all that identifies the connection.
-      log.info(`Foundry ready · deployment ${this.model ?? client.deployment}`);
+      log.info(`Foundry ready · describer deployment ${this.model}`);
       this.client = client;
       return client;
     })();

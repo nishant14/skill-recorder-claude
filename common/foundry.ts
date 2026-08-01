@@ -18,6 +18,19 @@ export const DEFAULT_FOUNDRY_DEPLOYMENT = "gpt-5.3-codex";
  */
 export const DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT = "gpt-4o-transcribe";
 
+/**
+ * Deployment the **describer** runs on when neither the env nor the config file names
+ * one — deliberately *not* {@link DEFAULT_FOUNDRY_DEPLOYMENT}.
+ *
+ * Chosen 2026-08-01 by a measured cost/quality A/B (see `docs/plans/progress.md`):
+ * `gpt-5.2` scored 100.0% mean rubric score over 27 runs at **$0.049/analysis**, versus
+ * `gpt-5.6-sol` at 99.6% and **$0.141/analysis** — 2.9× cheaper at equal-or-better
+ * quality. The describer's job is evidence interpretation + vision, a general-model
+ * task; the *builders* write code and stay on the codex deployment
+ * ({@link DEFAULT_FOUNDRY_DEPLOYMENT}).
+ */
+export const DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT = "gpt-5.2";
+
 /** A complete connection to one Foundry/Azure OpenAI deployment. Contains the key. */
 export interface FoundryConfig {
   /** Resource origin only, e.g. `https://<resource>.openai.azure.com` (no path). */
@@ -31,6 +44,13 @@ export interface FoundryConfig {
    * loaded config always carries it.
    */
   transcriptionDeployment?: string;
+  /**
+   * Deployment the describer (evidence interpretation + vision) runs on, separate from
+   * the code-writing {@link deployment} the builders use. Resolved to
+   * {@link DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT} when nothing names one, so a loaded
+   * config always carries it.
+   */
+  describerDeployment?: string;
   /**
    * Escape hatch: when set, requests use the legacy data-plane route
    * (`/openai/deployments/<name>/chat/completions?api-version=…`) instead of the

@@ -6,6 +6,7 @@ import { afterEach, beforeEach, test } from "node:test";
 
 import {
   DEFAULT_FOUNDRY_DEPLOYMENT,
+  DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
   DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
   normalizeFoundryEndpoint,
 } from "../../common/foundry";
@@ -14,7 +15,8 @@ import { foundryConfigFile, foundryConnectionInfo, loadFoundryConfig, saveFoundr
 /**
  * Covers the Foundry connection resolver: the env → file precedence (including a
  * half-configured env falling through), the save/load round-trip, the
- * `SKILL_RECORDER_MODEL` deployment override, save-time validation and endpoint
+ * `SKILL_RECORDER_MODEL` deployment override, the per-feature transcription and
+ * describer deployments, save-time validation and endpoint
  * normalization, corrupt-file tolerance, and the two secret-handling guarantees
  * (key-free connection info, `0600` on the stored file).
  */
@@ -38,6 +40,8 @@ const MANAGED_ENV = [
   "AZURE_OPENAI_DEPLOYMENT",
   "AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT",
   "FOUNDRY_TRANSCRIPTION_DEPLOYMENT",
+  "AZURE_OPENAI_DESCRIBER_DEPLOYMENT",
+  "FOUNDRY_DESCRIBER_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
 ] as const;
 
@@ -104,6 +108,7 @@ test("saveFoundryConfig round-trips through loadFoundryConfig", () => {
     apiKey: "  round-trip-key  ",
     deployment: "gpt-5.3-codex-mini",
     transcriptionDeployment: "whisper-1",
+    describerDeployment: "gpt-5.2-mini",
     apiVersion: "2024-12-01-preview",
   });
   assert.deepEqual(saved, {
@@ -111,6 +116,7 @@ test("saveFoundryConfig round-trips through loadFoundryConfig", () => {
     apiKey: "round-trip-key",
     deployment: "gpt-5.3-codex-mini",
     transcriptionDeployment: "whisper-1",
+    describerDeployment: "gpt-5.2-mini",
     apiVersion: "2024-12-01-preview",
   });
 
@@ -185,6 +191,52 @@ test("the transcription deployment resolves from env, from the file, or from the
   const overridden = loadFoundryConfig();
   assert.equal(overridden?.config.deployment, "override-model");
   assert.equal(overridden?.config.transcriptionDeployment, "alias-stt");
+});
+
+test("the describer deployment resolves from env, from the file, or from the default", () => {
+  // Nothing names one → the default is applied at read, from either source, so a
+  // loaded config always carries the describer's deployment.
+  saveFoundryConfig({ endpoint: "https://file.openai.azure.com", apiKey: "file-key" });
+  assert.equal(loadFoundryConfig()?.config.describerDeployment, DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT);
+  // The describer runs on the general deployment, not the codex one the builders use:
+  // decided 2026-08-01 by a measured cost/quality A/B (see docs/plans/progress.md).
+  assert.equal(DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT, "gpt-5.2");
+  assert.notEqual(DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT, DEFAULT_FOUNDRY_DEPLOYMENT);
+  // …and the builders' deployment is untouched by it.
+  assert.equal(loadFoundryConfig()?.config.deployment, DEFAULT_FOUNDRY_DEPLOYMENT);
+
+  // The stored file field wins over the default…
+  saveFoundryConfig({
+    endpoint: "https://file.openai.azure.com",
+    apiKey: "file-key",
+    describerDeployment: "file-describer",
+  });
+  assert.equal(loadFoundryConfig()?.config.describerDeployment, "file-describer");
+  // …and it is persisted as its own field, separate from the chat deployment.
+  const stored = JSON.parse(readFileSync(foundryConfigFile(), "utf8")) as Record<string, unknown>;
+  assert.equal(stored.describerDeployment, "file-describer");
+  assert.equal(stored.deployment, DEFAULT_FOUNDRY_DEPLOYMENT);
+
+  // Env resolves its own connection, including its own describer deployment.
+  process.env.AZURE_OPENAI_ENDPOINT = "https://env.openai.azure.com";
+  process.env.AZURE_OPENAI_API_KEY = "env-key";
+  assert.equal(loadFoundryConfig()?.config.describerDeployment, DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT);
+  process.env.AZURE_OPENAI_DESCRIBER_DEPLOYMENT = "env-describer";
+  assert.equal(loadFoundryConfig()?.config.describerDeployment, "env-describer");
+
+  // FOUNDRY_* is the accepted alias, exactly as for the endpoint and key.
+  delete process.env.AZURE_OPENAI_DESCRIBER_DEPLOYMENT;
+  process.env.FOUNDRY_DESCRIBER_DEPLOYMENT = "alias-describer";
+  assert.equal(loadFoundryConfig()?.config.describerDeployment, "alias-describer");
+
+  // SKILL_RECORDER_MODEL leaves the *resolved* field alone — it is applied one level
+  // up, where the describer picks its model (`Describer.ensureClient`), so the
+  // describer's full precedence is SKILL_RECORDER_MODEL > env describer var > file
+  // field > default while the resolver keeps reporting what was configured.
+  process.env.SKILL_RECORDER_MODEL = "override-model";
+  const overridden = loadFoundryConfig();
+  assert.equal(overridden?.config.deployment, "override-model");
+  assert.equal(overridden?.config.describerDeployment, "alias-describer");
 });
 
 test("saveFoundryConfig validates its input, defaults the deployment, and normalizes the endpoint", () => {

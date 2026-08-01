@@ -28,9 +28,13 @@ authoritative for *what to build*.
   **$0.049/analysis** — 2.9× cheaper at equal-or-better quality; `gpt-5.2` dominates
   every axis. Results files `evals/results/2026-08-01T10-16-41-414Z.json` (A) and
   `…T10-22-26-582Z.json` (B); rerun via "Model cost/quality comparison" in
-  `evals/README.md`. Costs are uncached-rate upper bounds. **Awaiting the user's
-  decision**; if `gpt-5.2` is chosen, Workstream C wires `describerDeployment` with that
-  default (builders stay `gpt-5.3-codex`).
+  `evals/README.md`. Costs are uncached-rate upper bounds. **DECIDED 2026-08-01 (user):
+  `gpt-5.2` for the describer** — wired as `describerDeployment`
+  (env `AZURE_OPENAI_DESCRIBER_DEPLOYMENT`, file field, default `gpt-5.2`;
+  `SKILL_RECORDER_MODEL` still overrides for evals). Live-verified: a no-flag eval run
+  logs `describer deployment gpt-5.2` and scores 100%. Builders stay `gpt-5.3-codex`;
+  transcription stays `gpt-4o-transcribe`. The resource now hosts three required
+  deployments.
 - **Standing constraints:** delegate implementation to subagents (see CLAUDE.md "Model
   economy"); live/credentialed gates are human-run, never wired into `npm test` or CI;
   never commit credentials (they live only in `~/.skill-recorder/foundry.json`) or a

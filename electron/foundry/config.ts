@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   DEFAULT_FOUNDRY_DEPLOYMENT,
+  DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
   DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
   normalizeFoundryEndpoint,
   type FoundryConfig,
@@ -19,7 +20,11 @@ import { createLogger } from "../logger";
  * Env comes first so CI, the eval harness, and `AZURE_OPENAI_*`-shaped shells keep
  * working without touching the user profile; the file (`<configDir>/foundry.json`)
  * is what the in-app connection form writes. `SKILL_RECORDER_MODEL` overrides the
- * deployment from *either* source because the evals' `--model` flag sets it.
+ * deployment from *either* source because the evals' `--model` flag sets it — and it
+ * also wins over the resolved `describerDeployment` at the point the describer picks its
+ * model (`electron/describer/describer.ts`), since `--model` retargets the describer.
+ * The per-feature deployments resolved here (`transcriptionDeployment`,
+ * `describerDeployment`) are otherwise untouched by it.
  *
  * Electron-free on purpose (no `app.getPath`): the eval harness loads this module
  * outside Electron, so the config dir is derived from env + `os.homedir()`.
@@ -43,6 +48,7 @@ interface StoredFoundryConfig {
   apiKey?: unknown;
   deployment?: unknown;
   transcriptionDeployment?: unknown;
+  describerDeployment?: unknown;
   apiVersion?: unknown;
 }
 
@@ -73,6 +79,10 @@ function fromEnv(): FoundryConfig | null {
         process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT ||
           process.env.FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
       ) || DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+    describerDeployment:
+      str(
+        process.env.AZURE_OPENAI_DESCRIBER_DEPLOYMENT || process.env.FOUNDRY_DESCRIBER_DEPLOYMENT,
+      ) || DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
     ...(apiVersion ? { apiVersion } : {}),
   };
 }
@@ -107,6 +117,7 @@ function fromFile(): FoundryConfig | null {
     apiKey,
     deployment,
     transcriptionDeployment: str(raw.transcriptionDeployment) || DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+    describerDeployment: str(raw.describerDeployment) || DEFAULT_FOUNDRY_DESCRIBER_DEPLOYMENT,
     ...(apiVersion ? { apiVersion } : {}),
   };
 }
@@ -131,6 +142,7 @@ export function saveFoundryConfig(input: {
   apiKey: string;
   deployment?: string;
   transcriptionDeployment?: string;
+  describerDeployment?: string;
   apiVersion?: string;
 }): FoundryConfig {
   const endpoint = normalizeFoundryEndpoint(input.endpoint ?? "");
@@ -141,13 +153,16 @@ export function saveFoundryConfig(input: {
   if (!apiKey) throw new Error("An API key is required.");
   const apiVersion = (input.apiVersion ?? "").trim();
   // Blank fields are dropped rather than stored as "": an absent
-  // `transcriptionDeployment` is what lets the default move with a later release.
+  // `transcriptionDeployment`/`describerDeployment` is what lets the default move with
+  // a later release.
   const transcriptionDeployment = (input.transcriptionDeployment ?? "").trim();
+  const describerDeployment = (input.describerDeployment ?? "").trim();
   const config: FoundryConfig = {
     endpoint,
     apiKey,
     deployment: (input.deployment ?? "").trim() || DEFAULT_FOUNDRY_DEPLOYMENT,
     ...(transcriptionDeployment ? { transcriptionDeployment } : {}),
+    ...(describerDeployment ? { describerDeployment } : {}),
     ...(apiVersion ? { apiVersion } : {}),
   };
   mkdirSync(configDir(), { recursive: true });
