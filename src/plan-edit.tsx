@@ -701,7 +701,7 @@ export function AutomationStepTiles({
           />
         </div>
       ))}
-      <AddTile label="Add step" onAdd={() => onChange([...steps, { label: "", prompt: "" }])} />
+      <AddTile label="Add step" onAdd={() => onChange([...steps, { label: "", prompt: "", tool: "" }])} />
     </div>
   );
 }

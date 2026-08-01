@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { collectApiRefs, unresolvedApiOperations } from "../../common/api-reference";
 import {
   AutomationPlanSchema,
   BuiltAutomationSchema,
@@ -15,6 +16,8 @@ import {
 import type { AutomationBuildInput, AutomationBuildProgress } from "../../common/ipc";
 import { slugifySkillName, type SkillArchitecture } from "../../common/skill";
 import { AgentBuilder, type BaseLive } from "../builders/agent-builder";
+import { loadIndex, loadReference } from "../builders/api-reference-store";
+import { createApiReferenceTools, renderApiReferenceBrief } from "../builders/api-reference-tools";
 import { createReadTools } from "../builders/read-tools";
 import { loadPersistedAnalysis } from "../describer/describer";
 import type { FoundrySession } from "../foundry/agent";
@@ -130,6 +133,17 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
     } catch {
       throw new Error("Add at least one step before you create the automation.");
     }
+    const dir = sessionDir(sessionId);
+    // The agent is hard-rejected at propose time, but the plan the user edited is
+    // authoritative — they may know an operation this reference doesn't describe. Warn,
+    // never fail; the runner revalidates when it actually calls the API.
+    const unknownOperations = unresolvedApiOperations(
+      collectApiRefs(submission.steps),
+      loadIndex(dir)?.operations ?? [],
+    );
+    if (unknownOperations.length) {
+      log.warn(`plan references API operations the attached reference doesn't have: ${unknownOperations.join(", ")}`);
+    }
     if (held) held.lastPlan = plan;
 
     this.active.add(sessionId);
@@ -138,7 +152,7 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
       const built = toBuiltAutomation(sessionId, plan.architecture, submission, plan);
       const exportPath = this.exportAutomation(built);
       const finalAutomation: BuiltAutomation = { ...built, exportedPath: exportPath, exportedAt: Date.now() };
-      this.persist(sessionDir(sessionId), finalAutomation);
+      this.persist(dir, finalAutomation);
       // Both targets land in the app's automation library; only the copilot-studio one
       // is a bundle the user then takes somewhere else.
       const verb = plan.architecture === "copilot-studio" ? "exported to" : "saved to";
@@ -161,14 +175,22 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
     if (!analysis) throw new Error("There is no analysis for this recording yet.");
 
     const holder: LiveBuild["holder"] = { plan: undefined };
+    // Read once per live conversation: the tools, the propose-time lint, and the prompt
+    // block below must all describe the same attachment.
+    const apiIndex = loadIndex(dir);
     const tools = [
       ...createReadTools({
         sessionDir: dir,
         analysis,
         onProgress: (m) => this.emit(sessionId, "working", m),
       }),
+      ...createApiReferenceTools({
+        sessionDir: dir,
+        onProgress: (m) => this.emit(sessionId, "working", m),
+      }),
       ...createAutomationBuilderTools({
         architecture,
+        apiIndex,
         onProgress: (m) => this.emit(sessionId, "working", m),
         onPlan: (p) => {
           holder.plan = p;
@@ -177,7 +199,16 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
     ];
 
     const catalogue = automationCatalogueFor(architecture) ?? "";
-    const systemContent = `${AUTOMATION_BUILDER_INSTRUCTIONS}\n\n${catalogue}`.trim();
+    // The API brief comes AFTER the catalogue: it narrows one application's steps onto
+    // concrete operations, it does not replace the target's capability ladder.
+    const reference = loadReference(dir);
+    const apiBrief = reference
+      ? renderApiReferenceBrief({ reference, architecture, kind: "automation" })
+      : "";
+    const systemContent = [AUTOMATION_BUILDER_INSTRUCTIONS, catalogue, apiBrief]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("\n\n");
 
     const client = await this.ensureClient();
     const agent = await client.createSession({

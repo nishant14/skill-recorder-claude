@@ -69,6 +69,11 @@ because the recording used it once.
   plus \`git\` and cloud CLIs — gate it with \`allowed-tools\` (e.g. \`Bash(gh *)\`), and
   write commands for the device OS (zsh/bash on macOS and Ubuntu, PowerShell on
   Windows). Only fall back to a UI step for something with no API and no CLI.
+- **If an API reference is attached** for one of these applications, you will have
+  \`list_api_operations\` / \`get_api_operation\` tools and a block below describing it. Then
+  the native capability for that application IS its API: map each action step onto a
+  concrete operation you looked up (never a guessed id) and name it on the step as
+  \`api:<operationId>\`, instead of replaying its UI. The block below has the specifics.
 - Record the chosen tool on each step (the step's \`tool\`), and set \`allowedTools\` to the
   patterns the skill actually needs.
 - Rely ONLY on the built-in tools and skills in the catalogue — never on a skill the

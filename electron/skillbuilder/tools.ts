@@ -1,6 +1,11 @@
 import type { Tool } from "../foundry/agent";
 
 import {
+  collectApiRefs,
+  unresolvedApiOperations,
+  type ApiReferenceIndex,
+} from "../../common/api-reference";
+import {
   SkillPlanSchema,
   SkillSubmissionSchema,
   type SkillArchitecture,
@@ -11,6 +16,12 @@ import {
 /** Everything the builder's skill-specific tools are bound to for one session. */
 export interface SkillToolContext {
   architecture: SkillArchitecture;
+  /**
+   * The attached API reference's index, when this recording has one. Present ⇒ the
+   * api-reference tools are in the session too, so an `api:` ref that resolves against
+   * nothing is a hallucination the agent can fix by listing the real operations.
+   */
+  apiIndex?: ApiReferenceIndex | null;
   /** Streamed to the UI as the agent works. */
   onProgress?: (message: string) => void;
   /** Called when the agent proposes a (validated) plan for review. */
@@ -27,7 +38,7 @@ export interface SkillToolContext {
  * architecture is injected server-side so the agent can't set it.
  */
 export function createSkillBuilderTools(ctx: SkillToolContext): Tool[] {
-  const { architecture, onPlan, onSubmit } = ctx;
+  const { architecture, apiIndex, onPlan, onSubmit } = ctx;
   const progress = (m: string) => ctx.onProgress?.(m);
 
   const proposePlan: Tool = {
@@ -97,7 +108,7 @@ export function createSkillBuilderTools(ctx: SkillToolContext): Tool[] {
               tool: {
                 type: "string",
                 description:
-                  "The native tool/capability this step uses, as the catalogue names it, e.g. \"web_fetch\", \"Bash(gh *)\", or \"Outlook.SendEmail\".",
+                  "The native tool/capability this step uses, as the catalogue names it, e.g. \"web_fetch\", \"Bash(gh *)\", or \"Outlook.SendEmail\". When an API reference is attached, a step that calls that application names its operation instead, as \"api:<operationId>\" (or \"api:METHOD /path\") — exactly as list_api_operations spells it.",
               },
             },
             required: ["kind", "title", "text"],
@@ -123,6 +134,25 @@ export function createSkillBuilderTools(ctx: SkillToolContext): Tool[] {
             parsed.error.issues.map((i) => `- ${i.path.join(".") || "(root)"}: ${i.message}`).join("\n"),
           resultType: "failure",
         };
+      }
+      // Grounding lint, at the only moment it can still be repaired cheaply: a step or an
+      // allowed-tools entry naming an operation the attached reference doesn't have would
+      // ship a skill nobody can run. Only enforced when a reference IS attached — without
+      // one there are no operations to point the agent at.
+      if (apiIndex) {
+        const unknown = unresolvedApiOperations(
+          collectApiRefs(parsed.data.steps, parsed.data.allowedTools),
+          apiIndex.operations,
+        );
+        if (unknown.length) {
+          return {
+            textResultForLlm:
+              "propose_plan rejected — these API references are not in the attached API reference:\n" +
+              unknown.map((u) => `- ${u}`).join("\n") +
+              "\nCall list_api_operations (and get_api_operation) to find the real operation ids, then call propose_plan again.",
+            resultType: "failure",
+          };
+        }
       }
       progress("Proposed a plan for your review.");
       onPlan(parsed.data);

@@ -7,6 +7,7 @@ import {
   planToAutomationSubmission,
   renderAutomationJson,
   toAutomationImport,
+  toBuiltAutomation,
   type BuiltAutomation,
 } from "./automation";
 
@@ -93,4 +94,43 @@ test("toAutomationImport omits a falsy model and substitutes value tokens", () =
 test("toAutomationImport carries a model only when the engine set one", () => {
   const built: BuiltAutomation = { ...BuiltAutomationSchema.parse(legacyBuiltAutomation), model: "gpt-5.3-codex" };
   assert.equal(toAutomationImport(built).model, "gpt-5.3-codex");
+});
+
+test("a step's tool defaults to empty and round-trips through plan, submission and build", () => {
+  // Plans written before the field existed (like the legacy fixture) still parse.
+  const legacyPlan = AutomationPlanSchema.parse(legacyBuiltAutomation.plan);
+  assert.equal(legacyPlan.steps[0].tool, "");
+
+  const plan = AutomationPlanSchema.parse({
+    ...legacyBuiltAutomation.plan,
+    steps: [
+      { label: "Create the order", prompt: "Create a sales order for each row.", tool: "api:createSalesOrder" },
+      { label: "Report", prompt: "Summarize what was created." },
+    ],
+  });
+  assert.deepEqual(plan.steps.map((s) => s.tool), ["api:createSalesOrder", ""]);
+
+  const submission = planToAutomationSubmission(plan);
+  assert.equal(submission.steps[0].tool, "api:createSalesOrder");
+  const built = toBuiltAutomation("2026-08-01T09-00-00-000Z", "app", submission, plan);
+  assert.equal(built.steps[0].tool, "api:createSalesOrder");
+  assert.equal(BuiltAutomationSchema.parse(JSON.parse(JSON.stringify(built))).steps[0].tool, "api:createSalesOrder");
+});
+
+test("a step's tool is planning metadata and never reaches the import JSON", () => {
+  const built = toBuiltAutomation(
+    "2026-08-01T09-00-00-000Z",
+    "app",
+    planToAutomationSubmission(
+      AutomationPlanSchema.parse({
+        ...legacyBuiltAutomation.plan,
+        steps: [{ label: "Create the order", prompt: "Create a sales order.", tool: "api:createSalesOrder" }],
+      }),
+    ),
+    null,
+  );
+  assert.deepEqual(toAutomationImport(built).steps, [
+    { label: "Create the order", prompt: "Create a sales order." },
+  ]);
+  assert.equal(renderAutomationJson(built).includes("api:createSalesOrder"), false);
 });

@@ -1,6 +1,11 @@
 import type { Tool } from "../foundry/agent";
 
 import {
+  collectApiRefs,
+  unresolvedApiOperations,
+  type ApiReferenceIndex,
+} from "../../common/api-reference";
+import {
   AutomationPlanSchema,
   type AutomationPlan,
 } from "../../common/automation";
@@ -9,6 +14,12 @@ import type { SkillArchitecture } from "../../common/skill";
 /** Everything the builder's automation-specific tools are bound to for one session. */
 export interface AutomationToolContext {
   architecture: SkillArchitecture;
+  /**
+   * The attached API reference's index, when this recording has one. Present ⇒ the
+   * api-reference tools are in the session too, so an `api:` ref that resolves against
+   * nothing is a hallucination the agent can fix by listing the real operations.
+   */
+  apiIndex?: ApiReferenceIndex | null;
   /** Streamed to the UI as the agent works. */
   onProgress?: (message: string) => void;
   /** Called when the agent proposes a (validated) plan for review. */
@@ -82,6 +93,11 @@ const stepsSchema = {
         description:
           "The natural-language instruction to the agent for this step: generalized over the whole collection, native-tool-first, and self-resolving (an automation runs unattended). Reference any fixed value by its {{id}} token instead of writing the literal (e.g. \"gh pr list -R {{repo}}\").",
       },
+      tool: {
+        type: "string" as const,
+        description:
+          "The native tool/capability this step uses, as the catalogue names it. When an API reference is attached, a step that calls that application names its operation instead, as \"api:<operationId>\" (or \"api:METHOD /path\") — exactly as list_api_operations spells it.",
+      },
     },
     required: ["prompt"],
     additionalProperties: false,
@@ -97,7 +113,7 @@ const stepsSchema = {
  * server-side.
  */
 export function createAutomationBuilderTools(ctx: AutomationToolContext): Tool[] {
-  const { architecture, onPlan } = ctx;
+  const { architecture, apiIndex, onPlan } = ctx;
   const progress = (m: string) => ctx.onProgress?.(m);
 
   const proposePlan: Tool = {
@@ -187,6 +203,21 @@ export function createAutomationBuilderTools(ctx: AutomationToolContext): Tool[]
             parsed.error.issues.map((i) => `- ${i.path.join(".") || "(root)"}: ${i.message}`).join("\n"),
           resultType: "failure",
         };
+      }
+      // Grounding lint, at the only moment it can still be repaired cheaply: an automation
+      // runs unattended, so a step naming an operation the attached reference doesn't have
+      // fails with nobody watching. Only enforced when a reference IS attached.
+      if (apiIndex) {
+        const unknown = unresolvedApiOperations(collectApiRefs(parsed.data.steps), apiIndex.operations);
+        if (unknown.length) {
+          return {
+            textResultForLlm:
+              "propose_automation_plan rejected — these API references are not in the attached API reference:\n" +
+              unknown.map((u) => `- ${u}`).join("\n") +
+              "\nCall list_api_operations (and get_api_operation) to find the real operation ids, then call propose_automation_plan again.",
+            resultType: "failure",
+          };
+        }
       }
       progress("Proposed an automation plan for your review.");
       onPlan(parsed.data);

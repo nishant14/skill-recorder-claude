@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
+import { collectApiRefs, unresolvedApiOperations } from "../../common/api-reference";
 import {
   BuiltSkillSchema,
   renderSkillMarkdown,
@@ -16,6 +17,8 @@ import {
 import { unresolvedTokens } from "../../common/values";
 import type { SkillBuildInput, SkillBuildProgress } from "../../common/ipc";
 import { AgentBuilder, type BaseLive } from "../builders/agent-builder";
+import { loadIndex, loadReference } from "../builders/api-reference-store";
+import { createApiReferenceTools, renderApiReferenceBrief } from "../builders/api-reference-tools";
 import { createReadTools } from "../builders/read-tools";
 import { loadPersistedAnalysis } from "../describer/describer";
 import type { FoundrySession } from "../foundry/agent";
@@ -187,6 +190,16 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
       if (unknownTokens.length) {
         log.warn(`skill body references unknown value tokens: ${unknownTokens.map((t) => `{{${t}}}`).join(", ")}`);
       }
+      // The same posture for API grounding: the agent is hard-rejected at propose time,
+      // but the plan the user edited is authoritative — they may know an operation this
+      // reference doesn't describe. Warn, never fail; Workstream H revalidates at run time.
+      const unknownOperations = unresolvedApiOperations(
+        collectApiRefs(plan.steps, plan.allowedTools),
+        loadIndex(live.sessionDir)?.operations ?? [],
+      );
+      if (unknownOperations.length) {
+        log.warn(`plan references API operations the attached reference doesn't have: ${unknownOperations.join(", ")}`);
+      }
       // The frontmatter comes from the edited plan (authoritative); only the body is
       // the agent's generated prose. allowed-tools may be tightened by the agent to the
       // final steps, but never emptied below what the plan declared.
@@ -228,14 +241,22 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     if (!analysis) throw new Error("There is no analysis for this recording yet.");
 
     const holder: LiveBuild["holder"] = { plan: undefined, submission: undefined };
+    // Read once per live conversation: the tools, the propose-time lint, and the prompt
+    // block below must all describe the same attachment.
+    const apiIndex = loadIndex(dir);
     const tools = [
       ...createReadTools({
         sessionDir: dir,
         analysis,
         onProgress: (m) => this.emit(sessionId, "working", m),
       }),
+      ...createApiReferenceTools({
+        sessionDir: dir,
+        onProgress: (m) => this.emit(sessionId, "working", m),
+      }),
       ...createSkillBuilderTools({
         architecture,
+        apiIndex,
         onProgress: (m) => this.emit(sessionId, "working", m),
         onPlan: (p) => {
           holder.plan = p;
@@ -247,7 +268,16 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     ];
 
     const catalogue = catalogueFor(architecture) ?? "";
-    const systemContent = `${SKILL_BUILDER_INSTRUCTIONS}\n\n${catalogue}`.trim();
+    // The API brief comes AFTER the catalogue: it narrows one application's steps onto
+    // concrete operations, it does not replace the target's capability ladder.
+    const reference = loadReference(dir);
+    const apiBrief = reference
+      ? renderApiReferenceBrief({ reference, architecture, kind: "skill" })
+      : "";
+    const systemContent = [SKILL_BUILDER_INSTRUCTIONS, catalogue, apiBrief]
+      .map((part) => part.trim())
+      .filter(Boolean)
+      .join("\n\n");
 
     const client = await this.ensureClient();
     const agent = await client.createSession({

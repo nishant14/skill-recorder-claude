@@ -87,6 +87,13 @@ export const AutomationStepDraftSchema = z.object({
   label: z.string().default(""),
   /** The natural-language instruction to the target agent for this step. */
   prompt: z.string(),
+  /**
+   * The capability this step uses — in practice an `api:<operationId>` reference into an
+   * attached API reference (see `common/api-reference.ts`), which the builders lint
+   * against the index. Planning metadata only: the prompt still has to say what to do, so
+   * this is deliberately NEVER emitted into the import JSON ({@link toAutomationImport}).
+   */
+  tool: z.string().default(""),
 });
 export type AutomationStepDraft = z.infer<typeof AutomationStepDraftSchema>;
 

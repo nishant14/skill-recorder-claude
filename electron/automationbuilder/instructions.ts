@@ -72,6 +72,11 @@ Each step has a short **label** and a **prompt** — an imperative instruction t
   and cloud CLIs — and write shell commands for the device OS (zsh/bash on macOS and
   Ubuntu, PowerShell on Windows). Only fall back to a UI step for something with no API
   and no CLI.
+- **If an API reference is attached** for one of these applications, you will have
+  \`list_api_operations\` / \`get_api_operation\` tools and a block below describing it. Then
+  the native capability for that application IS its API: map each action step onto a
+  concrete operation you looked up (never a guessed id) and name it on the step's \`tool\`
+  as \`api:<operationId>\`, instead of replaying its UI. The block below has the specifics.
 - **Self-resolving prompts.** An automation runs unattended and can't stop to ask a human,
   so each prompt must get what it needs on its own: reference a genuinely fixed literal by
   its \`{{id}}\` token, and for anything that varies, tell the agent to retrieve it with the
