@@ -59,7 +59,7 @@ export interface ActiveWindowOptions {
  *   - `browser.url`       when the active browser tab URL changes
  *
  * App switches and titles come from get-windows (cross-platform). URLs come from
- * a dedicated {@link UrlProvider} (macOS AppleScript today; Windows UIA later),
+ * a dedicated {@link UrlProvider} (macOS AppleScript, Windows UIA, Linux AT-SPI),
  * invoked **only** when a browser is frontmost and something changed — keeping
  * the permission-gated, comparatively slow URL read off the hot path so it never
  * blocks polling or hammers the browser.
@@ -100,7 +100,8 @@ export class ActiveWindowCollector implements Collector {
     this.ctx = ctx;
     if (this.captureUrls && !this.urlProvider) {
       // Honest degradation: the level asks for URLs but this platform has no
-      // provider (e.g. Linux). Say so once instead of silently emitting nothing.
+      // provider at all (macOS, Windows and Linux each have one). Say so once
+      // instead of silently emitting nothing.
       ctx.log.warn("Browser URL capture is on but unavailable on this platform; skipping URLs.");
     }
     void this.poll();

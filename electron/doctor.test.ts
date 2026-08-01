@@ -5,6 +5,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { resetLinuxCaptureProbe } from "./collectors/linux-active-window";
+import { resetLinuxUrlProbe } from "./collectors/linux-url-provider";
 import { runDoctor } from "./doctor";
 
 const ENV_KEYS = [
@@ -36,6 +37,10 @@ function asPlatform(
     process.env.SKILL_RECORDER_SESSIONS_DIR = path.join(root, "sessions");
     for (const [key, value] of Object.entries(env)) process.env[key] = value;
     resetLinuxCaptureProbe(toolsPresent);
+    // Present by default so cases about *window* capture don't depend on whether
+    // the machine running the tests happens to have pyatspi installed. Cases about
+    // URL capture re-prime it themselves.
+    resetLinuxUrlProbe(true);
     body();
   } finally {
     if (platformDescriptor) Object.defineProperty(process, "platform", platformDescriptor);
@@ -44,6 +49,7 @@ function asPlatform(
       else process.env[key] = value;
     }
     resetLinuxCaptureProbe();
+    resetLinuxUrlProbe();
     rmSync(root, { recursive: true, force: true });
   }
 }
@@ -96,11 +102,27 @@ test("doctor points at x11-utils when the X11 tools are missing", () => {
   });
 });
 
-test("doctor reports Linux browser URLs as unsupported without inventing a provider", () => {
+test("doctor reports Linux browser URLs as AT-SPI-backed when pyatspi is installed", () => {
   asPlatform("linux", { XDG_SESSION_TYPE: "x11", DISPLAY: ":0" }, true, () => {
+    resetLinuxUrlProbe(true);
     const report = runDoctor();
-    assert.equal(report.browserUrl.kind, "none");
+    assert.equal(report.browserUrl.kind, "atspi");
+    assert.equal(report.browserUrl.supported, true);
+    assert.equal(report.browserUrl.note, undefined);
+    assert.equal(source(report, "browserUrls")?.supported, true);
+  });
+});
+
+test("doctor names the apt package when python3-pyatspi is missing", () => {
+  asPlatform("linux", { XDG_SESSION_TYPE: "x11", DISPLAY: ":0" }, true, () => {
+    resetLinuxUrlProbe(false);
+    const report = runDoctor();
+    // The mechanism is still AT-SPI; only its availability changed.
+    assert.equal(report.browserUrl.kind, "atspi");
     assert.equal(report.browserUrl.supported, false);
-    assert.equal(source(report, "browserUrls")?.supported, false);
+    assert.match(report.browserUrl.note ?? "", /python3-pyatspi/);
+    const entry = source(report, "browserUrls");
+    assert.equal(entry?.supported, false);
+    assert.equal(entry?.note, report.browserUrl.note);
   });
 });

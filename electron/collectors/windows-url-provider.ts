@@ -4,6 +4,7 @@ import { createInterface, type Interface } from "node:readline";
 import os from "node:os";
 import path from "node:path";
 
+import { normalizeUrl } from "./url-normalize";
 import type { ActiveUrl, UrlProvider } from "./url-provider";
 
 /**
@@ -144,18 +145,6 @@ while ($true) {
 function isWindowsBrowser(app: string): boolean {
   const a = app.toLowerCase();
   return WINDOWS_BROWSER_TOKENS.some((t) => a.includes(t));
-}
-
-/** Normalize an omnibox value into a parseable URL, or null if it's not one. */
-function normalizeUrl(raw: string): string | null {
-  const v = raw.trim();
-  if (!v) return null;
-  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) return v;
-  // Address bars usually drop the scheme ("github.com/foo"). Restore it so the
-  // consumer can parse a host. Reject anything that still looks like a search
-  // (has whitespace, or no dot) rather than emit noise.
-  if (!/\s/.test(v) && v.includes(".")) return `https://${v}`;
-  return null;
 }
 
 export class WindowsUrlProvider implements UrlProvider {

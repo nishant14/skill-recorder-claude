@@ -340,7 +340,7 @@ export interface ActiveWindowInfo {
 
 /** How, and whether, active-tab URLs can be read on this platform. */
 export interface BrowserUrlInfo {
-  kind: "applescript" | "uia" | "none";
+  kind: "applescript" | "uia" | "atspi" | "none";
   supported: boolean;
   /** Why URLs are unavailable, phrased for the user. */
   note?: string;

@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 
+import { LinuxUrlProvider } from "./linux-url-provider";
 import { WindowsUrlProvider } from "./windows-url-provider";
 
 /**
@@ -124,16 +125,23 @@ export class MacUrlProvider implements UrlProvider {
 export function createUrlProvider(): UrlProvider | null {
   if (process.platform === "darwin") return new MacUrlProvider();
   if (process.platform === "win32") return new WindowsUrlProvider();
+  if (process.platform === "linux") return new LinuxUrlProvider();
   return null;
 }
 
 /** How the active-tab URL is read on a given platform, for honest reporting. */
-export type BrowserUrlKind = "applescript" | "uia" | "none";
+export type BrowserUrlKind = "applescript" | "uia" | "atspi" | "none";
 
+/**
+ * The *mechanism* a platform uses, which is static. Whether it can actually run
+ * here (macOS Automation grants, Linux `python3-pyatspi`) is a separate, probed
+ * question — see `linuxUrlSupport` and the doctor.
+ */
 export function browserUrlProviderKind(
   platform: NodeJS.Platform = process.platform,
 ): BrowserUrlKind {
   if (platform === "darwin") return "applescript";
   if (platform === "win32") return "uia";
+  if (platform === "linux") return "atspi";
   return "none";
 }

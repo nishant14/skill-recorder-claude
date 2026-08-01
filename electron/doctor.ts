@@ -14,6 +14,7 @@ import type {
   FoundryDoctorInfo,
 } from "../common/ipc";
 import { linuxCaptureSupport } from "./collectors/linux-active-window";
+import { linuxUrlSupport } from "./collectors/linux-url-provider";
 import { browserUrlProviderKind } from "./collectors/url-provider";
 import { loadFoundryConfig } from "./foundry/config";
 import { sessionsRoot } from "./recorder/session-store";
@@ -84,6 +85,16 @@ function checkActiveWindow(): ActiveWindowInfo {
 
 function checkBrowserUrl(): BrowserUrlInfo {
   const kind = browserUrlProviderKind();
+  if (process.platform === "linux") {
+    // The AT-SPI reader ships in-repo; what decides whether it works is the
+    // `python3-pyatspi` binding it hosts. Probed once and cached.
+    const support = linuxUrlSupport();
+    return {
+      kind,
+      supported: support.ok,
+      ...(support.reason ? { note: support.reason } : {}),
+    };
+  }
   return { kind, supported: kind !== "none" };
 }
 
