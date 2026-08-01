@@ -20,19 +20,17 @@ authoritative for *what to build*.
 - **Next step: Workstream C** (auth/config UX — connection form, doctor, IPC; deletes
   `copilot-cli-path.ts` + `copilot-signin.ts`), then D. Until C ships, an unconfigured
   machine shows the Foundry not-configured message as a plain banner (known interim UX).
-- **Open question (understand-first, no decision recorded):** which *general* GPT
-  deployment the describer should run on — e.g. `gpt-5.3` vs `gpt-5.6` — instead of codex
-  (builders stay codex). **Now instrumented, decision still open.** The eval suite
-  measures it: the Foundry session accumulates Responses-API `usage`, `npm run eval --
-  --model=<deployment> --repeat=3` records per-rep score, latency and tokens into
-  `evals/results/*.json`, and `evals/compare.ts <a.json> <b.json>` prints the A/B table.
-  Procedure: create two general-model deployments on the resource, run the suite at
-  `--repeat=3` against each (judge **off** — it shares `--model`), then compare with the
-  per-1M input/output prices read off the Azure pricing page (`--price-in-a` /
-  `--price-out-a` / `--price-in-b` / `--price-out-b`; there are no default rates). The
-  criterion is **cost vs quality** — mean cost per analysis and cost per score point next
-  to mean score and its spread. **The user decides on the numbers**; nothing here picks a
-  model. See "Model cost/quality comparison" in `evals/README.md`.
+- **Describer-model comparison: MEASURED, decision pending (user's call).** Run
+  2026-08-01, 9 scenarios × 3 reps per model, deterministic rubric, judge off, prices
+  user-supplied (`gpt-5.6-sol` $5/$30 per 1M in/out; `gpt-5.2` $1.75/$14):
+  `gpt-5.6-sol` mean score 99.6% (spread 88.9–100%), 24,226 tokens in, 13.0s, **$0.141
+  /analysis**; `gpt-5.2` mean score **100.0%** (spread 100–100%), 23,086 in, 11.4s,
+  **$0.049/analysis** — 2.9× cheaper at equal-or-better quality; `gpt-5.2` dominates
+  every axis. Results files `evals/results/2026-08-01T10-16-41-414Z.json` (A) and
+  `…T10-22-26-582Z.json` (B); rerun via "Model cost/quality comparison" in
+  `evals/README.md`. Costs are uncached-rate upper bounds. **Awaiting the user's
+  decision**; if `gpt-5.2` is chosen, Workstream C wires `describerDeployment` with that
+  default (builders stay `gpt-5.3-codex`).
 - **Standing constraints:** delegate implementation to subagents (see CLAUDE.md "Model
   economy"); live/credentialed gates are human-run, never wired into `npm test` or CI;
   never commit credentials (they live only in `~/.skill-recorder/foundry.json`) or a
