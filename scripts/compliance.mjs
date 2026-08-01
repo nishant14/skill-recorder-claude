@@ -614,7 +614,13 @@ export async function verifyComplianceDirectory(
     }
     for (const notice of electron.notices ?? []) {
       const noticeName = path.posix.basename(notice.file);
-      if (notice.sha256 !== policy.electron?.notices?.[noticeName]) {
+      // Same per-platform override as prepareElectronNotices: LICENSES.chromium.html
+      // differs per platform distribution, keyed by the bundle's own platform-arch
+      // (not process.platform — this verifier may inspect a foreign-platform bundle).
+      const expectedNotice =
+        policy.electron?.noticesByPlatform?.[distributionKey]?.[noticeName] ??
+        policy.electron?.notices?.[noticeName];
+      if (notice.sha256 !== expectedNotice) {
         throw new Error(`Electron notice ${noticeName} does not match its reviewed SHA-256.`);
       }
       await verifyManifestFile(directory, notice);

@@ -30,12 +30,17 @@ const unpacked = readdirSync(outputRoot)
   .find((entry) => statSync(entry).isDirectory() && path.basename(entry) === unpackedName);
 if (!unpacked) throw new Error(`Could not find the ${arch} unpacked Linux application.`);
 
-// build.linux.artifactName is "${productName}-${version}-linux-${arch}.${ext}".
-const expectedImage = `${manifest.build.productName}-${manifest.version}-linux-${arch}.AppImage`;
+// build.linux.artifactName is "${productName}-${version}-linux-${arch}.${ext}", but
+// electron-builder substitutes ${arch} with the AppImage-conventional name
+// (x64 → x86_64, arm64 → arm64), so accept both spellings.
+const archNames = arch === "x64" ? ["x64", "x86_64"] : [arch, "aarch64"];
+const expectedImages = archNames.map(
+  (a) => `${manifest.build.productName}-${manifest.version}-linux-${a}.AppImage`,
+);
 const images = readdirSync(outputRoot).filter((name) => name.endsWith(".AppImage"));
-if (!images.includes(expectedImage)) {
+if (!expectedImages.some((name) => images.includes(name))) {
   throw new Error(
-    `Expected AppImage ${expectedImage} in release/, found: ${images.join(", ") || "none"}.`,
+    `Expected one of ${expectedImages.join(" / ")} in release/, found: ${images.join(", ") || "none"}.`,
   );
 }
 
@@ -188,7 +193,7 @@ for (const root of forbiddenSourceRoots) {
 }
 
 console.log(
-  `Verified native ${arch} Linux package (${expectedImage}), compliance sources, notices, ` +
+  `Verified native ${arch} Linux package (${images.find((name) => expectedImages.includes(name))}), compliance sources, notices, ` +
     `no get-windows, and no standalone FFmpeg: ${path.relative(process.cwd(), unpacked)}`,
 );
 
