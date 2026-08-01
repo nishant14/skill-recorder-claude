@@ -313,8 +313,10 @@ export function renderApiReferenceBrief(options: ApiReferenceBriefOptions): stri
       `Read it with **${tools.join("**, **")}**. Every action step that touches this application must be grounded in a`,
       "concrete operation from this reference instead of UI replay — look the operation up, then name it on the",
       `${stepWord}'s \`tool\` as \`api:<operationId>\` (or \`api:METHOD /path\`). A step naming an operation that isn't in`,
-      "the reference is rejected, so never guess an id — look it up first. Steps that do NOT touch this",
-      "application keep using the catalogue's capabilities as usual.",
+      "the reference is rejected, so never guess an id — look it up first. If an action has NO matching operation",
+      "in the reference (the API may cover only part of the app), leave that step un-grounded: write it against the",
+      "catalogue's normal capabilities (web/UI) with no `api:` ref at all — never force or invent one. Steps that do",
+      "NOT touch this application keep using the catalogue's capabilities as usual.",
       "",
     );
   }

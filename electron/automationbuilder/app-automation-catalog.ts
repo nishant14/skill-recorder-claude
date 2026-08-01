@@ -44,6 +44,10 @@ in plain language.
 - Write prompts that GENERALIZE: if the recording acted on N specific items, the prompt tells
   the agent to handle every item of that kind, not the specific examples recorded.
 - Prompts should prefer the capabilities below over UI replay, and say briefly why.
+- Name the CONCRETE command or tool in the prompt, not just the tool family: "run
+  \`gh pr list --repo {{repo}}\`" executes unambiguously at run time, while "use the
+  GitHub CLI" leaves the agent to rediscover the invocation. Same for web reads
+  (\`web_fetch\` the URL) and file writes (name the format and path).
 - Self-resolving prompts: reference a genuinely fixed literal by its \`{{id}}\` value token,
   and for anything that varies tell the agent to locate it on the device or fetch it from the
   web. An unattended automation can't stop to ask a human, so never depend on a user-provided

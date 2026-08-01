@@ -79,7 +79,7 @@ const githubIssueTriage: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["gh "], ["gh issue", "gh api"]],
+    mustUseAny: [["gh ", "github cli"], ["gh issue", "gh api", "github cli"]],
     forbidden: ["playwright", "browser_", "click", "navigate to github", "github.com/acme"],
   },
 };
@@ -143,7 +143,7 @@ const githubStalePrNudge: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["gh "], ["gh pr", "gh api"]],
+    mustUseAny: [["gh ", "github cli"], ["gh pr", "gh api", "github cli"]],
     forbidden: ["playwright", "browser_", "click", "navigate to github", "github.com/acme"],
   },
 };

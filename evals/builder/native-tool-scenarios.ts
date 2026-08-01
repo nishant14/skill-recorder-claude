@@ -184,7 +184,7 @@ const researchCompile: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch", "web access", "fetch", "http"], ["docx", "write", "note", ".md", ".txt"]],
+    mustUseAny: [["web_fetch", "web access", "fetch", "http", "web search", "visit each"], ["docx", "write", "note", ".md", ".txt"]],
     forbidden: [],
   },
 };
@@ -370,7 +370,7 @@ const releaseNotes: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["gh "], ["gh pr", "gh api", "gh release"]],
+    mustUseAny: [["gh ", "github cli"], ["gh pr", "gh api", "gh release", "github cli"]],
     forbidden: ["playwright", "browser_", "navigate to github"],
   },
 };

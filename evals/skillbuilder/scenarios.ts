@@ -128,7 +128,7 @@ const priceTracker: SkillBuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch"], ["xlsx"]],
+    mustUseAny: [["web_fetch", "fetch"], ["xlsx", "spreadsheet", "sheet", "csv"]],
     forbidden: [],
     minValues: 1,
     minCalculations: 1,
