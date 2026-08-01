@@ -41,7 +41,7 @@ export interface SkillBuilderScenario {
   title: string;
   /** Which target agent's catalogue the builder generalizes against. */
   architecture: SkillArchitecture;
-  /** The device OS the Scout skill will run on (macOS or Windows). */
+  /** The device OS the skill will run on (macOS or Windows). */
   platform: NodeJS.Platform;
   /** Ground-truth description of the task (for docs + humans reading failures). */
   truth: string;

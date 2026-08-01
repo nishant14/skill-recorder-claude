@@ -171,10 +171,10 @@ export const myScenario: Scenario = {
 ## Builder evals (`evals/builder/`)
 
 A second, smaller harness that guards the **final stage** — the builder that
-generalizes an approved analysis into a Scout artifact — rather than the
+generalizes an approved analysis into a runnable artifact — rather than the
 describer. It exists because of a real regression: when generalizing GitHub work,
 the builder preferred driving the **browser (Playwright)** instead of the **`gh`
-CLI**, even though Scout runs on the user's own Mac/Windows device where `gh` is
+CLI**, even though the app target runs on the user's own device where `gh` is
 installed and authenticated.
 
 ```bash
@@ -221,10 +221,12 @@ one of two flavours:
   browser-driven tasks (`expense-report` → Amex/Expensify, `lead-to-crm` →
   Salesforce/LinkedIn have no CLI/API) don't forbid the browser at all; instead
   they pin the one sub-step that *is* native — reading the local PDF receipts
-  (`view`/pdf), and reading the mailbox via `workiq_*` rather than the Mail UI.
+  (`view`/pdf), and keeping the mailbox as the lead source. The app target ships no
+  Microsoft 365 tools, so those two rubrics also **forbid** an invented `workiq_*` /
+  `m365_*` tool name.
 
 This is the suite that drove the catalogue fix in
-`electron/skillbuilder/scout-catalog.ts` (prefer first-class device CLIs — above
+`electron/skillbuilder/app-catalog.ts` (prefer first-class device CLIs — above
 all `gh` — over the browser, platform-aware for zsh/bash vs PowerShell). When you
 add a describer scenario, add the matching builder scenario so the pair stays in
 lockstep.
@@ -256,16 +258,18 @@ each scenario asserts the shape of the proposed `SkillPlan`:
 - **typed steps** — `minCalculations` / `minActions` require the procedure to be
   split into `calculation` (no side effect) and `action` (changes the world) steps.
 
-**Coverage.** Five scenarios. Two target **Scout**: `price-tracker-skill` (a canonical
-page URL → a fixed **value** referenced as `{{…}}`, `web_fetch` + the `xlsx` skill,
-calculations then an append) and `github-issue-triage-skill` (the gh-vs-browser case as a
-skill —
-must use `gh`, forbid the browser, and drive the mutating comment/label actions). Three
-target **Cowork** (Microsoft 365 Copilot), whose catalogue has **no browser automation**
-— each asserts the right M365 `server/Tool` is reached for while playwright/`click` and
-the web hosts are forbidden: `cowork-teams-digest` (read a channel then post via
-`m365_teams`), `cowork-outlook-reply` (triage the mailbox then reply via `outlook`), and
-`cowork-calendar-schedule` (find a slot then book via `outlook_calendar`).
+**Coverage.** Five scenarios. Two target the **app** (this app's own library, whose
+agent has a shell, files, and web): `price-tracker-skill` (a canonical page URL → a fixed
+**value** referenced as `{{…}}`, `web_fetch` + the `.xlsx` file, calculations then an
+append) and `github-issue-triage-skill` (the gh-vs-browser case as a skill — must use
+`gh`, forbid the browser, and drive the mutating comment/label actions). Three target
+**copilot-studio**, a hosted agent with **no shell, no filesystem, and no browser** —
+each asserts the right `Connector.Action` is reached for while playwright/`click`, the
+web hosts, and any device-shell command (`bash`, `gh `) are forbidden:
+`copilot-studio-teams-digest` (read a channel then post via `Teams.*`),
+`copilot-studio-outlook-reply` (triage the mailbox then reply via `Outlook.*`), and
+`copilot-studio-calendar-schedule` (find a slot then book via
+`Outlook.FindMeetingTimes` → `Outlook.CreateEvent`).
 
 ## Mock pages (`evals/mocks/`)
 

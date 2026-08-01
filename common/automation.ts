@@ -10,16 +10,15 @@ import { migrateLegacyInputsToValues, renderValues, ValueSchema } from "./values
  * it proposes, refinable in natural language) plus the generalized, ordered
  * **steps** (each a natural-language prompt to the target agent) — which the user
  * refines. On confirmation the agent submits the final **built automation**
- * ({@link BuiltAutomation}), which is rendered to Scout's import JSON and written
- * into an importable bundle folder (Scout imports it; it is not auto-loaded like a
+ * ({@link BuiltAutomation}), which is rendered to the import JSON and written into a
+ * bundle folder (the automation is imported from it; it is not auto-loaded like a
  * skill). Kept separate from `analysis.ts` (the builder's *input*); this is the
  * builder's *output*.
  *
- * The recorder-side schedule mirrors Scout's three kinds but omits the redundant
- * top-level `hour`/`minute` mirror Scout's import schema also carries — the
- * renderer fills that in {@link renderAutomationJson} so the emitted JSON validates
- * against Scout's strict `AutomationScheduleSchema` without relying on its
- * import-time schedule migration.
+ * The recorder-side schedule carries three kinds but omits the redundant top-level
+ * `hour`/`minute` mirror the import schema also carries — the renderer fills that in
+ * {@link renderAutomationJson} so the emitted JSON validates against a strict
+ * importer without relying on its import-time schedule migration.
  */
 
 /** A wall-clock time of day, 24-hour. */
@@ -32,7 +31,7 @@ export type TimeOfDay = z.infer<typeof TimeOfDaySchema>;
 /** Days of the week the schedule fires on (0 = Sunday … 6 = Saturday). */
 export const DaysSchema = z.array(z.number().int().min(0).max(6));
 
-/** The generated schedule. One of Scout's three kinds; `naturalLanguage` is the
+/** The generated schedule. One of the three kinds; `naturalLanguage` is the
  *  human phrasing shown in the plan and refined by the user. */
 export const AutomationScheduleSchema = z.discriminatedUnion("kind", [
   z.object({
@@ -117,9 +116,15 @@ export const AutomationPlanSchema = z.preprocess(
   values: z.array(ValueSchema).default([]),
   /** The generalized procedure, as ordered label + prompt steps. */
   steps: z.array(AutomationStepDraftSchema).default([]),
-  /** Optional per-automation model override. */
+  /**
+   * Engine-owned model selection, kept in the schema so plans persisted before it
+   * became engine-owned still parse. Semantics per target: **omitted** for
+   * `copilot-studio` (the maker's agent owns its model — {@link toAutomationImport}
+   * drops it when falsy); for `app`, an optional Foundry **deployment name** reserved
+   * for the in-app runner. The builder agent no longer proposes it.
+   */
   model: z.string().default(""),
-  /** Built-in Scout skills the steps rely on (for the user's awareness). */
+  /** Built-in skills the steps rely on (for the user's awareness). */
   skillNames: z.array(z.string()).default([]),
   }),
 );
@@ -127,7 +132,7 @@ export type AutomationPlan = z.infer<typeof AutomationPlanSchema>;
 
 /**
  * The payload the agent submits via `submit_automation` once the plan is approved.
- * The engine renders this into Scout's import JSON and wraps it into a
+ * The engine renders this into the import JSON and wraps it into a
  * {@link BuiltAutomation}.
  */
 export const AutomationSubmissionSchema = z.object({
@@ -139,6 +144,7 @@ export const AutomationSubmissionSchema = z.object({
   schedule: AutomationScheduleSchema,
   condition: z.string().default(""),
   conditionCheckInterval: z.number().int().positive().optional(),
+  /** Engine-owned; see {@link AutomationPlanSchema}'s `model`. Usually empty. */
   model: z.string().default(""),
   /** Fixed values substituted into the step prompts at export (the pill literals). */
   values: z.array(ValueSchema).default([]),
@@ -159,6 +165,7 @@ export const BuiltAutomationSchema = z.object({
   schedule: AutomationScheduleSchema,
   condition: z.string().default(""),
   conditionCheckInterval: z.number().int().positive().optional(),
+  /** Engine-owned; see {@link AutomationPlanSchema}'s `model`. Usually empty. */
   model: z.string().default(""),
   steps: z.array(AutomationStepDraftSchema),
   /** Fixed values substituted into the step prompts at export (the pill literals). */
@@ -215,7 +222,7 @@ export function planToAutomationSubmission(plan: AutomationPlan): AutomationSubm
   });
 }
 
-/** The primary time of day for a schedule — the value Scout mirrors into the
+/** The primary time of day for a schedule — the value mirrored into the
  *  schedule's top-level `hour`/`minute`. */
 function primaryTime(schedule: AutomationSchedule): TimeOfDay {
   switch (schedule.kind) {
@@ -228,9 +235,9 @@ function primaryTime(schedule: AutomationSchedule): TimeOfDay {
   }
 }
 
-/** Convert a recorder schedule into Scout's strict import schedule shape (adds the
- *  redundant top-level `hour`/`minute` mirror Scout's schema requires). */
-function scheduleToScout(schedule: AutomationSchedule): Record<string, unknown> {
+/** Convert a recorder schedule into the strict import schedule shape (adds the
+ *  redundant top-level `hour`/`minute` mirror the import schema requires). */
+function scheduleToImport(schedule: AutomationSchedule): Record<string, unknown> {
   const t = primaryTime(schedule);
   const base = {
     naturalLanguage: schedule.naturalLanguage,
@@ -249,16 +256,17 @@ function scheduleToScout(schedule: AutomationSchedule): Record<string, unknown> 
 }
 
 /**
- * Shape a {@link BuiltAutomation} into the plain object Scout's `AutomationImportSchema`
- * accepts (`workingDir`/`skillNames` are injected by Scout at import time from the
- * bundle context, so they are intentionally omitted here).
+ * Shape a {@link BuiltAutomation} into the plain object the importer accepts
+ * (`workingDir`/`skillNames` are injected at import time from the bundle context, so
+ * they are intentionally omitted here). `model` is engine-owned and only travels when
+ * it is actually set — a Copilot Studio bundle never carries one.
  */
 export function toAutomationImport(a: BuiltAutomation): Record<string, unknown> {
   const obj: Record<string, unknown> = {
     name: slugifySkillName(a.name),
     description: a.description,
     triggerType: a.triggerType,
-    schedule: scheduleToScout(a.schedule),
+    schedule: scheduleToImport(a.schedule),
     steps: a.steps.map((s) => ({
       label: renderValues(s.label, a.values),
       prompt: renderValues(s.prompt, a.values),
@@ -270,7 +278,7 @@ export function toAutomationImport(a: BuiltAutomation): Record<string, unknown> 
   return obj;
 }
 
-/** Render a {@link BuiltAutomation} to the `automation.json` text Scout imports. */
+/** Render a {@link BuiltAutomation} to the `automation.json` text the bundle carries. */
 export function renderAutomationJson(a: BuiltAutomation): string {
   return JSON.stringify(toAutomationImport(a), null, 2) + "\n";
 }

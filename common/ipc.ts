@@ -132,7 +132,7 @@ export interface SkillBuildProgress {
 /** Start a build (or refine one) for a session's analysis. */
 export interface SkillBuildInput {
   sessionId: string;
-  /** Target architecture (Scout or Cowork). */
+  /** Target architecture (the app's own library or Copilot Studio). */
   architecture: SkillArchitecture;
   /** Natural-language refinement for the current plan; omit for the first pass. */
   feedback?: string;
@@ -147,8 +147,8 @@ export interface SkillPlanResult {
 
 /**
  * Where a built skill lands:
- * - **install** — write it into the target agent's live skills folder (Scout auto-loads it).
- * - **export** — download it to a folder the user picks (the only option for Cowork).
+ * - **install** — write it into this app's own skill library (the `app` architecture only).
+ * - **export** — download it to a folder the user picks (the only option for copilot-studio).
  */
 export type SkillPlacement = "install" | "export";
 
@@ -177,7 +177,7 @@ export interface AutomationBuildProgress {
 /** Start an automation build (or refine one) for a session's analysis. */
 export interface AutomationBuildInput {
   sessionId: string;
-  /** Target architecture (automations are Scout-only today). */
+  /** Target architecture (the app's own library or Copilot Studio). */
   architecture: SkillArchitecture;
   /** Natural-language refinement for the current plan; omit for the first pass. */
   feedback?: string;
@@ -479,9 +479,9 @@ export interface SkillRecorderApi {
   /**
    * Finalize the (user-edited) skill plan and place its SKILL.md. The edited plan the
    * user sees is authoritative — the body is written from exactly these values and steps.
-   * `placement` picks the destination: `"install"` writes into the target agent's live
-   * skills folder (Scout); `"export"` prompts for a folder and downloads it there (the
-   * only option for Cowork). Defaults to `"install"`.
+   * `placement` picks the destination: `"install"` writes into this app's own
+   * skill library (the `app` architecture); `"export"` prompts for a folder and downloads
+   * it there (the only option for copilot-studio). Defaults to `"install"`.
    */
   createSkill(sessionId: string, plan: SkillPlan, placement?: SkillPlacement): Promise<SkillCreateResult>;
   /** Load a previously built skill for a session, if any. */

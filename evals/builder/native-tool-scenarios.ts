@@ -8,32 +8,32 @@
 //
 // Two flavours:
 //   • "prefer a real native tool" cases — a public page → web_fetch, a spreadsheet
-//     → the xlsx skill, a cloud deploy → the az CLI, merged PRs → gh, a mailbox →
-//     WorkIQ. The CLI cases (gh, az) forbid the browser outright, because a headless
-//     native tool is unambiguously correct. The web-read cases assert web_fetch is
-//     the tool reached for, but do NOT forbid the browser: preferring web_fetch and
-//     documenting a browser fallback for a page that may need a login is exactly the
-//     behaviour we want, and a pure-browser regression is still caught (web_fetch
-//     would be absent).
+//     → the .xlsx file itself, a cloud deploy → the az CLI, merged PRs → gh. The CLI
+//     cases (gh, az) forbid the browser outright, because a headless native tool is
+//     unambiguously correct. The web-read cases assert web_fetch is the tool reached
+//     for, but do NOT forbid the browser: preferring web_fetch and documenting a
+//     browser fallback for a page that may need a login is exactly the behaviour we
+//     want, and a pure-browser regression is still caught (web_fetch would be absent).
 //   • genuinely browser-legit cases (expense-report, lead-to-crm) — an app with no
 //     API and no CLI (Amex/Expensify, Salesforce/LinkedIn) that must be driven
 //     through its UI. Here we do NOT forbid the browser; instead we assert the ONE
-//     sub-step that IS native (reading local PDF receipts; reading the mailbox via
-//     WorkIQ), so the rubric stays honest.
+//     sub-step that IS native (reading local PDF receipts; naming the mailbox as the
+//     lead source), so the rubric stays honest. The app target has NO Microsoft 365
+//     tools, so the directory and mailbox cases forbid an invented `workiq_*` name.
 
 import type { BuilderScenario } from "./scenario";
 
-/** Public pricing page → read with web_fetch, write with the xlsx skill (not the browser + Numbers UI). */
+/** Public pricing page → read with web_fetch, write the .xlsx file (not the browser + Numbers UI). */
 const webToSpreadsheet: BuilderScenario = {
   id: "web-to-spreadsheet",
   title: "Copy pricing from a website into a spreadsheet",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user opened the Acme pricing page in Chrome, copied the Pro plan's monthly ($49) and " +
     "annual ($490) price, and pasted both into a Numbers budget sheet. Generalized on a headless " +
-    "device, the right tools are web_fetch (read the public pricing page) and the xlsx skill " +
-    "(write the sheet) — not browser automation driving Numbers.",
+    "device, the right tools are web_fetch (read the public pricing page) and writing the " +
+    ".xlsx sheet as a file — not browser automation driving Numbers.",
   analysis: {
     title: "Record plan pricing",
     intent:
@@ -76,17 +76,17 @@ const webToSpreadsheet: BuilderScenario = {
   },
 };
 
-/** A web data table → read (web_fetch if public, else the browser), write with the xlsx skill. */
+/** A web data table → read (web_fetch if public, else the browser), write into the .xlsx file. */
 const invoiceExtract: BuilderScenario = {
   id: "invoice-extract",
   title: "Extract invoice rows from a web table into a spreadsheet",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user copied three invoice rows from the Acme Books invoices page and pasted them into a " +
     "Numbers sheet. Whether the table is read with web_fetch (if public) or the browser (if the " +
     "books app needs a login) is genuinely app-dependent; what IS pinned is that the rows are " +
-    "written with the xlsx skill, not by replaying the Numbers UI.",
+    "written into the .xlsx file itself, not by replaying the Numbers UI.",
   analysis: {
     title: "Extract invoice rows",
     intent:
@@ -137,7 +137,7 @@ const invoiceExtract: BuilderScenario = {
 const researchCompile: BuilderScenario = {
   id: "research-compile",
   title: "Research a topic and compile quotes into a note",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user searched the web, opened two articles, copied a key quote from each, and pasted them " +
@@ -189,16 +189,16 @@ const researchCompile: BuilderScenario = {
   },
 };
 
-/** A directory of people → read natively (web_fetch or WorkIQ people), write with xlsx. */
+/** A directory of people → read natively with web_fetch, write the .xlsx contacts file. */
 const directoryLookup: BuilderScenario = {
   id: "directory-lookup",
   title: "Collect contact details from a directory into a spreadsheet",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user copied two people's contact lines from the company team directory and pasted them " +
-    "into a Numbers contacts sheet. Generalized, the directory is read natively (web_fetch, or " +
-    "WorkIQ people search for the org directory) and the contacts written with the xlsx skill.",
+    "into a Numbers contacts sheet. Generalized, the directory page is read with web_fetch and the " +
+    "contacts are written into the .xlsx sheet as a file — there is no org-directory tool here.",
   analysis: {
     title: "Build a contact list",
     intent:
@@ -240,8 +240,8 @@ const directoryLookup: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["web_fetch", "workiq_search_people", "workiq"], ["xlsx"]],
-    forbidden: ["playwright"],
+    mustUseAny: [["web_fetch"], ["xlsx"]],
+    forbidden: ["playwright", "workiq"],
   },
 };
 
@@ -254,7 +254,7 @@ const directoryLookup: BuilderScenario = {
 const expenseReport: BuilderScenario = {
   id: "expense-report",
   title: "Reconcile receipts against a card statement and file an expense report",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user reconciled three card charges against their PDF receipts and filed each in Expensify. " +
@@ -311,7 +311,7 @@ const expenseReport: BuilderScenario = {
 const releaseNotes: BuilderScenario = {
   id: "release-notes",
   title: "Compile release notes from merged PRs and deploy",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user pulled main, gathered the milestone's merged PR titles from GitHub into CHANGELOG.md, " +
@@ -375,16 +375,16 @@ const releaseNotes: BuilderScenario = {
   },
 };
 
-/** Windows cloud deploy: the az CLI (not the Azure Portal UI), plus the xlsx skill for the log. */
+/** Windows cloud deploy: the az CLI (not the Azure Portal UI), plus the .xlsx log file. */
 const windowsDeploy: BuilderScenario = {
   id: "windows-deploy",
   title: "Deploy a web app to Azure and log the live URL (Windows)",
-  architecture: "scout",
+  architecture: "app",
   platform: "win32",
   truth:
     "On Windows the user deployed a web app to Azure with the Azure CLI (az webapp up) in Windows " +
     "Terminal, verified it was live, and logged the URL in Deployments.xlsx. Generalized, the deploy " +
-    "uses the az CLI (PowerShell on Windows) and the log uses the xlsx skill — not the Azure Portal UI.",
+    "uses the az CLI (PowerShell on Windows) and the log is written into the .xlsx file — not the Azure Portal UI.",
   analysis: {
     title: "Deploy to Azure and log the URL",
     intent:
@@ -441,18 +441,21 @@ const windowsDeploy: BuilderScenario = {
 
 /**
  * Browser-legit for the CRM/enrichment (Salesforce Lightning and LinkedIn are UI-only
- * here), so we don't forbid the browser. The native sub-step we guard is reading the
- * inbound leads from the mailbox via WorkIQ instead of driving the Mail GUI.
+ * here), so we don't forbid the browser. What we guard is that the plan keeps the
+ * MAILBOX as the lead source — and that it doesn't hallucinate a Microsoft 365 tool to
+ * read it with, since this target ships none.
  */
 const leadToCrm: BuilderScenario = {
   id: "lead-to-crm",
   title: "Qualify inbound leads and enter them into the CRM",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "The user read two inbound leads from the Sales Leads mailbox, enriched each via LinkedIn, and " +
     "created a Salesforce contact. LinkedIn and Salesforce Lightning are UI-only, so the browser is " +
-    "fine there; the mailbox, though, should be read via WorkIQ (Outlook) rather than the Mail UI.",
+    "fine there; the mailbox stays the source of the leads, read through whatever interface the " +
+    "device offers — but never through an invented `workiq_*`/`m365_*` tool, which this target " +
+    "does not have.",
   analysis: {
     title: "Enter leads into the CRM",
     intent:
@@ -496,8 +499,8 @@ const leadToCrm: BuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["workiq_search_emails", "workiq_list_emails", "workiq_get_email", "workiq"]],
-    forbidden: [],
+    mustUseAny: [["mailbox", "inbox", "outlook", "email"]],
+    forbidden: ["workiq", "m365_"],
   },
 };
 

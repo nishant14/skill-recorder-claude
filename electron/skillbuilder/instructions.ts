@@ -60,15 +60,15 @@ because the recording used it once.
 
 ## Prefer native tools (read the catalogue below)
 
-- Map each recorded action to the target's native capability. Searching Teams becomes
-  a WorkIQ call, not simulated clicks; reading a local file becomes the file tools;
-  editing a spreadsheet becomes the built-in spreadsheet skill.
-- When a service ships a first-class CLI on the device, prefer it over the browser —
-  above all **GitHub → the \`gh\` CLI**, plus \`git\` and cloud CLIs (Scout runs on the
-  user's Mac or Windows machine). Only fall back to browser automation for genuine
-  UI-only steps (a web app with no API and no CLI). Gate the shell with \`allowed-tools\`
-  (e.g. \`Bash(gh *)\`) and write commands for the device OS (zsh/bash on macOS,
-  PowerShell on Windows).
+- Map each recorded action to the target's native capability, exactly as the catalogue
+  describes it — reading a file, fetching a page, or calling a service becomes the
+  capability the catalogue names for that target, never simulated clicks.
+- Where the target agent runs (a device with a shell, or a hosted agent with
+  connectors) is the catalogue's call, not yours. When it does have a device shell,
+  prefer a first-class CLI over the browser — above all **GitHub → the \`gh\` CLI**,
+  plus \`git\` and cloud CLIs — gate it with \`allowed-tools\` (e.g. \`Bash(gh *)\`), and
+  write commands for the device OS (zsh/bash on macOS and Ubuntu, PowerShell on
+  Windows). Only fall back to a UI step for something with no API and no CLI.
 - Record the chosen tool on each step (the step's \`tool\`), and set \`allowedTools\` to the
   patterns the skill actually needs.
 - Rely ONLY on the built-in tools and skills in the catalogue — never on a skill the

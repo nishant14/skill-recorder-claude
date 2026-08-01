@@ -13,7 +13,7 @@ import { nativeToolScenarios } from "./native-tool-scenarios";
 const githubIssueTriage: BuilderScenario = {
   id: "github-issue-triage",
   title: "Triage new bug issues on GitHub",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "In Chrome the user opened the acme/api repo's open issues filtered to label:bug with no " +
@@ -88,7 +88,7 @@ const githubIssueTriage: BuilderScenario = {
 const githubStalePrNudge: BuilderScenario = {
   id: "github-stale-pr-nudge",
   title: "Nudge pull requests awaiting review on GitHub",
-  architecture: "scout",
+  architecture: "app",
   platform: "win32",
   truth:
     "In Chrome the user opened the acme/api open pull requests that still need review, checked " +

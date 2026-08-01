@@ -1,4 +1,4 @@
-/* Segoe Sans — Scout's brand typeface (bundled from the Scout app). */
+/* Segoe Sans — the app's brand typeface (bundled woff2, no network fetch). */
 @font-face {
   font-family: "Segoe Sans";
   src: url("./assets/fonts/Segoe-sans.woff2") format("woff2");
@@ -16,20 +16,20 @@
 
 :root {
   color-scheme: light;
-  /* ── Scout skin (light) — the warm "cream" companion look ────────────────
-     Scout's default identity: a warm cream canvas (hue 36) with neutral-grey
+  /* ── App skin (light) — the warm "cream" companion look ──────────────────
+     The app's default identity: a warm cream canvas (hue 36) with neutral-grey
      ink and the "lobster" coral accent. Neutrals stay desaturated; only the
-     canvas and the sand accent carry warmth, exactly as Scout does. */
-  --deck: hsl(36, 33%, 97%);       /* window canvas — warm cream (Scout surface-default) */
+     canvas and the sand accent carry the warmth. */
+  --deck: hsl(36, 33%, 97%);       /* window canvas — warm cream (surface-default) */
   --surface: hsl(0, 0%, 100%);     /* raised panels / cards / rows */
-  --surface-2: hsl(40, 19%, 94%);  /* chips / inset controls — warm sand (Scout brand-subtle) */
-  --line: hsl(0, 0%, 87%);         /* Scout border-subtle */
+  --surface-2: hsl(40, 19%, 94%);  /* chips / inset controls — warm sand (brand-subtle) */
+  --line: hsl(0, 0%, 87%);         /* border-subtle */
   --line-strong: hsl(0, 0%, 74%);  /* neutral hover / stronger divider */
-  --text: hsl(0, 0%, 14%);         /* Scout foreground-primary */
-  --muted: hsl(0, 0%, 44%);        /* Scout foreground-tertiary */
+  --text: hsl(0, 0%, 14%);         /* foreground-primary */
+  --muted: hsl(0, 0%, 44%);        /* foreground-tertiary */
   --faint: hsl(0, 0%, 53%);        /* least-emphasis labels */
 
-  /* Lobster brand — Scout's signature coral. Light mode uses the base solid
+  /* Lobster brand — the app's signature coral. Light mode uses the base solid
      hsl(7, 76%, 50%) ≈ #E0341E, with white text on the fill. */
   --brand: hsl(7, 76%, 50%);
   --brand-hover: hsl(7, 76%, 43%);
@@ -45,7 +45,7 @@
      coral. Everything referencing it inherits the shift. */
   --signal: var(--brand);
   --signal-dim: rgba(var(--brand-rgb), 0.13);
-  --go: hsl(158, 100%, 26%);       /* Scout success-loud (dark green) */
+  --go: hsl(158, 100%, 26%);       /* success-loud (dark green) */
   --go-rgb: 0, 133, 84;
   --warn: hsl(35, 92%, 42%);       /* amber for "needs setup" (not an error) */
   --warn-rgb: 206, 123, 9;
@@ -77,7 +77,7 @@ body[data-route="recording-controls"] {
   /* ── HUD skin (dark) — the recording overlay's night surface ─────────────
      An always-on-top bar floats over arbitrary screen content, so it stays a
      dark HUD for legibility. These tokens make that darkness a deliberate part
-     of the Scout system: desaturated neutrals with a whisper of warmth (hue 30–40)
+     of the same system: desaturated neutrals with a whisper of warmth (hue 30–40)
      so it belongs to the cream family, and the SAME lobster-coral accent as the
      main app — reused from the global --brand / --rec / --signal tokens. */
   --hud-surface: hsl(30, 6%, 13%);      /* bar / dialog / menu card */

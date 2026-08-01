@@ -166,11 +166,12 @@ export function createAutomationBuilderTools(ctx: AutomationToolContext): Tool[]
           },
         },
         steps: stepsSchema,
-        model: { type: "string", description: "Optional per-automation model override." },
+        // `model` is deliberately absent: model selection is engine-owned (see
+        // `AutomationPlanSchema.model`), so the agent has no say in it.
         skillNames: {
           type: "array",
           items: { type: "string" },
-          description: "Built-in Scout skills the steps rely on (for the user's awareness).",
+          description: "Built-in skills the steps rely on (for the user's awareness).",
         },
       },
       required: ["name", "title", "description", "trigger"],

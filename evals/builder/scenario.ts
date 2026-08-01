@@ -33,7 +33,7 @@ export interface BuilderScenario {
   title: string;
   /** Which target agent's catalogue the builder generalizes against. */
   architecture: SkillArchitecture;
-  /** The device OS the Scout automation will run on (macOS or Windows). */
+  /** The device OS the automation will run on (macOS or Windows). */
   platform: NodeJS.Platform;
   /** Ground-truth description of the task (for docs + humans reading failures). */
   truth: string;

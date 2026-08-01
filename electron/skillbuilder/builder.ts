@@ -21,8 +21,8 @@ import { loadPersistedAnalysis } from "../describer/describer";
 import type { FoundrySession } from "../foundry/agent";
 import { createLogger } from "../logger";
 import { isValidSessionId, sessionDir } from "../recorder/session-store";
+import { catalogueFor } from "./app-catalog";
 import { SKILL_BUILDER_INSTRUCTIONS } from "./instructions";
-import { catalogueFor } from "./scout-catalog";
 import { createSkillBuilderTools } from "./tools";
 
 const log = createLogger("SkillBuilder");
@@ -44,11 +44,24 @@ const CREATE_PROMPT =
 
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** Root folder Scout auto-loads user skills from (overridable for dev/tests). */
+/**
+ * This app's own skill library — where an installed SKILL.md lands and where the
+ * in-app runner (Workstream H) will load skills from. Overridable for dev/tests.
+ */
 function skillsRoot(): string {
   const override = process.env.SKILL_RECORDER_SKILLS_DIR;
   if (override) return path.resolve(override);
-  return path.join(os.homedir(), ".copilot", "skills");
+  return path.join(os.homedir(), ".skill-recorder", "skills");
+}
+
+/**
+ * Where an export lands when the caller asked to install something that can't be
+ * installed (a copilot-studio bundle). The UI never takes this path — it only offers
+ * export for copilot-studio — so this is the defensive landing spot, deliberately
+ * outside the library the runner loads.
+ */
+function exportsRoot(): string {
+  return path.join(os.homedir(), ".skill-recorder", "exports");
 }
 
 /** True when `dir` is `root` or nested inside it (so we can safely re-use it). */
@@ -59,7 +72,8 @@ function isInside(root: string, dir: string): boolean {
 
 /**
  * Where {@link SkillBuilder.create} writes the finished SKILL.md:
- * - **install** — into the agent's live skills folder ({@link skillsRoot}), auto-loaded.
+ * - **install** — into this app's own skill library ({@link skillsRoot}). Valid only
+ *   for `architecture === "app"`; a copilot-studio skill has nothing to install into.
  * - **export** — into a user-picked folder (a "download"), as `<dir>/<name>/SKILL.md`.
  */
 export type SkillTarget = { kind: "install" } | { kind: "export"; dir: string };
@@ -96,7 +110,8 @@ export function loadPersistedSkill(sessionId: string): BuiltSkill | null {
  * into a generalized, native-tool-first skill for a target architecture. Shares the
  * {@link AgentBuilder} pool (one live conversation per recording) so the plan →
  * refine → build flow stays in a single session. Streams progress out via a
- * callback and writes the final SKILL.md into the target agent's skills folder.
+ * callback and writes the final SKILL.md into this app's skill library or into a
+ * user-picked export folder.
  */
 export class SkillBuilder extends AgentBuilder<LiveBuild> {
   constructor(private readonly emitProgress: (p: SkillBuildProgress) => void) {
@@ -108,7 +123,7 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     const { sessionId, architecture, feedback } = input;
     if (this.active.has(sessionId)) throw new Error("A build is already running for this session.");
     if (!catalogueFor(architecture)) {
-      throw new Error("That target architecture isn't available yet. Choose Scout or Cowork.");
+      throw new Error("That target architecture isn't available yet. Choose the app or Copilot Studio.");
     }
     const analysis = loadPersistedAnalysis(sessionId);
     if (!analysis) throw new Error("There is no analysis for this recording yet.");
@@ -133,8 +148,9 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
    *  authoritative: its name/description/values/steps are used verbatim and only the
    *  markdown body is written by the agent (which references each fixed value by its
    *  `{{id}}` token; `renderSkillMarkdown` substitutes the literals). `target` picks the
-   *  destination — installed into the agent's live skills folder, or exported (downloaded)
-   *  to a user-picked dir. */
+   *  destination — installed into this app's skill library, or exported (downloaded)
+   *  to a user-picked dir. Installing is only meaningful for `architecture === "app"`;
+   *  a copilot-studio install request degrades to an export. */
   async create(
     sessionId: string,
     editedPlan?: SkillPlan,
@@ -181,14 +197,18 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
         body: submission.body,
       };
       const built = toBuiltSkill(sessionId, plan.architecture, finalSubmission, plan);
-      const exportPath =
-        target.kind === "export" ? this.exportSkillTo(built, target.dir) : this.exportSkill(built);
+      // Only an app skill has a library to be installed into; anything else is a bundle
+      // the user takes elsewhere, so an install request degrades to an export.
+      const installing = target.kind === "install" && plan.architecture === "app";
+      const exportPath = installing
+        ? this.exportSkill(built)
+        : this.exportSkillTo(built, target.kind === "export" ? target.dir : exportsRoot());
       const finalSkill: BuiltSkill = { ...built, exportedPath: exportPath, exportedAt: Date.now() };
       this.persist(live.sessionDir, finalSkill);
       this.emit(
         sessionId,
         "done",
-        target.kind === "export" ? `Skill exported to ${exportPath}` : `Skill added: ${exportPath}`,
+        installing ? `Skill added: ${exportPath}` : `Skill exported to ${exportPath}`,
       );
       return { skill: finalSkill, path: exportPath };
     } finally {
@@ -264,7 +284,7 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     return plan;
   }
 
-  /** Write the SKILL.md into the target agent's live skills folder; returns its path. */
+  /** Write the SKILL.md into this app's own skill library; returns its path. */
   private exportSkill(skill: BuiltSkill): string {
     const root = skillsRoot();
     const name = slugifySkillName(skill.name);

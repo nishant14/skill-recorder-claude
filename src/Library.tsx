@@ -17,12 +17,13 @@ import type {
   SkillPlacement,
 } from "../common/ipc";
 import type {
+  BuildKind,
   BuildTarget,
   BuiltSkill,
   SkillArchitecture,
   SkillPlan,
 } from "../common/skill";
-import { ARCHITECTURES, TARGETS } from "../common/skill";
+import { TARGETS } from "../common/skill";
 import type { AutomationPlan, BuiltAutomation } from "../common/automation";
 import {
   DEFAULT_NARRATION_LANGUAGE,
@@ -615,7 +616,7 @@ function AnalysisWorkspace({
         ? "automation"
         : "none";
   const [launch, setLaunch] = useState<LaunchTarget>(initialLaunch);
-  const [chosenArch, setChosenArch] = useState<SkillArchitecture>("scout");
+  const [chosenArch, setChosenArch] = useState<SkillArchitecture>("app");
   // Set while the user is deliberately canceling, so the aborted run's rejection
   // doesn't surface as an error toast.
   const canceled = useRef(false);
@@ -1068,9 +1069,9 @@ function SkillBuilderView({
         setBuiltName(s.name);
         setExportedPath(s.exportedPath);
         setArchitecture(s.architecture);
-        // We don't persist how it was placed; Cowork can only export, and Scout defaults
-        // to install (its primary action), so infer from the architecture on reopen.
-        setPlacement(s.architecture === "cowork" ? "export" : "install");
+        // We don't persist how it was placed; copilot-studio can only export, and an app
+        // skill defaults to install (its primary action), so infer it from the architecture.
+        setPlacement(s.architecture === "copilot-studio" ? "export" : "install");
         if (s.plan) setPlan(s.plan);
         setPhase("done");
       } else if (hasSkill) {
@@ -1141,6 +1142,9 @@ function SkillBuilderView({
   }, [sessionId, plan]);
 
   const busy = phase === "planning" || phase === "creating";
+  // Only an app skill has a library to install into; a Copilot Studio skill is an
+  // export-only bundle the user adds to their agent themselves.
+  const canInstall = architecture === "app";
 
   return (
     <section className="ws">
@@ -1171,7 +1175,7 @@ function SkillBuilderView({
 
         {phase === "ready" && (
           <div className="sb-arch">
-            <p className="sb-lead">Build a {archLabel(architecture)} skill from this recording.</p>
+            <p className="sb-lead">Build {targetPhrase("skill", architecture)} from this recording.</p>
             <button className="record-cta" onClick={() => void runPlan()}>
               Plan the skill →
             </button>
@@ -1231,12 +1235,16 @@ function SkillBuilderView({
             <div className="sb-check" aria-hidden>
               ✓
             </div>
-            <h2 className="sb-title">{placement === "install" ? "Added to Scout" : "Skill exported"}</h2>
+            <h2 className="sb-title">
+              {placement === "install" ? "Added to your skill library" : "Skill exported"}
+            </h2>
             <p>
               <code className="sb-slug">{builtName}</code>{" "}
               {placement === "install"
-                ? "is now in Scout — it loads automatically."
-                : `is built for ${archLabel(architecture)}. Install it wherever ${archLabel(architecture)} loads skills.`}
+                ? "is now in this app's skill library."
+                : architecture === "copilot-studio"
+                  ? "is ready to add to your Copilot Studio agent: paste the body into the agent's Instructions and configure the listed connectors."
+                  : "is exported. Drop the folder into this app's skill library when you want it installed."}
             </p>
             {exportedPath && <p className="sb-path">{exportedPath}</p>}
           </div>
@@ -1247,7 +1255,7 @@ function SkillBuilderView({
         <div className="ws-foot">
           <span className="foot-status" />
           <div className="ws-foot-actions">
-            {architecture === "scout" && (
+            {canInstall && (
               <button
                 className="ghost"
                 onClick={() => void place("export")}
@@ -1258,14 +1266,14 @@ function SkillBuilderView({
             )}
             <button
               className="record-cta"
-              onClick={() => void place(architecture === "scout" ? "install" : "export")}
+              onClick={() => void place(canInstall ? "install" : "export")}
               title={
-                architecture === "scout"
-                  ? "Add the skill to Scout so it loads automatically"
+                canInstall
+                  ? "Add the skill to this app's library"
                   : "Download the skill to a folder you choose"
               }
             >
-              {architecture === "scout" ? "Add to Scout" : "Export skill"}
+              {canInstall ? "Add to library" : "Export skill"}
             </button>
           </div>
         </div>
@@ -1287,8 +1295,11 @@ function SkillBuilderView({
   );
 }
 
-function archLabel(id: SkillArchitecture): string {
-  return ARCHITECTURES.find((a) => a.id === id)?.label ?? id;
+/** "an App skill" / "a Copilot Studio automation" — the picker's own label, kept in
+ *  sync by reading it back out of TARGETS rather than restating it here. */
+function targetPhrase(kind: BuildKind, architecture: SkillArchitecture): string {
+  const label = TARGETS.find((t) => t.kind === kind && t.architecture === architecture)?.label ?? kind;
+  return `${/^[aeiou]/i.test(label) ? "an" : "a"} ${label}`;
 }
 
 /* --- Automation builder --------------------------------------------------- */
@@ -1427,7 +1438,7 @@ function AutomationBuilderView({
 
         {phase === "ready" && (
           <div className="sb-arch">
-            <p className="sb-lead">Build a {archLabel(architecture)} automation from this recording.</p>
+            <p className="sb-lead">Build {targetPhrase("automation", architecture)} from this recording.</p>
             <button className="record-cta" onClick={() => void runPlan()}>
               Plan the automation →
             </button>
@@ -1503,11 +1514,13 @@ function AutomationBuilderView({
             </div>
             <h2 className="sb-title">Automation ready</h2>
             <p>
-              <code className="sb-slug">{builtName}</code> is built for {archLabel(architecture)}.
+              <code className="sb-slug">{builtName}</code> is built as {targetPhrase("automation", architecture)}.
             </p>
             {exportedPath && <p className="sb-path">{exportedPath}</p>}
             <p className="sb-import-hint">
-              Import it into Scout: open Scout → Automations → Import, and choose this bundle folder.
+              {architecture === "copilot-studio"
+                ? "Recreate this as a scheduled trigger in Copilot Studio using the steps in automation.json."
+                : "Saved to your automation library."}
             </p>
           </div>
         )}
@@ -1520,9 +1533,13 @@ function AutomationBuilderView({
             <button
               className="record-cta"
               onClick={() => void create()}
-              title="Create and export the automation bundle"
+              title={
+                architecture === "copilot-studio"
+                  ? "Create the bundle you recreate in Copilot Studio"
+                  : "Create the automation and save it to this app's library"
+              }
             >
-              Create &amp; export automation
+              {architecture === "copilot-studio" ? "Create & export bundle" : "Create automation"}
             </button>
           </div>
         </div>

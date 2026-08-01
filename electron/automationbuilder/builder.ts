@@ -21,7 +21,7 @@ import type { FoundrySession } from "../foundry/agent";
 import { createLogger } from "../logger";
 import { isValidSessionId, sessionDir } from "../recorder/session-store";
 import { AUTOMATION_BUILDER_INSTRUCTIONS } from "./instructions";
-import { automationCatalogueFor } from "./scout-automation-catalog";
+import { automationCatalogueFor } from "./app-automation-catalog";
 import { createAutomationBuilderTools } from "./tools";
 
 const log = createLogger("AutomationBuilder");
@@ -35,11 +35,14 @@ const KICKOFF_PROMPT =
 
 const msg = (err: unknown) => (err instanceof Error ? err.message : String(err));
 
-/** Root folder automation bundles are exported into (overridable for dev/tests). */
+/**
+ * This app's own automation library — where a built bundle lands and where the in-app
+ * scheduler (Workstream H) will pick automations up. Overridable for dev/tests.
+ */
 function automationsRoot(): string {
   const override = process.env.SKILL_RECORDER_AUTOMATIONS_DIR;
   if (override) return path.resolve(override);
-  return path.join(os.homedir(), ".copilot", "automations");
+  return path.join(os.homedir(), ".skill-recorder", "automations");
 }
 
 interface LiveBuild extends BaseLive {
@@ -71,10 +74,10 @@ export function loadPersistedAutomation(sessionId: string): BuiltAutomation | nu
 
 /**
  * Drives the multi-turn Foundry Codex agent that turns a recording's analysis
- * into a generalized Scout **automation** (a trigger + ordered prompt-steps). Shares
- * the {@link AgentBuilder} pool (one live conversation per recording) so the plan →
+ * into a generalized **automation** (a trigger + ordered prompt-steps). Shares the
+ * {@link AgentBuilder} pool (one live conversation per recording) so the plan →
  * refine → create flow stays in a single session. Streams progress out via a callback
- * and writes an importable bundle (automation.json) the user imports into Scout.
+ * and writes a bundle (automation.json) into this app's automation library.
  */
 export class AutomationBuilder extends AgentBuilder<LiveBuild> {
   constructor(private readonly emitProgress: (p: AutomationBuildProgress) => void) {
@@ -86,7 +89,7 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
     const { sessionId, architecture, feedback } = input;
     if (this.active.has(sessionId)) throw new Error("A build is already running for this session.");
     if (!automationCatalogueFor(architecture)) {
-      throw new Error("That target architecture isn't available yet. Choose Scout.");
+      throw new Error("That target architecture isn't available yet. Choose the app or Copilot Studio.");
     }
     const analysis = loadPersistedAnalysis(sessionId);
     if (!analysis) throw new Error("There is no analysis for this recording yet.");
@@ -136,7 +139,10 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
       const exportPath = this.exportAutomation(built);
       const finalAutomation: BuiltAutomation = { ...built, exportedPath: exportPath, exportedAt: Date.now() };
       this.persist(sessionDir(sessionId), finalAutomation);
-      this.emit(sessionId, "done", `Automation exported to ${exportPath}`);
+      // Both targets land in the app's automation library; only the copilot-studio one
+      // is a bundle the user then takes somewhere else.
+      const verb = plan.architecture === "copilot-studio" ? "exported to" : "saved to";
+      this.emit(sessionId, "done", `Automation ${verb} ${exportPath}`);
       return { automation: finalAutomation, path: exportPath };
     } finally {
       this.active.delete(sessionId);
@@ -208,7 +214,7 @@ export class AutomationBuilder extends AgentBuilder<LiveBuild> {
     return plan;
   }
 
-  /** Write the importable bundle (automation.json) to disk; returns its path. */
+  /** Write the bundle (automation.json) into the automation library; returns its path. */
   private exportAutomation(automation: BuiltAutomation): string {
     const root = automationsRoot();
     const name = slugifySkillName(automation.name);

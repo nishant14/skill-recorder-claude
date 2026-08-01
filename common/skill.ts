@@ -8,13 +8,33 @@ import { migrateLegacyInputsToValues, renderValues, ValueSchema } from "./values
  * generalize the recorded task, what fixed values it needs, and which of the target
  * architecture's native tools it will use — which the user refines in natural
  * language. On confirmation the agent submits the final **built skill**
- * ({@link BuiltSkill}), which is rendered to a `SKILL.md` and exported into the
- * target agent (Scout first). Kept separate from `analysis.ts` (the builder's
- * *input*); this is the builder's *output*.
+ * ({@link BuiltSkill}), which is rendered to a `SKILL.md` and either installed into
+ * this app's own skill library or exported as a bundle for the target agent. Kept
+ * separate from `analysis.ts` (the builder's *input*); this is the builder's *output*.
  */
 
-/** Agent architectures a skill can target. Scout and Cowork are enabled today. */
-export const SkillArchitecture = z.enum(["scout", "cowork", "copilot-studio"]);
+/**
+ * Architecture ids written by earlier releases, mapped onto the two targets that
+ * exist now. These are **data, not branding**: the strings live in every
+ * `skill.json` / `built-automation.json` on disk from before the retarget, so the
+ * mapping has to name them literally. Read-only — nothing ever writes these back.
+ */
+const LEGACY_ARCHITECTURE_IDS: Record<string, string> = {
+  scout: "app",
+  cowork: "copilot-studio",
+};
+
+/**
+ * Agent architectures a skill can target: **app** (this app's own library) and
+ * **copilot-studio** (an exported bundle). The `preprocess` runs at the string level
+ * before the enum validates, so every schema that references this constant — plan,
+ * built skill, automation plan, built automation — migrates persisted artifacts for
+ * free. Non-strings pass through untouched so the enum still reports the real error.
+ */
+export const SkillArchitecture = z.preprocess(
+  (v) => (typeof v === "string" ? LEGACY_ARCHITECTURE_IDS[v] ?? v : v),
+  z.enum(["app", "copilot-studio"]),
+);
 export type SkillArchitecture = z.infer<typeof SkillArchitecture>;
 
 /** UI metadata for the architecture selector (shared so main + renderer agree). */
@@ -28,9 +48,18 @@ export interface ArchitectureOption {
 }
 
 export const ARCHITECTURES: readonly ArchitectureOption[] = [
-  { id: "scout", label: "Scout", enabled: true, note: "Microsoft Scout: native WorkIQ, browser, files, and built-in skills." },
-  { id: "cowork", label: "Cowork", enabled: true, note: "Microsoft 365 Copilot (Cowork): native Teams, Outlook, Calendar, SharePoint, files, and built-in skills." },
-  { id: "copilot-studio", label: "Copilot Studio", enabled: false, note: "Coming soon." },
+  {
+    id: "app",
+    label: "Skill Recorder (this app)",
+    enabled: true,
+    note: "Runs from this app's own skill library. Execution engine ships in a later release.",
+  },
+  {
+    id: "copilot-studio",
+    label: "Copilot Studio",
+    enabled: true,
+    note: "Export a bundle you add to a Copilot Studio agent.",
+  },
 ] as const;
 
 /**
@@ -46,7 +75,7 @@ export type BuildKind = z.infer<typeof BuildKind>;
 export interface BuildTarget {
   kind: BuildKind;
   architecture: SkillArchitecture;
-  /** Card label, e.g. "Scout automation". */
+  /** Card label, e.g. "App automation". */
   label: string;
   /** Enabled targets can be built today; the rest are shown greyed out. */
   enabled: boolean;
@@ -55,39 +84,40 @@ export interface BuildTarget {
 }
 
 /**
- * The build targets shown up front, in order. Scout has both a skill and an automation
- * target; Cowork has a skill target (export/download only). Automations are deeply
+ * The build targets shown up front, in order. Both architectures carry a skill and an
+ * automation target; the app installs into its own library while Copilot Studio is
+ * export-only (the maker adds the bundle to their agent). Automations are deeply
  * platform-specific, so the target — not just the architecture — is chosen before the
- * builder plans. copilot-studio is shown as a single greyed "coming soon" card.
+ * builder plans.
  */
 export const TARGETS: readonly BuildTarget[] = [
   {
     kind: "skill",
-    architecture: "scout",
-    label: "Scout skill",
+    architecture: "app",
+    label: "App skill",
     enabled: true,
-    note: "An on-demand skill Scout runs when its description matches the task.",
+    note: "An on-demand skill installed into this app's own library.",
   },
   {
     kind: "automation",
-    architecture: "scout",
-    label: "Scout automation",
+    architecture: "app",
+    label: "App automation",
     enabled: true,
-    note: "A scheduled, multi-step automation Scout runs on a trigger.",
-  },
-  {
-    kind: "skill",
-    architecture: "cowork",
-    label: "Cowork skill",
-    enabled: true,
-    note: "An on-demand skill for Microsoft 365 Copilot (Cowork) you export and install.",
+    note: "A scheduled, multi-step procedure saved to this app's automation library.",
   },
   {
     kind: "skill",
     architecture: "copilot-studio",
-    label: "Copilot Studio",
-    enabled: false,
-    note: "Coming soon.",
+    label: "Copilot Studio skill",
+    enabled: true,
+    note: "An on-demand skill exported as a bundle you add to a Copilot Studio agent.",
+  },
+  {
+    kind: "automation",
+    architecture: "copilot-studio",
+    label: "Copilot Studio automation",
+    enabled: true,
+    note: "A trigger + steps exported as a bundle you recreate in Copilot Studio.",
   },
 ] as const;
 
@@ -109,7 +139,7 @@ export const PlanStepSchema = z.preprocess(
     title: z.string().default(""),
     /** Imperative, generalized description of the step. */
     text: z.string(),
-    /** The native tool/skill this step uses, if any (e.g. "workiq_search_chats"). */
+    /** The native tool/capability this step uses, if any (e.g. "web_fetch"). */
     tool: z.string().default(""),
   }),
 );
@@ -181,7 +211,7 @@ export const BuiltSkillSchema = z.object({
 });
 export type BuiltSkill = z.infer<typeof BuiltSkillSchema>;
 
-/** Coerce arbitrary text into a safe kebab-case skill name Scout will accept. */
+/** Coerce arbitrary text into a safe kebab-case skill name the target agent will accept. */
 export function slugifySkillName(raw: string): string {
   const slug = raw
     .toLowerCase()
@@ -214,11 +244,13 @@ export function toBuiltSkill(
 }
 
 /**
- * Render a {@link BuiltSkill} to the exact `SKILL.md` text Scout parses:
+ * Render a {@link BuiltSkill} to the exact `SKILL.md` text the target agent parses:
  * YAML frontmatter (`name`, `description`, optional `allowed-tools`) followed by
  * the instructions body, with each `{{id}}` value token substituted for its literal.
  * The description is emitted as a double-quoted scalar so colons/commas in it never
- * break the YAML.
+ * break the YAML. The format is identical for both architectures — a Copilot Studio
+ * maker pastes the body into the agent's Instructions and configures the listed
+ * connectors, so nothing here is target-specific.
  */
 export function renderSkillMarkdown(skill: BuiltSkill): string {
   const lines: string[] = ["---", `name: ${slugifySkillName(skill.name)}`];

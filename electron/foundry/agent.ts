@@ -32,10 +32,10 @@ import { abortReason, authHeaders, isRecord, msg, postWithRetry } from "./http";
  * payload a reasoning item cannot be re-submitted. If a deployment rejects that include
  * value, the session drops it once and remembers (surface drift tolerance).
  *
- * The public surface deliberately mirrors the Copilot SDK's
- * (`start`/`createSession`/`sendAndWait`/`abort`/`disconnect`/`stop`) and its `Tool`
- * contract, so the existing `tools.ts` files and their call sites move over by
- * changing an import line.
+ * The public surface was modelled on the Copilot SDK this app used to run on
+ * (`start`/`createSession`/`sendAndWait`/`abort`/`disconnect`/`stop`) and on its `Tool`
+ * contract, which is why the `tools.ts` files and their call sites moved over by
+ * changing an import line. That lineage is history now — nothing here depends on it.
  *
  * Built on Node's global `fetch` — **no new npm dependency** — and free of any
  * `electron` import so the eval harness can load it outside the app.
@@ -59,7 +59,7 @@ const MAX_ROUNDS_PER_TURN = 32;
 /** Asked for so reasoning items come back re-submittable under `store: false`. */
 const REASONING_INCLUDE = "reasoning.encrypted_content";
 
-// --- tool contract (drop-in for the Copilot SDK's) --------------------------
+// --- tool contract (shaped after the Copilot SDK's, which this replaced) -----
 
 export interface ToolBinaryResult {
   type: "image";

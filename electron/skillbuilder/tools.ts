@@ -97,7 +97,7 @@ export function createSkillBuilderTools(ctx: SkillToolContext): Tool[] {
               tool: {
                 type: "string",
                 description:
-                  "The native tool/skill this step uses, e.g. \"workiq_search_chats\" or \"Bash(gh *)\".",
+                  "The native tool/capability this step uses, as the catalogue names it, e.g. \"web_fetch\", \"Bash(gh *)\", or \"Outlook.SendEmail\".",
               },
             },
             required: ["kind", "title", "text"],

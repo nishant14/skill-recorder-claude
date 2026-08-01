@@ -6,7 +6,7 @@
 //   • price-tracker — a recurring read-from-one-page-then-record task. It should
 //     yield a **fixed** input (the canonical page URL), calculation steps (read the
 //     figure, compute the change) and an action step (append the row), reaching for
-//     web_fetch + the xlsx skill rather than driving the browser + a spreadsheet UI.
+//     web_fetch + the .xlsx file rather than driving the browser + a spreadsheet UI.
 //   • github-issue-triage — the gh-vs-browser case, as a skill. It should generalize
 //     to the `gh` CLI (never the browser), split "decide which issues qualify"
 //     (calculation) from "comment + label" (action), and gate the mutating action
@@ -15,11 +15,14 @@
 // Together they assert the whole new contract: input `source` vocabulary, typed
 // calculation/action steps, native-tool choice, and confirmation on the risky step.
 //
-// A third group targets the **Cowork** (Microsoft 365 Copilot) catalogue. Cowork has
-// NO browser automation, so every recorded web-UI step must map to a first-class M365
-// tool. These three cover the biggest M365 surfaces — Teams, Outlook mail, and
-// Calendar — and each asserts the right `server/Tool` is reached for while the browser
-// (playwright/click and the *.office.com / teams.microsoft.com hosts) is forbidden.
+// Both target this app's own library (`app`), whose agent has a shell, files, and web.
+//
+// A third group targets the **copilot-studio** catalogue — a hosted agent with NO
+// shell, NO filesystem, and NO browser, only connector actions. These three cover the
+// surfaces a maker actually wires up (Teams, Outlook mail, Calendar) and each asserts
+// the right `Connector.Action` is reached for, while the browser (playwright/click and
+// the *.office.com / teams.microsoft.com hosts) AND any device-shell command are
+// forbidden — a Copilot Studio agent cannot run `gh`, `bash`, or read `~/…`.
 
 import type { SkillBuilderScenario } from "./scenario";
 
@@ -27,15 +30,15 @@ import type { SkillBuilderScenario } from "./scenario";
 const priceTracker: SkillBuilderScenario = {
   id: "price-tracker-skill",
   title: "Track a plan price over time in a spreadsheet",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "Every Monday the user opens the SAME public Acme pricing page in Chrome, reads the Pro " +
     "plan's monthly price, works out how much it changed since the last recorded figure, and " +
     "appends a new dated row (date, price, change) to their Pricing Tracker spreadsheet. " +
     "Generalized on a headless device the right tools are web_fetch (read the fixed public page) " +
-    "and the xlsx skill (append the row) — the page URL is a fixed input, the change is a " +
-    "calculation, and appending the row is the one action.",
+    "and writing the .xlsx tracker as a file (append the row) — the page URL is a fixed input, " +
+    "the change is a calculation, and appending the row is the one action.",
   analysis: {
     title: "Record the weekly Pro plan price",
     intent:
@@ -101,7 +104,7 @@ const priceTracker: SkillBuilderScenario = {
 const githubIssueTriage: SkillBuilderScenario = {
   id: "github-issue-triage-skill",
   title: "Triage new bug issues on GitHub",
-  architecture: "scout",
+  architecture: "app",
   platform: "darwin",
   truth:
     "In Chrome the user opened the acme/api repo's open issues filtered to label:bug with no " +
@@ -177,21 +180,21 @@ const githubIssueTriage: SkillBuilderScenario = {
   },
 };
 
-/* --- Cowork (Microsoft 365 Copilot) scenarios ----------------------------- */
+/* --- Copilot Studio scenarios --------------------------------------------- */
 
-/** Read a Teams channel in the web app, summarize, post a digest — must use the m365_teams tool, never the browser. */
-const coworkTeamsDigest: SkillBuilderScenario = {
-  id: "cowork-teams-digest",
+/** Read a Teams channel in the web app, summarize, post a digest — must use the Teams connector, never a browser. */
+const studioTeamsDigest: SkillBuilderScenario = {
+  id: "copilot-studio-teams-digest",
   title: "Post a morning digest to the leads Teams channel",
-  architecture: "cowork",
+  architecture: "copilot-studio",
   platform: "darwin",
   truth:
     "Every morning the user opens the 'Eng — Announcements' channel in the Teams web app, reads " +
     "the overnight messages, writes a short 3-bullet digest, and posts it to the 'Leads' channel. " +
-    "Cowork has no browser automation, so the right generalization reads the source channel with " +
-    "m365_teams/ListChannelMessages and posts with m365_teams/PostChannelMessage — summarizing is " +
-    "a calculation and posting is the one mutating action, which pauses for confirmation because it " +
-    "posts on the user's behalf. Driving teams.microsoft.com in a browser is wrong.",
+    "A Copilot Studio agent has no browser and no shell, so the right generalization reads the " +
+    "source channel with Teams.GetMessages and posts with Teams.PostMessageToChannel — summarizing " +
+    "is a calculation and posting is the one mutating action, which the maker sees called out " +
+    "because it posts on the user's behalf. Driving teams.microsoft.com in a browser is wrong.",
   analysis: {
     title: "Post a morning digest to the leads channel",
     intent:
@@ -247,26 +250,26 @@ const coworkTeamsDigest: SkillBuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["m365_teams"], ["postchannelmessage", "postmessage", "replytochannelmessage"]],
-    forbidden: ["playwright", "browser_", "click", "teams.microsoft.com"],
+    mustUseAny: [["teams."], ["postmessagetochannel", "postmessage", "replytomessage"]],
+    forbidden: ["playwright", "browser_", "click", "teams.microsoft.com", "bash", "gh "],
     minCalculations: 1,
     minActions: 1,
   },
 };
 
-/** Triage unread mail in Outlook web and reply — must use the outlook tool, never the browser. */
-const coworkOutlookReply: SkillBuilderScenario = {
-  id: "cowork-outlook-reply",
+/** Triage unread mail in Outlook web and reply — must use the Outlook connector, never a browser. */
+const studioOutlookReply: SkillBuilderScenario = {
+  id: "copilot-studio-outlook-reply",
   title: "Acknowledge unread support emails",
-  architecture: "cowork",
+  architecture: "copilot-studio",
   platform: "darwin",
   truth:
     "The user triages the Support mailbox in Outlook on the web: for each unread customer email " +
-    "they send a short acknowledgement reply. Cowork can't drive a browser, so the right tools are " +
-    "outlook/ListMessages + outlook/GetMessage to read the unread mail and outlook/ReplyToMessage " +
-    "(or CreateDraftMessage + SendDraftMessage) to send the acknowledgement — deciding which " +
-    "messages qualify is a calculation, and sending the reply is the mutating action that pauses " +
-    "for confirmation. Replaying outlook.office.com in a browser is wrong.",
+    "they send a short acknowledgement reply. A Copilot Studio agent can't drive a browser, so the " +
+    "right tools are Outlook.GetEmails + Outlook.GetEmail to read the unread mail and " +
+    "Outlook.ReplyToEmail (or Outlook.SendEmail) to send the acknowledgement — deciding which " +
+    "messages qualify is a calculation, and sending the reply is the mutating action the maker " +
+    "must see. Replaying outlook.office.com in a browser is wrong.",
   analysis: {
     title: "Acknowledge unread support emails",
     intent:
@@ -317,26 +320,34 @@ const coworkOutlookReply: SkillBuilderScenario = {
     ],
   },
   rubric: {
-    mustUseAny: [["outlook/"], ["replytomessage", "senddraftmessage", "createdraftmessage", "replyalltomessage"]],
-    forbidden: ["playwright", "browser_", "click", "outlook.office.com", "outlook.office365.com"],
+    mustUseAny: [["outlook."], ["replytoemail", "sendemail", "replyall"]],
+    forbidden: [
+      "playwright",
+      "browser_",
+      "click",
+      "outlook.office.com",
+      "outlook.office365.com",
+      "bash",
+      "gh ",
+    ],
     minCalculations: 1,
     minActions: 1,
   },
 };
 
-/** Find a slot everyone can make and book a follow-up — must use outlook_calendar, never the browser. */
-const coworkCalendarSchedule: SkillBuilderScenario = {
-  id: "cowork-calendar-schedule",
+/** Find a slot everyone can make and book a follow-up — must use the Outlook calendar actions, never a browser. */
+const studioCalendarSchedule: SkillBuilderScenario = {
+  id: "copilot-studio-calendar-schedule",
   title: "Book a follow-up meeting with the call attendees",
-  architecture: "cowork",
+  architecture: "copilot-studio",
   platform: "darwin",
   truth:
     "After a customer call the user opens Outlook Calendar in the browser, checks the two attendees' " +
-    "availability next week, and books a 30-minute follow-up. Cowork has no browser automation, so " +
-    "the right tools are outlook_calendar/FindMeetingTimes (find a slot everyone can make) and " +
-    "outlook_calendar/CreateEvent (book it) — resolving the slot is a calculation and creating the " +
-    "event is the mutating action that pauses for confirmation because it invites people. Driving " +
-    "the outlook.office.com calendar UI is wrong.",
+    "availability next week, and books a 30-minute follow-up. A Copilot Studio agent has no browser, " +
+    "so the right tools are Outlook.FindMeetingTimes (find a slot everyone can make) and " +
+    "Outlook.CreateEvent (book it) — resolving the slot is a calculation and creating the event is " +
+    "the mutating action the maker must see, because it invites people. Driving the " +
+    "outlook.office.com calendar UI is wrong.",
   analysis: {
     title: "Book a follow-up meeting with the attendees",
     intent:
@@ -386,11 +397,11 @@ const coworkCalendarSchedule: SkillBuilderScenario = {
   },
   rubric: {
     mustUseAny: [
-      ["outlook_calendar"],
-      ["findmeetingtimes", "listcalendarview", "listevents", "getschedule"],
+      ["outlook."],
+      ["findmeetingtimes", "getcalendarview", "getevents", "getschedule"],
       ["createevent"],
     ],
-    forbidden: ["playwright", "browser_", "click", "outlook.office.com"],
+    forbidden: ["playwright", "browser_", "click", "outlook.office.com", "bash", "gh "],
     minCalculations: 1,
     minActions: 1,
   },
@@ -399,7 +410,7 @@ const coworkCalendarSchedule: SkillBuilderScenario = {
 export const skillScenarios: SkillBuilderScenario[] = [
   priceTracker,
   githubIssueTriage,
-  coworkTeamsDigest,
-  coworkOutlookReply,
-  coworkCalendarSchedule,
+  studioTeamsDigest,
+  studioOutlookReply,
+  studioCalendarSchedule,
 ];

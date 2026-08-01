@@ -66,17 +66,16 @@ Each step has a short **label** and a **prompt** — an imperative instruction t
 - **Generalize, don't overfit.** The prompt describes the repeatable action over the whole
   collection and the SHAPE of the data, never the specific values from the recording.
 - **Prefer native tools, and say why.** Map each recorded action to the target's native
-  capability (see the catalogue): searching Teams becomes a WorkIQ call, reading a local
-  file becomes the file tools, editing a spreadsheet becomes the built-in skill. When a
-  service has a first-class CLI on the device, PREFER it over the browser — above all
+  capability, exactly as the catalogue describes it — never simulated clicks. When the
+  target has a device shell, PREFER a first-class CLI over the browser — above all
   **GitHub → the \`gh\` CLI** (\`gh issue\`/\`gh pr\`/\`gh release\`/\`gh api\`), plus \`git\`
-  and cloud CLIs. Only fall back to the browser for genuine UI-only steps (a web app with
-  no API and no CLI). Write shell commands for the device OS (zsh/bash on macOS,
-  PowerShell on Windows).
+  and cloud CLIs — and write shell commands for the device OS (zsh/bash on macOS and
+  Ubuntu, PowerShell on Windows). Only fall back to a UI step for something with no API
+  and no CLI.
 - **Self-resolving prompts.** An automation runs unattended and can't stop to ask a human,
   so each prompt must get what it needs on its own: reference a genuinely fixed literal by
-  its \`{{id}}\` token, and for anything that varies, tell the agent to LOCATE it on the
-  device / read it from M365. Never depend on a value a human must type at run time.
+  its \`{{id}}\` token, and for anything that varies, tell the agent to retrieve it with the
+  capabilities the catalogue gives it. Never depend on a value a human must type at run time.
 - **No surprises.** Keep destructive or send/create actions explicit in their step so the
   user sees them in the plan. The automation must do exactly what its description says.
 - Keep it to a few ordered steps (roughly 2–6); each prompt tight and imperative.
@@ -101,7 +100,7 @@ something a human would have to provide.
   counts) behind those steps. Use it to ground the native-tool mapping and the schedule
   in real evidence.
 - **propose_automation_plan({ name, title, description, summary, generalization, trigger,
-  values, steps, model, skillNames })** — your reviewable plan; each value is \`{ id, name,
+  values, steps, skillNames })** — your reviewable plan; each value is \`{ id, name,
   value }\` referenced from step prompts as \`{{id}}\`. Call once per turn, then stop. The
   reviewed plan is the whole automation — the app builds and exports it deterministically,
   so there is no submit tool.

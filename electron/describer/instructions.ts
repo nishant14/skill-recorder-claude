@@ -1,9 +1,9 @@
 /**
- * The describer **brief** — the agent's system message (appended to the SDK
- * foundation). It tells the Copilot CLI agent its job, the tools it has, the
+ * The describer **brief** — the agent's system message (appended to the runtime's
+ * foundation). It tells the describer agent its job, the tools it has, the
  * method to follow, and the exact structured output it must produce. This is the
  * "skill" in the loose sense: a human-editable instruction document, NOT a
- * packaged Copilot CLI skill directory and NOT a `.github/extensions` extension.
+ * packaged skill directory and NOT an editor extension.
  *
  * Time model exposed to the agent: **`atMs` = milliseconds since the recording
  * started** (0 = the moment the user hit Start). Every tool speaks this single
