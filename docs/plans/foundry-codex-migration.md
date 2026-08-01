@@ -1,7 +1,10 @@
 # Migration plan: GitHub Copilot CLI → GPT-5.3 Codex on Azure AI Foundry
 
-Status: **approved, not yet implemented**
-Branch: `claude/gpt-5.6-codex-foundry-migration-u1csnc`
+Status: **Workstream A implemented and merged; gate G1 passed 3/3 (2026-08-01). Workstreams
+B–H not started.** Per-phase status and evidence: [`progress.md`](./progress.md).
+Branch: work lands on `main`. The historical feature branch
+`claude/gpt-5.6-codex-foundry-migration-u1csnc` is merged; the "5.6" in its name is a
+naming artifact — the deployment is `gpt-5.3-codex`.
 
 ## Locked decisions
 
@@ -35,6 +38,10 @@ onnxruntime), all capture/recorder/frames code, the zod analysis/skill/automatio
 ## Workstream A — New Foundry runtime (new code, no new npm dependencies)
 
 > Detailed implementation spec: [`foundry-codex-migration-phase1a.md`](./foundry-codex-migration-phase1a.md)
+
+> **Superseded at G1:** the chat-completions transport described below never shipped —
+> codex deployments are Responses-API-only. See the "G1 outcome" callout at the top of the
+> phase1a doc; `electron/foundry/agent.ts` and its tests are the wire contract of record.
 
 ### A1. `common/foundry.ts` (shared main + renderer)
 
@@ -268,10 +275,12 @@ Phase 2: G and H (independent of each other; H depends on A only, G on D only).
 
 ## Risks / notes
 
-1. **GPT-5.3/5.6 Codex is newer than the authoring model's knowledge cutoff.** The
-   implementation targets the stable Azure chat-completions contract with the `apiVersion`
-   escape hatch; the live smoke test is the real gate. If the deployment rejects any
-   default parameter, the fix is confined to `electron/foundry/agent.ts`.
+1. **GPT-5.3 Codex was newer than the authoring model's knowledge cutoff — and this risk
+   fired.** The implementation targeted the stable Azure chat-completions contract; at gate
+   G1 the real deployment rejected every chat-completions request (HTTP 400, Responses API
+   only). As designed, the fix was confined to `electron/foundry/agent.ts` and its
+   fixtures, and the smoke then passed 3/3 — the gate ladder caught the wrong assumption
+   before Workstreams B–F built on it.
 2. **Copilot Studio can't auto-install skills** — its outputs are export bundles with
    import instructions; the catalog copy makes that explicit to the user.
 3. **In-app runtime lands in Phase 2 (Workstream H)**; Phase 1 ships the app target as

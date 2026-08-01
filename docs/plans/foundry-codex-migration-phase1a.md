@@ -316,12 +316,18 @@ the smoke re-runs.
 
 ## Acceptance checklist
 
-- [ ] `npm run typecheck` green (new files compile; no existing file touched but
-      `package.json`)
-- [ ] `npm test` green including the two new files
-- [ ] `rg "@github/copilot-sdk" electron/foundry common/foundry.ts` → no hits
-- [ ] `rg "from \"electron\"" electron/foundry` → no hits
-- [ ] No new entries in `package.json` `dependencies`
-- [ ] Gate G1: `scripts/foundry-smoke.ts` passes all three checks against the real
+- [x] `npm run typecheck` green (new files compile; no existing file touched but
+      `package.json`) — exit 0, as is `npm run typecheck:evals`
+- [x] `npm test` green including the two new files — 87/87 (22 agent-loop + 7 config +
+      58 pre-existing)
+- [x] `rg "@github/copilot-sdk" electron/foundry common/foundry.ts` → no hits
+- [x] `rg "from \"electron\"" electron/foundry` → no hits
+- [x] No new entries in `package.json` `dependencies` (the runtime is built on global
+      `fetch`; `@github/copilot-sdk` is pre-existing and leaves in Workstream E)
+- [x] Gate G1: `scripts/foundry-smoke.ts` passes all three checks against the real
       deployment (manual, credentialed — blocks the start of Workstream B, not the commit)
-- [ ] Commit message: `Add Foundry runtime: config resolution + chat tool loop (Workstream A)`
+      — **passed 3/3 on 2026-08-01** vs `gpt-5.3-codex`, after the Responses-API port
+- [x] Commit message: `Add Foundry runtime: config resolution + chat tool loop (Workstream A)`
+      — landed under that message in `6b9acc4`; the transport was then ported in `4c5a538`
+      ("Port Foundry transport to the Responses API (G1 finding)"). Two commits, not one,
+      so the message no longer describes the shipped transport.
