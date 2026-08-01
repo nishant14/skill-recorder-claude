@@ -1,0 +1,2297 @@
+{
+  "at": "2026-08-01T10-16-41-414Z",
+  "model": "gpt-5.6-sol",
+  "repeat": 3,
+  "root": "/tmp/sr-evals-fneVQl",
+  "results": [
+    {
+      "id": "web-to-spreadsheet",
+      "title": "Copy pricing from a website into a spreadsheet",
+      "ok": true,
+      "durationMs": 11883,
+      "stepCount": 4,
+      "intent": "Enter Acme’s monthly and annual subscription prices into the Budget 2026 spreadsheet.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [price, pricing, cost]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [spreadsheet, numbers, budget]",
+            "pass": true
+          },
+          {
+            "name": "step count in [2, 6]",
+            "pass": true,
+            "detail": "got 4"
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"numbers\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (3 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [$49, 49, $490, 490, price, pricing]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"gclid\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"utm_source\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "web-to-spreadsheet-r1",
+          "ok": true,
+          "durationMs": 11883,
+          "inputTokens": 21634,
+          "outputTokens": 579,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Enter Acme’s monthly and annual subscription prices into the Budget 2026 spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [price, pricing, cost]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, budget]",
+                "pass": true
+              },
+              {
+                "name": "step count in [2, 6]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [$49, 49, $490, 490, price, pricing]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"gclid\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"utm_source\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "web-to-spreadsheet-r2",
+          "ok": true,
+          "durationMs": 15900,
+          "inputTokens": 27178,
+          "outputTokens": 681,
+          "requests": 6,
+          "stepCount": 4,
+          "intent": "Copy Acme's monthly and annual subscription prices into the Budget 2026 spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [price, pricing, cost]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, budget]",
+                "pass": true
+              },
+              {
+                "name": "step count in [2, 6]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [$49, 49, $490, 490, price, pricing]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"gclid\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"utm_source\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "web-to-spreadsheet-r3",
+          "ok": true,
+          "durationMs": 10503,
+          "inputTokens": 21637,
+          "outputTokens": 583,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Record Acme's monthly and annual plan prices in the Budget 2026 spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [price, pricing, cost]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, budget]",
+                "pass": true
+              },
+              {
+                "name": "step count in [2, 6]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [$49, 49, $490, 490, price, pricing]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"gclid\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"utm_source\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 12762,
+        "inputTokens": 23483,
+        "outputTokens": 614.3333333333334
+      }
+    },
+    {
+      "id": "invoice-extract",
+      "title": "Extract invoice rows from a web table into a spreadsheet",
+      "ok": true,
+      "durationMs": 11486,
+      "stepCount": 3,
+      "intent": "Transfer selected invoice records from the Acme Books invoice page into the Q3 Invoices spreadsheet in Numbers.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [invoice, invoices, billing, table, rows]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [spreadsheet, numbers, extract, copy, enter, record, transfer]",
+            "pass": true
+          },
+          {
+            "name": "step count in [3, 8]",
+            "pass": true,
+            "detail": "got 3"
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"numbers\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (3 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [inv-100, globex, initech, umbrella, 1,250, invoice, amount, row]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "invoice-extract-r1",
+          "ok": true,
+          "durationMs": 11486,
+          "inputTokens": 20159,
+          "outputTokens": 663,
+          "requests": 5,
+          "stepCount": 3,
+          "intent": "Transfer selected invoice records from the Acme Books invoice page into the Q3 Invoices spreadsheet in Numbers.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [invoice, invoices, billing, table, rows]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, extract, copy, enter, record, transfer]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 8]",
+                "pass": true,
+                "detail": "got 3"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [inv-100, globex, initech, umbrella, 1,250, invoice, amount, row]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "invoice-extract-r2",
+          "ok": true,
+          "durationMs": 11338,
+          "inputTokens": 20087,
+          "outputTokens": 614,
+          "requests": 5,
+          "stepCount": 2,
+          "intent": "Transfer selected invoice details from Acme Books into the Q3 Invoices spreadsheet in Numbers.",
+          "score": {
+            "score": 0.8888888888888888,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [invoice, invoices, billing, table, rows]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, extract, copy, enter, record, transfer]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 8]",
+                "pass": false,
+                "detail": "got 2"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [inv-100, globex, initech, umbrella, 1,250, invoice, amount, row]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "invoice-extract-r3",
+          "ok": true,
+          "durationMs": 13079,
+          "inputTokens": 20279,
+          "outputTokens": 785,
+          "requests": 5,
+          "stepCount": 3,
+          "intent": "Collect selected invoice details from Acme Books for entry into the Q3 Invoices spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [invoice, invoices, billing, table, rows]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, extract, copy, enter, record, transfer]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 8]",
+                "pass": true,
+                "detail": "got 3"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [inv-100, globex, initech, umbrella, 1,250, invoice, amount, row]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 0.9629629629629629,
+        "scoreMin": 0.8888888888888888,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 11967.666666666666,
+        "inputTokens": 20175,
+        "outputTokens": 687.3333333333334
+      }
+    },
+    {
+      "id": "research-compile",
+      "title": "Research a topic and compile quotes into a note",
+      "ok": true,
+      "durationMs": 10531,
+      "stepCount": 4,
+      "intent": "Research advice on building better habits and compile useful quotes into a text note.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [habit, habits]",
+            "pass": true
+          },
+          {
+            "name": "step count in [3, 8]",
+            "pass": true,
+            "detail": "got 4"
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"textedit\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (4 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [quote, sentence, passage, text, habit]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "research-compile-r1",
+          "ok": true,
+          "durationMs": 10531,
+          "inputTokens": 20934,
+          "outputTokens": 634,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Research advice on building better habits and compile useful quotes into a text note.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [habit, habits]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 8]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"textedit\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [quote, sentence, passage, text, habit]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "research-compile-r2",
+          "ok": true,
+          "durationMs": 11773,
+          "inputTokens": 21014,
+          "outputTokens": 714,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Research advice on building better habits and compile useful quotes into a text file.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [habit, habits]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 8]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"textedit\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [quote, sentence, passage, text, habit]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "research-compile-r3",
+          "ok": true,
+          "durationMs": 17541,
+          "inputTokens": 21001,
+          "outputTokens": 682,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Research advice on building better habits and collect useful quotes in a text note.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [habit, habits]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 8]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"textedit\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [quote, sentence, passage, text, habit]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 13281.666666666666,
+        "inputTokens": 20983,
+        "outputTokens": 676.6666666666666
+      }
+    },
+    {
+      "id": "directory-lookup",
+      "title": "Collect contact details from a directory into a spreadsheet",
+      "ok": true,
+      "durationMs": 13756,
+      "stepCount": 4,
+      "intent": "Copy selected employee contact details from the Acme team directory into a Numbers contacts spreadsheet.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [contact, contacts, directory, email, phone, people, roster]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [spreadsheet, numbers, list, copy, collect, compile, gather]",
+            "pass": true
+          },
+          {
+            "name": "step count in [2, 7]",
+            "pass": true,
+            "detail": "got 4"
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"numbers\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (3 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [email, @acme, phone, contact, dana, sam]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "directory-lookup-r1",
+          "ok": true,
+          "durationMs": 13756,
+          "inputTokens": 26360,
+          "outputTokens": 691,
+          "requests": 6,
+          "stepCount": 4,
+          "intent": "Copy selected employee contact details from the Acme team directory into a Numbers contacts spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [contact, contacts, directory, email, phone, people, roster]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, list, copy, collect, compile, gather]",
+                "pass": true
+              },
+              {
+                "name": "step count in [2, 7]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [email, @acme, phone, contact, dana, sam]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "directory-lookup-r2",
+          "ok": true,
+          "durationMs": 11255,
+          "inputTokens": 21256,
+          "outputTokens": 619,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Copy Dana Lee’s and Sam Ortiz’s contact details from the Acme team directory into a Numbers contacts spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [contact, contacts, directory, email, phone, people, roster]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, list, copy, collect, compile, gather]",
+                "pass": true
+              },
+              {
+                "name": "step count in [2, 7]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [email, @acme, phone, contact, dana, sam]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "directory-lookup-r3",
+          "ok": true,
+          "durationMs": 10390,
+          "inputTokens": 21315,
+          "outputTokens": 663,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Copy Dana Lee's and Sam Ortiz's contact details from the Acme team directory into a Numbers contacts spreadsheet.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [contact, contacts, directory, email, phone, people, roster]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [spreadsheet, numbers, list, copy, collect, compile, gather]",
+                "pass": true
+              },
+              {
+                "name": "step count in [2, 7]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"numbers\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (3 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [email, @acme, phone, contact, dana, sam]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 11800.333333333334,
+        "inputTokens": 22977,
+        "outputTokens": 657.6666666666666
+      }
+    },
+    {
+      "id": "irrelevant-detour",
+      "title": "Research habit articles despite an off-task recipe detour",
+      "ok": true,
+      "durationMs": 11301,
+      "stepCount": 4,
+      "intent": "Research advice on building better habits and compile useful quotes into a text file.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [habit, habits]",
+            "pass": true
+          },
+          {
+            "name": "step count in [3, 7]",
+            "pass": true,
+            "detail": "got 4"
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"textedit\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (4 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [quote, sentence, passage, habit]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"recipe\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"allrecipes\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"cookie\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"chocolate\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "irrelevant-detour-r1",
+          "ok": true,
+          "durationMs": 11301,
+          "inputTokens": 21529,
+          "outputTokens": 704,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Research advice on building better habits and compile useful quotes into a text file.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [habit, habits]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 7]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"textedit\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [quote, sentence, passage, habit]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"recipe\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"allrecipes\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"cookie\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"chocolate\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "irrelevant-detour-r2",
+          "ok": true,
+          "durationMs": 11116,
+          "inputTokens": 21533,
+          "outputTokens": 717,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Research advice on building better habits and compile useful quotes into a text note.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [habit, habits]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 7]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"textedit\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [quote, sentence, passage, habit]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"recipe\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"allrecipes\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"cookie\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"chocolate\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "irrelevant-detour-r3",
+          "ok": true,
+          "durationMs": 13688,
+          "inputTokens": 21637,
+          "outputTokens": 812,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Research advice on building better habits and compile useful excerpts in a text note.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [research, compile, gather, collect, summar, notes, quote]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [habit, habits]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 7]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"textedit\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [quote, sentence, passage, habit]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"recipe\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"allrecipes\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"cookie\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"chocolate\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 12035,
+        "inputTokens": 21566.333333333332,
+        "outputTokens": 744.3333333333334
+      }
+    },
+    {
+      "id": "expense-report",
+      "title": "Reconcile receipts against a card statement and file an expense report",
+      "ok": true,
+      "durationMs": 13344,
+      "stepCount": 4,
+      "intent": "Create and submit a July travel expense report in Expensify using American Express transactions and supporting receipts.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [expense, expenses, receipt, receipts, reimburse, reconcile]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [report, expensify, submit, file, enter, log]",
+            "pass": true
+          },
+          {
+            "name": "step count in [3, 9]",
+            "pass": true,
+            "detail": "got 4"
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"preview\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (4 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [united, marriott, uber, $412, 412, $286, 286, $24, receipt, expense]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"linknav\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"icid\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "expense-report-r1",
+          "ok": true,
+          "durationMs": 13344,
+          "inputTokens": 24377,
+          "outputTokens": 918,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Create and submit a July travel expense report in Expensify using American Express transactions and supporting receipts.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [expense, expenses, receipt, receipts, reimburse, reconcile]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [report, expensify, submit, file, enter, log]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 9]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"preview\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [united, marriott, uber, $412, 412, $286, 286, $24, receipt, expense]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"linknav\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"icid\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "expense-report-r2",
+          "ok": true,
+          "durationMs": 12353,
+          "inputTokens": 24376,
+          "outputTokens": 898,
+          "requests": 5,
+          "stepCount": 6,
+          "intent": "Create July travel expenses in Expensify from American Express transactions and supporting receipts, then submit the expense report.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [expense, expenses, receipt, receipts, reimburse, reconcile]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [report, expensify, submit, file, enter, log]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 9]",
+                "pass": true,
+                "detail": "got 6"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"preview\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [united, marriott, uber, $412, 412, $286, 286, $24, receipt, expense]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"linknav\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"icid\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "expense-report-r3",
+          "ok": true,
+          "durationMs": 11757,
+          "inputTokens": 24254,
+          "outputTokens": 793,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Create and submit a July travel expense report in Expensify using American Express transactions and supporting receipts.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [expense, expenses, receipt, receipts, reimburse, reconcile]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [report, expensify, submit, file, enter, log]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 9]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"preview\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [united, marriott, uber, $412, 412, $286, 286, $24, receipt, expense]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"linknav\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"icid\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 12484.666666666666,
+        "inputTokens": 24335.666666666668,
+        "outputTokens": 869.6666666666666
+      }
+    },
+    {
+      "id": "release-notes",
+      "title": "Compile release notes from merged PRs and deploy",
+      "ok": true,
+      "durationMs": 17168,
+      "stepCount": 6,
+      "intent": "Prepare the acme-api v2.4.0 release notes, deploy the release to production, and verify the service health.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [release, changelog, release notes]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [deploy, ship, publish, version, cut]",
+            "pass": true
+          },
+          {
+            "name": "step count in [5, 12]",
+            "pass": true,
+            "detail": "got 6"
+          },
+          {
+            "name": "involves app \"terminal\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (5 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [#482, 482, #485, 485, #489, 489, v2.4, 2.4.0, rate limiting, pagination]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "release-notes-r1",
+          "ok": true,
+          "durationMs": 17168,
+          "inputTokens": 26340,
+          "outputTokens": 1002,
+          "requests": 5,
+          "stepCount": 6,
+          "intent": "Prepare the acme-api v2.4.0 release notes, deploy the release to production, and verify the service health.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [release, changelog, release notes]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [deploy, ship, publish, version, cut]",
+                "pass": true
+              },
+              {
+                "name": "step count in [5, 12]",
+                "pass": true,
+                "detail": "got 6"
+              },
+              {
+                "name": "involves app \"terminal\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (5 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [#482, 482, #485, 485, #489, 489, v2.4, 2.4.0, rate limiting, pagination]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "release-notes-r2",
+          "ok": true,
+          "durationMs": 13785,
+          "inputTokens": 27817,
+          "outputTokens": 972,
+          "requests": 5,
+          "stepCount": 6,
+          "intent": "Prepare the acme-api v2.4.0 release notes, version and commit the release, deploy it to production, and verify the service health.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [release, changelog, release notes]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [deploy, ship, publish, version, cut]",
+                "pass": true
+              },
+              {
+                "name": "step count in [5, 12]",
+                "pass": true,
+                "detail": "got 6"
+              },
+              {
+                "name": "involves app \"terminal\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (5 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [#482, 482, #485, 485, #489, 489, v2.4, 2.4.0, rate limiting, pagination]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "release-notes-r3",
+          "ok": true,
+          "durationMs": 14168,
+          "inputTokens": 27666,
+          "outputTokens": 945,
+          "requests": 5,
+          "stepCount": 6,
+          "intent": "Prepare the Acme API v2.4.0 release notes, version the project, deploy it to production, and verify its health.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [release, changelog, release notes]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [deploy, ship, publish, version, cut]",
+                "pass": true
+              },
+              {
+                "name": "step count in [5, 12]",
+                "pass": true,
+                "detail": "got 6"
+              },
+              {
+                "name": "involves app \"terminal\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (5 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [#482, 482, #485, 485, #489, 489, v2.4, 2.4.0, rate limiting, pagination]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 15040.333333333334,
+        "inputTokens": 27274.333333333332,
+        "outputTokens": 973
+      }
+    },
+    {
+      "id": "lead-to-crm",
+      "title": "Qualify inbound leads and enter them into the CRM",
+      "ok": true,
+      "durationMs": 13886,
+      "stepCount": 4,
+      "intent": "Add two sales leads from the Sales Leads inbox to Salesforce after reviewing their LinkedIn profiles, then begin creating an opportunity.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [lead, leads, prospect, contact, contacts]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [crm, salesforce, enter, add, create, qualify, log]",
+            "pass": true
+          },
+          {
+            "name": "step count in [3, 9]",
+            "pass": true,
+            "detail": "got 4"
+          },
+          {
+            "name": "involves app \"mail\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"chrome\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (4 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [jane, tom, acme, globex, @acme, @globex, vp ops, contact, lead]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"usernotificationcenter\"",
+            "pass": true,
+            "critical": true
+          },
+          {
+            "name": "no noise step \"trk=\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "lead-to-crm-r1",
+          "ok": true,
+          "durationMs": 13886,
+          "inputTokens": 23522,
+          "outputTokens": 798,
+          "requests": 5,
+          "stepCount": 4,
+          "intent": "Add two sales leads from the Sales Leads inbox to Salesforce after reviewing their LinkedIn profiles, then begin creating an opportunity.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [lead, leads, prospect, contact, contacts]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [crm, salesforce, enter, add, create, qualify, log]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 9]",
+                "pass": true,
+                "detail": "got 4"
+              },
+              {
+                "name": "involves app \"mail\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [jane, tom, acme, globex, @acme, @globex, vp ops, contact, lead]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"trk=\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "lead-to-crm-r2",
+          "ok": true,
+          "durationMs": 14963,
+          "inputTokens": 23768,
+          "outputTokens": 1132,
+          "requests": 5,
+          "stepCount": 7,
+          "intent": "Process two sales leads from email by reviewing their LinkedIn profiles, adding them as Salesforce contacts, and starting a Salesforce opportunity.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [lead, leads, prospect, contact, contacts]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [crm, salesforce, enter, add, create, qualify, log]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 9]",
+                "pass": true,
+                "detail": "got 7"
+              },
+              {
+                "name": "involves app \"mail\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [jane, tom, acme, globex, @acme, @globex, vp ops, contact, lead]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"trk=\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "lead-to-crm-r3",
+          "ok": true,
+          "durationMs": 14511,
+          "inputTokens": 23641,
+          "outputTokens": 1005,
+          "requests": 5,
+          "stepCount": 7,
+          "intent": "Add two sales leads from email to Salesforce after reviewing their LinkedIn profiles, then begin creating an opportunity.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [lead, leads, prospect, contact, contacts]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [crm, salesforce, enter, add, create, qualify, log]",
+                "pass": true
+              },
+              {
+                "name": "step count in [3, 9]",
+                "pass": true,
+                "detail": "got 7"
+              },
+              {
+                "name": "involves app \"mail\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"chrome\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (4 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [jane, tom, acme, globex, @acme, @globex, vp ops, contact, lead]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"usernotificationcenter\"",
+                "pass": true,
+                "critical": true
+              },
+              {
+                "name": "no noise step \"trk=\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 14453.333333333334,
+        "inputTokens": 23643.666666666668,
+        "outputTokens": 978.3333333333334
+      }
+    },
+    {
+      "id": "windows-deploy",
+      "title": "Deploy a web app to Azure and log the live URL (Windows)",
+      "ok": true,
+      "durationMs": 13054,
+      "stepCount": 5,
+      "intent": "Deploy the Contoso CRM Node.js application to Azure App Service, verify that it was live, and record the successful deployment.",
+      "score": {
+        "score": 1,
+        "pass": true,
+        "checks": [
+          {
+            "name": "intent mentions one of [deploy, deployment, publish, ship]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [azure]",
+            "pass": true
+          },
+          {
+            "name": "intent mentions one of [web app, webapp, app, site]",
+            "pass": true
+          },
+          {
+            "name": "step count in [4, 9]",
+            "pass": true,
+            "detail": "got 5"
+          },
+          {
+            "name": "involves app \"edge\"",
+            "pass": true
+          },
+          {
+            "name": "involves app \"terminal\"",
+            "pass": true
+          },
+          {
+            "name": "ordered flow (5 actions)",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [azure]",
+            "pass": true
+          },
+          {
+            "name": "mentions one of [url, link, address, azurewebsites, contoso-crm]",
+            "pass": true
+          },
+          {
+            "name": "no noise step \"skill recorder\"",
+            "pass": true,
+            "critical": true
+          }
+        ]
+      },
+      "runs": [
+        {
+          "rep": 1,
+          "sessionId": "windows-deploy-r1",
+          "ok": true,
+          "durationMs": 13054,
+          "inputTokens": 28465,
+          "outputTokens": 898,
+          "requests": 6,
+          "stepCount": 5,
+          "intent": "Deploy the Contoso CRM Node.js application to Azure App Service, verify that it was live, and record the successful deployment.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [deploy, deployment, publish, ship]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [azure]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [web app, webapp, app, site]",
+                "pass": true
+              },
+              {
+                "name": "step count in [4, 9]",
+                "pass": true,
+                "detail": "got 5"
+              },
+              {
+                "name": "involves app \"edge\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"terminal\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (5 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [azure]",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [url, link, address, azurewebsites, contoso-crm]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 2,
+          "sessionId": "windows-deploy-r2",
+          "ok": true,
+          "durationMs": 12786,
+          "inputTokens": 28183,
+          "outputTokens": 786,
+          "requests": 6,
+          "stepCount": 5,
+          "intent": "Deploy the Contoso CRM Node.js application to Azure App Service, verify that it was live, and record the successful deployment.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [deploy, deployment, publish, ship]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [azure]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [web app, webapp, app, site]",
+                "pass": true
+              },
+              {
+                "name": "step count in [4, 9]",
+                "pass": true,
+                "detail": "got 5"
+              },
+              {
+                "name": "involves app \"edge\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"terminal\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (5 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [azure]",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [url, link, address, azurewebsites, contoso-crm]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        },
+        {
+          "rep": 3,
+          "sessionId": "windows-deploy-r3",
+          "ok": true,
+          "durationMs": 14826,
+          "inputTokens": 23012,
+          "outputTokens": 842,
+          "requests": 5,
+          "stepCount": 5,
+          "intent": "Deploy the Contoso CRM Node.js application to Azure App Service, verify it was live, and record the successful deployment.",
+          "score": {
+            "score": 1,
+            "pass": true,
+            "checks": [
+              {
+                "name": "intent mentions one of [deploy, deployment, publish, ship]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [azure]",
+                "pass": true
+              },
+              {
+                "name": "intent mentions one of [web app, webapp, app, site]",
+                "pass": true
+              },
+              {
+                "name": "step count in [4, 9]",
+                "pass": true,
+                "detail": "got 5"
+              },
+              {
+                "name": "involves app \"edge\"",
+                "pass": true
+              },
+              {
+                "name": "involves app \"terminal\"",
+                "pass": true
+              },
+              {
+                "name": "ordered flow (5 actions)",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [azure]",
+                "pass": true
+              },
+              {
+                "name": "mentions one of [url, link, address, azurewebsites, contoso-crm]",
+                "pass": true
+              },
+              {
+                "name": "no noise step \"skill recorder\"",
+                "pass": true,
+                "critical": true
+              }
+            ]
+          }
+        }
+      ],
+      "means": {
+        "runs": 3,
+        "score": 1,
+        "scoreMin": 1,
+        "scoreMax": 1,
+        "passRate": 1,
+        "durationMs": 13555.333333333334,
+        "inputTokens": 26553.333333333332,
+        "outputTokens": 842
+      }
+    }
+  ]
+}
