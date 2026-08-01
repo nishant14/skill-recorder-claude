@@ -95,9 +95,15 @@ export function WhatsRecorded({
               timeline.
             </li>
             <li>
-              The recording can be turned into text on this computer using an offline model. The
-              transcript stays in the language you select from Whisper's 99 supported choices. The
-              first transcription needs a one-time ~252 MB download that you choose when to start.
+              To turn your voice into text, the saved audio is sent to your Azure AI Foundry
+              deployment and transcribed there. The voice recording itself leaves this computer,
+              not just the text, and it happens right after you stop, or when you analyze the
+              recording, whichever comes first.
+            </li>
+            <li>
+              The transcript stays in the language you select from the 99 supported choices; it
+              is never translated. Without an Azure AI Foundry connection, the audio stays on
+              this computer and is simply not transcribed.
             </li>
             <li>Leave Narrate and the recording-bar microphone off and no microphone is opened.</li>
           </ul>
@@ -112,9 +118,13 @@ export function WhatsRecorded({
         </section>
 
         <section className="sheet-block">
-          <h3>What's sent for analysis</h3>
+          <h3>What's sent off this computer</h3>
           <ul>
             <li>Nothing leaves your computer while you record.</li>
+            <li>
+              If you turned on Narrate, your recorded voice audio is sent to your Azure AI
+              Foundry deployment to be transcribed.
+            </li>
             <li>
               When you choose Analyze, the event timeline—including window and document titles,
               URLs, and clipboard previews—plus extracted screen images and narration text (if

@@ -4,7 +4,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, test } from "node:test";
 
-import { DEFAULT_FOUNDRY_DEPLOYMENT, normalizeFoundryEndpoint } from "../../common/foundry";
+import {
+  DEFAULT_FOUNDRY_DEPLOYMENT,
+  DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+  normalizeFoundryEndpoint,
+} from "../../common/foundry";
 import { foundryConfigFile, foundryConnectionInfo, loadFoundryConfig, saveFoundryConfig } from "./config";
 
 /**
@@ -32,6 +36,8 @@ const MANAGED_ENV = [
   "AZURE_OPENAI_API_KEY",
   "FOUNDRY_API_KEY",
   "AZURE_OPENAI_DEPLOYMENT",
+  "AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT",
+  "FOUNDRY_TRANSCRIPTION_DEPLOYMENT",
   "AZURE_OPENAI_API_VERSION",
 ] as const;
 
@@ -97,12 +103,14 @@ test("saveFoundryConfig round-trips through loadFoundryConfig", () => {
     endpoint: "https://res.openai.azure.com/",
     apiKey: "  round-trip-key  ",
     deployment: "gpt-5.3-codex-mini",
+    transcriptionDeployment: "whisper-1",
     apiVersion: "2024-12-01-preview",
   });
   assert.deepEqual(saved, {
     endpoint: "https://res.openai.azure.com",
     apiKey: "round-trip-key",
     deployment: "gpt-5.3-codex-mini",
+    transcriptionDeployment: "whisper-1",
     apiVersion: "2024-12-01-preview",
   });
 
@@ -132,6 +140,51 @@ test("SKILL_RECORDER_MODEL overrides the deployment from either source", () => {
   const fromEnv = loadFoundryConfig();
   assert.equal(fromEnv?.source, "env");
   assert.equal(fromEnv?.config.deployment, "override-model");
+});
+
+test("the transcription deployment resolves from env, from the file, or from the default", () => {
+  // Nothing names one → the default is applied at read, from either source, so a
+  // loaded config always carries a usable speech-to-text deployment.
+  saveFoundryConfig({ endpoint: "https://file.openai.azure.com", apiKey: "file-key" });
+  assert.equal(
+    loadFoundryConfig()?.config.transcriptionDeployment,
+    DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+  );
+  assert.equal(DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT, "gpt-4o-transcribe");
+
+  // The stored file field wins over the default…
+  saveFoundryConfig({
+    endpoint: "https://file.openai.azure.com",
+    apiKey: "file-key",
+    transcriptionDeployment: "file-stt",
+  });
+  assert.equal(loadFoundryConfig()?.config.transcriptionDeployment, "file-stt");
+  // …and it is persisted as its own field, separate from the chat deployment.
+  const stored = JSON.parse(readFileSync(foundryConfigFile(), "utf8")) as Record<string, unknown>;
+  assert.equal(stored.transcriptionDeployment, "file-stt");
+  assert.equal(stored.deployment, DEFAULT_FOUNDRY_DEPLOYMENT);
+
+  // Env resolves its own connection, including its own transcription deployment.
+  process.env.AZURE_OPENAI_ENDPOINT = "https://env.openai.azure.com";
+  process.env.AZURE_OPENAI_API_KEY = "env-key";
+  assert.equal(
+    loadFoundryConfig()?.config.transcriptionDeployment,
+    DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+  );
+  process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT = "env-stt";
+  assert.equal(loadFoundryConfig()?.config.transcriptionDeployment, "env-stt");
+
+  // FOUNDRY_* is the accepted alias, exactly as for the endpoint and key.
+  delete process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT;
+  process.env.FOUNDRY_TRANSCRIPTION_DEPLOYMENT = "alias-stt";
+  assert.equal(loadFoundryConfig()?.config.transcriptionDeployment, "alias-stt");
+
+  // SKILL_RECORDER_MODEL retargets the chat deployment only — the evals' `--model`
+  // must never silently point transcription at a model that cannot transcribe.
+  process.env.SKILL_RECORDER_MODEL = "override-model";
+  const overridden = loadFoundryConfig();
+  assert.equal(overridden?.config.deployment, "override-model");
+  assert.equal(overridden?.config.transcriptionDeployment, "alias-stt");
 });
 
 test("saveFoundryConfig validates its input, defaults the deployment, and normalizes the endpoint", () => {

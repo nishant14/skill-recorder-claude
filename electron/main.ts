@@ -55,7 +55,7 @@ const recorder = new RecorderController({
   postProcess: async (dir) => {
     await processSession(dir);
     try {
-      await narration.transcribeIfCached(dir);
+      await narration.transcribeIfConfigured(dir);
     } catch (err) {
       log.warn("Cached narration processing failed:", err);
     }

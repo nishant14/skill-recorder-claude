@@ -21,7 +21,6 @@ import { ARCHITECTURES, TARGETS } from "../common/skill";
 import type { AutomationPlan, BuiltAutomation } from "../common/automation";
 import {
   DEFAULT_NARRATION_LANGUAGE,
-  NARRATION_MODEL_DOWNLOAD_LABEL,
   narrationLanguageLabel,
 } from "../common/narration";
 import {
@@ -710,9 +709,7 @@ function AnalysisWorkspace({
             </details>
             {voicePending && (
               <p className="voice-analysis-note">
-                {narrationStatus?.model === "ready"
-                  ? `Your ${voiceLanguage} voice is transcribed in the same language first, then analyzed.`
-                  : `Your ${voiceLanguage} voice is transcribed in the same language first, then analyzed. The first run downloads a ${NARRATION_MODEL_DOWNLOAD_LABEL} voice model once.`}
+                {`Your ${voiceLanguage} voice recording is sent to your Azure AI Foundry deployment and transcribed in the same language first, then analyzed.`}
               </p>
             )}
           </div>
@@ -728,12 +725,6 @@ function AnalysisWorkspace({
               Cancel
             </button>
           </div>
-        )}
-
-        {analyzing && narrationStatus?.phase === "downloading" && (
-          <p className="voice-analysis-note">
-            First analysis downloads the ~250 MB voice model once — later runs skip this.
-          </p>
         )}
 
         {error && <AnalysisError error={error} />}
@@ -844,14 +835,7 @@ function AnalysisWorkspace({
 }
 
 function narrationWorkLabel(status: NarrationStatus | null): string {
-  if (!status) return "Working…";
-  if (status.phase === "transcribing") return "Transcribing voice…";
-  if (status.phase === "loading") return "Preparing voice model…";
-  if (status.phase === "downloading") {
-    return status.progress == null
-      ? "Downloading voice model…"
-      : `Downloading voice model… ${status.progress}%`;
-  }
+  if (status?.phase === "transcribing") return "Transcribing voice…";
   return "Working…";
 }
 

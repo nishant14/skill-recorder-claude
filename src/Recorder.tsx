@@ -10,7 +10,6 @@ import {
   DEFAULT_NARRATION_LANGUAGE,
   isNarrationLanguage,
   NARRATION_LANGUAGES,
-  NARRATION_MODEL_DOWNLOAD_LABEL,
   narrationLanguageLabel,
   type NarrationLanguage,
 } from "../common/narration";
@@ -223,11 +222,6 @@ export function Recorder() {
 
   const openLibrary = useCallback(() => {
     void window.skillRecorder.openLibrary();
-  }, []);
-
-  const downloadNarrationModel = useCallback(async () => {
-    const res = await window.skillRecorder.downloadNarrationModel();
-    if (!res.ok) window.alert(res.error ?? "Could not download the voice transcription model.");
   }, []);
 
   return (
@@ -518,13 +512,7 @@ export function Recorder() {
             status={doctor.copilotCli.ok ? "good" : "bad"}
             note={doctor.copilotCli.ok ? "found" : "missing"}
           />
-          {narrationStatus && (
-            <VoiceModelRow
-              status={narrationStatus}
-              recording={recording}
-              onDownload={downloadNarrationModel}
-            />
-          )}
+          {narrationStatus && <VoiceTranscriptionRow status={narrationStatus} />}
         </div>
       )}
 
@@ -576,39 +564,18 @@ function Row({
   );
 }
 
-function VoiceModelRow({
-  status,
-  recording,
-  onDownload,
-}: {
-  status: NarrationStatus;
-  recording: boolean;
-  onDownload: () => void;
-}) {
-  if (status.phase === "downloading") {
-    const progress = status.progress == null ? "downloading" : `${status.progress}%`;
-    return <Row label="voice transcription" status="warn" note={progress} />;
-  }
-  if (status.phase === "loading") {
-    return <Row label="voice transcription" status="warn" note="preparing" />;
+/**
+ * Whether voice narration can be transcribed at all. There is no model to download
+ * any more: narration audio is sent to the user's Azure AI Foundry deployment, so
+ * this row tracks the connection (the form for it lives with the other Foundry
+ * settings).
+ */
+function VoiceTranscriptionRow({ status }: { status: NarrationStatus }) {
+  if (status.phase === "transcribing") {
+    return <Row label="voice transcription" status="warn" note="transcribing" />;
   }
   if (status.model === "ready") {
-    return <Row label="voice transcription" status="good" note="offline · multilingual" />;
+    return <Row label="voice transcription" status="good" note="Azure AI Foundry · multilingual" />;
   }
-  return (
-    <Row
-      label="voice transcription"
-      status="warn"
-      note={
-        status.model === "error"
-          ? "download failed"
-          : `${NARRATION_MODEL_DOWNLOAD_LABEL} · multilingual`
-      }
-      action={{
-        label: status.model === "error" ? "retry" : "download",
-        disabled: recording,
-        onClick: onDownload,
-      }}
-    />
-  );
+  return <Row label="voice transcription" status="warn" note="needs an AI connection" />;
 }

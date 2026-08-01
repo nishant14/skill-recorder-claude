@@ -58,8 +58,9 @@ export function RecordingPrivacyWarning({
           information off screen and out of narration.
         </p>
         <p id="recording-warning-detail" className="recording-warning-detail">
-          For complete transparency, review exactly what&apos;s captured and what may later be
-          sent to GitHub Copilot for cloud analysis.
+          If you narrate, that voice recording is sent to your Azure AI Foundry deployment to be
+          transcribed. For complete transparency, review exactly what&apos;s captured and what
+          may later be sent to GitHub Copilot for cloud analysis.
         </p>
 
         <div className="recording-warning-actions">

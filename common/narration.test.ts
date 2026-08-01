@@ -8,7 +8,7 @@ import {
   narrationLanguageLabel,
 } from "./narration";
 
-test("narration exposes all Whisper languages alphabetically with English as the default", () => {
+test("narration exposes all 99 supported languages alphabetically with English as the default", () => {
   const codes = NARRATION_LANGUAGES.map(({ code }) => code);
   const labels = NARRATION_LANGUAGES.map(({ label }) => label);
 

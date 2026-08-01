@@ -4,6 +4,7 @@ import path from "node:path";
 
 import {
   DEFAULT_FOUNDRY_DEPLOYMENT,
+  DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
   normalizeFoundryEndpoint,
   type FoundryConfig,
   type FoundryConfigSource,
@@ -41,6 +42,7 @@ interface StoredFoundryConfig {
   endpoint?: unknown;
   apiKey?: unknown;
   deployment?: unknown;
+  transcriptionDeployment?: unknown;
   apiVersion?: unknown;
 }
 
@@ -66,6 +68,11 @@ function fromEnv(): FoundryConfig | null {
     endpoint: normalizeFoundryEndpoint(endpoint),
     apiKey,
     deployment,
+    transcriptionDeployment:
+      str(
+        process.env.AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT ||
+          process.env.FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
+      ) || DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
     ...(apiVersion ? { apiVersion } : {}),
   };
 }
@@ -99,6 +106,7 @@ function fromFile(): FoundryConfig | null {
     endpoint: normalizeFoundryEndpoint(endpoint),
     apiKey,
     deployment,
+    transcriptionDeployment: str(raw.transcriptionDeployment) || DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT,
     ...(apiVersion ? { apiVersion } : {}),
   };
 }
@@ -122,6 +130,7 @@ export function saveFoundryConfig(input: {
   endpoint: string;
   apiKey: string;
   deployment?: string;
+  transcriptionDeployment?: string;
   apiVersion?: string;
 }): FoundryConfig {
   const endpoint = normalizeFoundryEndpoint(input.endpoint ?? "");
@@ -131,10 +140,14 @@ export function saveFoundryConfig(input: {
   const apiKey = (input.apiKey ?? "").trim();
   if (!apiKey) throw new Error("An API key is required.");
   const apiVersion = (input.apiVersion ?? "").trim();
+  // Blank fields are dropped rather than stored as "": an absent
+  // `transcriptionDeployment` is what lets the default move with a later release.
+  const transcriptionDeployment = (input.transcriptionDeployment ?? "").trim();
   const config: FoundryConfig = {
     endpoint,
     apiKey,
     deployment: (input.deployment ?? "").trim() || DEFAULT_FOUNDRY_DEPLOYMENT,
+    ...(transcriptionDeployment ? { transcriptionDeployment } : {}),
     ...(apiVersion ? { apiVersion } : {}),
   };
   mkdirSync(configDir(), { recursive: true });

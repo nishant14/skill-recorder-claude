@@ -11,6 +11,13 @@
 /** Deployment used when neither the env nor the config file names one. */
 export const DEFAULT_FOUNDRY_DEPLOYMENT = "gpt-5.3-codex";
 
+/**
+ * Speech-to-text deployment used when neither the env nor the config file names one.
+ * Separate from {@link DEFAULT_FOUNDRY_DEPLOYMENT} because a codex-class chat
+ * deployment cannot transcribe audio — voice narration needs its own deployment.
+ */
+export const DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT = "gpt-4o-transcribe";
+
 /** A complete connection to one Foundry/Azure OpenAI deployment. Contains the key. */
 export interface FoundryConfig {
   /** Resource origin only, e.g. `https://<resource>.openai.azure.com` (no path). */
@@ -18,6 +25,12 @@ export interface FoundryConfig {
   apiKey: string;
   /** Model deployment name. */
   deployment: string;
+  /**
+   * Speech-to-text deployment used for voice narration. Resolved to
+   * {@link DEFAULT_FOUNDRY_TRANSCRIPTION_DEPLOYMENT} when nothing names one, so a
+   * loaded config always carries it.
+   */
+  transcriptionDeployment?: string;
   /**
    * Escape hatch: when set, requests use the legacy data-plane route
    * (`/openai/deployments/<name>/chat/completions?api-version=…`) instead of the

@@ -1,6 +1,6 @@
 /**
  * Decide whether an analyze run must transcribe the session's voice narration
- * first. Kept as a tiny pure module (no electron / whisper imports) so the rule
+ * first. Kept as a tiny pure module (no electron / transcription imports) so the rule
  * is unit-testable in isolation and shared by the analyze flow.
  *
  * The narration is the user's own words describing their intent, so analysis

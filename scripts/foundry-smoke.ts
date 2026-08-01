@@ -1,15 +1,24 @@
+import { execFileSync } from "node:child_process";
+import { existsSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
 import sharp from "sharp";
 
+import type { FoundryConfig } from "../common/foundry";
 import { FoundryClient, type Tool } from "../electron/foundry/agent";
 import { foundryConfigFile, loadFoundryConfig } from "../electron/foundry/config";
+import { transcribeWavOnFoundry, transcriptionDeployment } from "../electron/foundry/transcribe";
 
 /**
- * Gate G1 — the live contract smoke for the Azure AI Foundry runtime.
+ * Gates G1 and G6 — the live contract smoke for the Azure AI Foundry runtime.
  *
  * `electron/foundry/agent.test.ts` checks our tool loop against **our assumptions**
  * about the wire contract. This script checks the assumptions themselves against a
- * real deployment: that `tools`/`tool_choice`/`role:"tool"` are honored, and that a
- * base64 `image_url` data URI in a user message actually reaches the model's eyes.
+ * real deployment: that `tools`/`tool_choice`/`role:"tool"` are honored, that a
+ * base64 `image_url` data URI in a user message actually reaches the model's eyes,
+ * and (G6) that spoken audio uploaded as multipart comes back as timestamped text.
  * Mocks cannot see any of that.
  *
  * Manual and credentialed — never wired into CI or `npm test`:
@@ -28,6 +37,7 @@ const ENV_VARS = [
   "AZURE_OPENAI_ENDPOINT (or FOUNDRY_ENDPOINT)",
   "AZURE_OPENAI_API_KEY (or FOUNDRY_API_KEY)",
   "AZURE_OPENAI_DEPLOYMENT (optional)",
+  "AZURE_OPENAI_TRANSCRIPTION_DEPLOYMENT (optional)",
 ];
 
 /** Anything worth seeing when a check fails: prompts, raw text, recorded tool args. */
@@ -39,6 +49,17 @@ interface Check {
 }
 
 const message = (err: unknown) => (err instanceof Error ? err.message : String(err));
+
+/**
+ * Thrown by a check that cannot run here at all (a missing local prerequisite, not a
+ * failing contract). A skip is reported and does not fail the gate — only a real
+ * FAIL sets a non-zero exit.
+ */
+class Skipped extends Error {}
+
+function skip(reason: string): never {
+  throw new Skipped(reason);
+}
 
 /** Readable one-liner per context entry, truncated so a huge body can't flood a terminal. */
 function format(value: unknown): string {
@@ -195,6 +216,95 @@ function imageRoundTrip(client: FoundryClient): Check {
   };
 }
 
+/**
+ * 4. Voice narration end to end: a WAV of known spoken words goes up as multipart
+ * audio and must come back as that phrase, with at least one usable timestamp span.
+ * This is the only check that proves narration still works after the move off the
+ * local Whisper model — mocks cannot tell us the deployment accepts our multipart
+ * body or returns segments at all.
+ *
+ * The audio comes from a committed fixture when one exists, else from a local
+ * text-to-speech binary. With neither, the check SKIPs: a contributor without
+ * `espeak-ng` must not see a red gate for a missing local tool.
+ */
+function transcriptionRoundTrip(config: FoundryConfig): Check {
+  return {
+    name: "transcription round-trip",
+    run: async (context) => {
+      const wav = loadOrSynthesizePhraseWav(context);
+      context.deployment = transcriptionDeployment(config);
+
+      const result = await transcribeWavOnFoundry(config, wav, { language: "en" });
+      context.transcriptText = result.text;
+      context.segments = result.segments;
+
+      assert(
+        normalize(result.text).includes(KNOWN_PHRASE),
+        `the transcript does not contain "${KNOWN_PHRASE}"`,
+      );
+      assert(
+        result.segments.some((segment) => segment.endMs > segment.startMs),
+        "no segment came back with a usable time span",
+      );
+    },
+  };
+}
+
+/** The words spoken in the fixture, and what the transcript must contain. */
+const KNOWN_PHRASE = "skill recorder test phrase";
+
+const FIXTURE_WAV = path.join(
+  path.dirname(fileURLToPath(import.meta.url)),
+  "..",
+  "evals",
+  "fixtures",
+  "narration-smoke.wav",
+);
+
+/** Text-to-speech binaries that can write a WAV, in preference order. */
+const SPEECH_SYNTHESIZERS: Array<{ bin: string; args: (out: string) => string[] }> = [
+  { bin: "espeak-ng", args: (out) => ["-w", out, KNOWN_PHRASE] },
+  { bin: "espeak", args: (out) => ["-w", out, KNOWN_PHRASE] },
+  // macOS: `say` defaults to AIFF, so the WAV format is requested explicitly.
+  { bin: "say", args: (out) => ["--data-format=LEI16@22050", "-o", out, KNOWN_PHRASE] },
+];
+
+/** Lowercase, letters/digits only — punctuation and casing are not the contract. */
+function normalize(text: string): string {
+  return text
+    .toLocaleLowerCase()
+    .replace(/[^\p{L}\p{N}]+/gu, " ")
+    .trim();
+}
+
+function loadOrSynthesizePhraseWav(context: Context): Uint8Array {
+  if (existsSync(FIXTURE_WAV)) {
+    context.audioSource = FIXTURE_WAV;
+    return new Uint8Array(readFileSync(FIXTURE_WAV));
+  }
+
+  const dir = mkdtempSync(path.join(tmpdir(), "foundry-smoke-"));
+  try {
+    for (const { bin, args } of SPEECH_SYNTHESIZERS) {
+      const out = path.join(dir, "narration-smoke.wav");
+      try {
+        execFileSync(bin, args(out), { stdio: "ignore" });
+      } catch {
+        continue; // not installed, or it refused these arguments
+      }
+      if (!existsSync(out)) continue;
+      const wav = new Uint8Array(readFileSync(out));
+      if (wav.byteLength === 0) continue;
+      context.audioSource = `${bin} (generated)`;
+      return wav;
+    }
+  } finally {
+    rmSync(dir, { recursive: true, force: true });
+  }
+
+  skip("no fixture; see docs/plans/foundry-codex-migration-phase1i.md");
+}
+
 // --- runner ------------------------------------------------------------------
 
 async function main(): Promise<void> {
@@ -214,16 +324,28 @@ async function main(): Promise<void> {
   const client = new FoundryClient();
   await client.start();
 
-  const checks: Check[] = [plainCompletion(client), toolRoundTrip(client), imageRoundTrip(client)];
+  const checks: Check[] = [
+    plainCompletion(client),
+    toolRoundTrip(client),
+    imageRoundTrip(client),
+    transcriptionRoundTrip(loaded.config),
+  ];
 
   let failures = 0;
+  let skipped = 0;
   for (const check of checks) {
     const context: Context = {};
     try {
       await check.run(context);
       console.log(`PASS ${check.name}`);
       if (context.finalText) console.log(`  final text: ${format(context.finalText)}`);
+      if (context.transcriptText) console.log(`  transcript: ${format(context.transcriptText)}`);
     } catch (err) {
+      if (err instanceof Skipped) {
+        skipped += 1;
+        console.log(`SKIP ${check.name} (${err.message})`);
+        continue;
+      }
       failures += 1;
       console.error(`FAIL ${check.name}`);
       console.error(`  error: ${message(err)}`);
@@ -236,8 +358,12 @@ async function main(): Promise<void> {
 
   await client.stop();
 
-  const passed = checks.length - failures;
-  console.log(`\n${passed}/${checks.length} checks passed.`);
+  const attempted = checks.length - skipped;
+  const passed = attempted - failures;
+  console.log(
+    `\n${passed}/${attempted} checks passed${skipped > 0 ? ` (${skipped} skipped)` : ""}.`,
+  );
+  // A skip is a missing local prerequisite, never a contract failure.
   if (failures > 0) process.exitCode = 1;
 }
 

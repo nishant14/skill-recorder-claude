@@ -104,9 +104,6 @@ export type NarrationLanguage = (typeof NARRATION_LANGUAGES)[number]["code"];
 
 export const DEFAULT_NARRATION_LANGUAGE: NarrationLanguage = "en";
 
-/** Current q8 model files total 251,875,316 bytes at the publisher. */
-export const NARRATION_MODEL_DOWNLOAD_LABEL = "~252 MB";
-
 export function isNarrationLanguage(value: unknown): value is NarrationLanguage {
   return (
     typeof value === "string" &&
@@ -121,12 +118,12 @@ export function narrationLanguageLabel(language: NarrationLanguage): string {
 }
 
 /**
- * The offline voice-narration transcript. This is the spoken form of the typed
- * marker: the user's own stated intent while recording. It is produced after
- * Stop by the narration stage (Whisper via transformers.js) and written to
- * `narration.json`. It is NEVER appended to the finalized `events.jsonl`; the
- * describer reads it through the `get_narration` tool, and it only leaves the
- * machine on Analyze, exactly like screenshots.
+ * The voice-narration transcript. This is the spoken form of the typed marker: the
+ * user's own stated intent while recording. It is produced after Stop by the
+ * narration stage — the recorded audio is sent to the user's own Azure AI Foundry
+ * transcription deployment — and written to `narration.json`. It is NEVER appended
+ * to the finalized `events.jsonl`; the describer reads it through the
+ * `get_narration` tool.
  */
 export interface NarrationSegment {
   /** Segment start, in ms since the session started (same clock as step offsets). */
@@ -138,7 +135,7 @@ export interface NarrationSegment {
 }
 
 export interface NarrationTranscript {
-  /** The Whisper model id that produced this transcript. */
+  /** The transcription deployment that produced this transcript. */
   model: string;
   /** The explicitly selected source language, preserved rather than translated. */
   language: NarrationLanguage;
