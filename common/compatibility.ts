@@ -44,8 +44,14 @@ export interface CompatibilityReport {
 export interface BrowserA11yProbeResult {
   /** False when the probe could not run at all (wrong platform, no python3, timeout). */
   checked: boolean;
-  /** AT-SPI application names, lowercased, that matched a known browser token. */
+  /**
+   * Browsers whose URL the probe **actually read** through the real provider. Being
+   * listed on the AT-SPI registry is not enough: snap Firefox publishes its name there
+   * and then has its tree reads denied by AppArmor.
+   */
   accessibleBrowsers: string[];
+  /** Running and enumerable, but the live read came back empty — confined or blocked. */
+  presentButUnreadable: string[];
 }
 
 /** Live evidence the main process gathered alongside the doctor report. */
@@ -76,6 +82,15 @@ export const FIXES = {
    */
   browserAccessibility:
     "Firefox: GNOME_ACCESSIBILITY=1 firefox & (quit it fully first — snap is single-instance) · Chrome/Chromium/Edge: google-chrome --force-renderer-accessibility &",
+  /**
+   * Linux browser URLs: the browser is running with accessibility on and is visible on
+   * the AT-SPI registry, but its reads are denied — snap Firefox's AppArmor profile
+   * (`snap.firefox.firefox (enforce)`) allows the name and blocks the tree. No launch
+   * flag fixes that, so the remedy is a different build, and the honest consolation is
+   * that the recording is still perfectly usable without URLs.
+   */
+  confinedBrowser:
+    "use a non-snap Firefox (Mozilla deb/tar build) or a Chromium-family browser started with --force-renderer-accessibility; titles + frames still identify pages",
   /** macOS browser URLs: the per-browser Automation grant was never given or was declined. */
   macAutomation:
     "System Settings → Privacy & Security → Automation → allow Skill Recorder for your browser",
@@ -167,6 +182,11 @@ function displayBrowser(name: string): string {
  * per-launch state (snap Firefox exposes nothing unless started with
  * `GNOME_ACCESSIBILITY=1`), so **Full** requires live evidence: an unrun probe leaves
  * the level at Good with the restart command attached.
+ *
+ * "Live evidence" means a URL the probe actually **read**, not a browser it merely saw
+ * on the AT-SPI registry. Snap Firefox is enumerable and unreadable at the same time
+ * (AppArmor allows the name, denies the tree), and grading that as Full is exactly the
+ * lie this signal exists to prevent — so it gets its own branch and its own fix.
  */
 function browserUrlSignal(
   doctor: DoctorReport,
@@ -218,6 +238,21 @@ function browserUrlSignal(
     };
   }
   if (probe.accessibleBrowsers.length === 0) {
+    const blocked = probe.presentButUnreadable ?? [];
+    if (blocked.length > 0) {
+      // The snap-Firefox case: the browser is up, accessibility is on, the registry
+      // lists it — and the read is denied anyway. Naming the flag here would send the
+      // user round a loop that cannot end in URLs.
+      const names = blocked.map(displayBrowser).join(", ");
+      const [is, its] = blocked.length === 1 ? ["is", "its"] : ["are", "their"];
+      return {
+        key: "browserUrls",
+        label,
+        ok: false,
+        detail: `${names} ${is} running and accessibility is enabled, but ${its} snap confinement blocks accessibility reads.`,
+        fix: FIXES.confinedBrowser,
+      };
+    }
     return {
       key: "browserUrls",
       label,
@@ -231,7 +266,7 @@ function browserUrlSignal(
     key: "browserUrls",
     label,
     ok: true,
-    detail: `${names} ${probe.accessibleBrowsers.length === 1 ? "is" : "are"} exposing accessibility ✓`,
+    detail: `${names} — URLs verified by a live read ✓`,
   };
 }
 

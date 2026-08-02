@@ -167,12 +167,19 @@ each release pins an exact 40-character commit, shown below as
   <li><b>Start your browser in accessibility mode</b> so URL capture can read its address bar
       (X11 sessions only — on Wayland, window tracking is unavailable, so URL capture never
       engages and these flags change nothing):
-<pre><code># Firefox (required for the snap build; harmless otherwise)
+<pre><code># Firefox (non-snap builds — see the snap caveat below)
 GNOME_ACCESSIBILITY=1 firefox &amp;
 
 # Chrome / Chromium / Edge
 google-chrome --force-renderer-accessibility &amp;</code></pre>
       Launch the browser this way <i>before</i> recording sessions that involve web pages.</li>
+  <li><b>Snap Firefox caveat:</b> Ubuntu's default Firefox is a snap, and its AppArmor profile
+      (<code>snap.firefox.firefox (enforce)</code>) lets it appear on the accessibility bus while
+      <i>blocking</i> the tree reads URL capture needs. <code>GNOME_ACCESSIBILITY=1</code> does not
+      change that — the flag helps non-snap builds. For browser URLs, use a non-snap Firefox
+      (Mozilla's deb or tar build) or a Chromium-family browser with
+      <code>--force-renderer-accessibility</code>. <b>Check compatibility</b> performs a real URL
+      read, so it tells you which case you are in rather than assuming.</li>
   <li><b>Session type matters:</b> log in with <b>“Ubuntu on Xorg”</b> for full capture. On Wayland the app still records video, clipboard and narration, and shows exactly which sources are unavailable instead of failing silently.</li>
   <li>Other distros: not validated; a packaged AppImage can be built from source (<code>npm run dist:linux:x64</code>) and may work, with the same X11 requirements.</li>
 </ul>
@@ -206,7 +213,8 @@ exposing its accessibility tree, then reports the level to expect:</p>
 
 <ul>
   <li>Every degraded item comes with its <b>copyable fix</b> — a command, a settings path, or a login-screen choice.</li>
-  <li><b>Full is only reported on live evidence</b>: on Linux, having the prerequisites installed isn't enough — a browser must actually be exposing accessibility <i>right now</i>, because that's a per-launch property. Run the check again after restarting your browser with the commands from section&nbsp;2.</li>
+  <li><b>Full is only reported on live evidence</b>: on Linux, having the prerequisites installed isn't enough — the check <i>actually reads a URL</i> from every running browser and reports Full only if one answers. Being visible on the accessibility bus doesn't count: snap Firefox is visible and still refuses the read. Run the check again after restarting your browser with the commands from section&nbsp;2.</li>
+  <li><b>“…but its snap confinement blocks accessibility reads”</b> is a verified result, not a failure of the check: the browser is up and accessibility is on, and the read was denied anyway. Use a non-snap Firefox or a Chromium-family browser (section&nbsp;2) if you want URLs; otherwise <b>Good</b> is a perfectly usable level.</li>
   <li><b>Copy report</b> produces a plain-text version (levels, signals, and fixes) — paste it into a support thread and it doubles as the remediation checklist.</li>
   <li>The AI connection and narration transcription are reported as separate lines — they gate <i>analysis</i>, not capture.</li>
 </ul>
@@ -325,7 +333,7 @@ of the rows below without further digging.</p>
   <tr><td>Analysis says “no reconstructable task / no signals”</td><td>The recording captured no events. Run <b>Check compatibility</b> — expect <i>Reduced</i> with the fix named (install <code>x11-utils</code>, or log in with “Ubuntu on Xorg” instead of Wayland).</td></tr>
   <tr><td>“Azure AI Foundry rejected the API key (HTTP 401)”</td><td>Wrong or expired key — re-enter it in the connection form and press <i>Test connection</i>.</td></tr>
   <tr><td>“…could not find the ‘X’ deployment (HTTP 404)”</td><td>That deployment doesn't exist on your resource — create it in the Foundry portal, or put your actual deployment name in the form's Deployments section.</td></tr>
-  <tr><td>No browser URLs in recordings (Linux)</td><td>Install <code>python3-pyatspi</code>. Chromium browsers additionally need <code>--force-renderer-accessibility</code>; snap Firefox needs <code>GNOME_ACCESSIBILITY=1</code> at launch. Titles + frames still identify pages without it.</td></tr>
+  <tr><td>No browser URLs in recordings (Linux)</td><td>Install <code>python3-pyatspi</code>, then run <b>Check compatibility</b> — it attempts a real read and names the cause. Chromium browsers additionally need <code>--force-renderer-accessibility</code>; <b>snap Firefox can't be read at all</b> (AppArmor blocks it, flag or no flag) — use a non-snap Firefox or a Chromium-family browser. Titles + frames still identify pages without URLs.</td></tr>
   <tr><td>“OpenAPI YAML isn't supported yet”</td><td>Export the spec as JSON from your API portal, or attach the docs as md/txt for best-effort matching.</td></tr>
   <tr><td>Skill run refuses a command</td><td>Working as designed: the command falls outside the skill's <code>allowed-tools</code>. Rebuild the skill with broader tools, or run it and approve individually.</td></tr>
   <tr><td>Voice wasn't transcribed</td><td>Narration needs the <code>gpt-4o-transcribe</code> deployment (or your name for it in the form). Audio stays on disk — re-analyze after fixing the connection.</td></tr>

@@ -97,13 +97,27 @@
 </ol>
 
 <div class="card ok">
-  <b>Two-click bonus check — the Good→Full flip (also the GL2 snap-Firefox experiment).</b>
+  <b>Two-click bonus check — the URL-readability flip (also the GL2 snap-Firefox experiment).</b>
   With plain-launched Firefox running, the check should report <b>Good</b> and show the
   <code>GNOME_ACCESSIBILITY=1 firefox &amp;</code> fix. Quit Firefox <i>fully</i> (snap is
   single-instance — the flag does nothing while any old window survives), relaunch with the
-  flag, and re-run the check: <span class="pass">expect <b>Full</b></span> with "Firefox is
-  exposing accessibility". Record both readings — they're checklist row 12. Recording with
-  Full compatibility also gives your Part A baseline real <code>browser.url</code> events.
+  flag, and re-run the check. Two outcomes are both <i>correct</i>, because the check now
+  proves the capability by reading a URL rather than by spotting the browser on the
+  accessibility bus:
+  <ul>
+    <li><b>On Ubuntu's snap Firefox</b> — <span class="pass">expect <b>Good</b></span> with
+        “Firefox is running and accessibility is enabled, but its snap confinement blocks
+        accessibility reads”. That is the verified truth: AppArmor
+        (<code>snap.firefox.firefox (enforce)</code>) permits the bus name and denies the tree
+        reads, so no launch flag can reach Full. Recordings still identify pages by title and
+        frames.</li>
+    <li><b>On a non-snap Firefox (Mozilla deb/tar) or a Chromium-family browser started with
+        <code>--force-renderer-accessibility</code></b> — <span class="pass">expect
+        <b>Full</b></span> with “… — URLs verified by a live read ✓”. This is the real path to
+        Full, and the only one that gives your Part A baseline real <code>browser.url</code>
+        events.</li>
+  </ul>
+  Record both readings — they're checklist row 12.
 </div>
 
 <p>Seeded data you'll reference throughout: customers <b>Contoso Ltd</b> (<code>CUST-1001</code>),
@@ -269,7 +283,7 @@ attach it as docs for best-effort matching."</i></p>
   <tr><td>9</td><td>Transcript exists and contains no credential</td></tr>
   <tr><td>10</td><td>Deny adapts gracefully; Cancel stops cleanly</td></tr>
   <tr><td>11</td><td>(Optional) Copilot Studio bundle complete; import succeeds</td><td>GG ③</td></tr>
-  <tr><td>12</td><td>Compatibility check flips <b>Good → Full</b> after relaunching Firefox with <code>GNOME_ACCESSIBILITY=1</code></td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
+  <tr><td>12</td><td>Compatibility check reports the <i>verified</i> URL result after relaunching Firefox with <code>GNOME_ACCESSIBILITY=1</code>: <b>Full</b> (“URLs verified by a live read ✓”) on a non-snap or Chromium-family browser, or <b>Good</b> with “snap confinement blocks accessibility reads” on snap Firefox — both pass; a bare “no browser is accessible” or an unverified <b>Full</b> fails</td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
 </table>
 
 <p>Report each row as pass/fail with any deviating text you saw — verbatim strings are the most
@@ -281,7 +295,7 @@ useful bug reports. Results land in <code>docs/plans/progress.md</code>'s gate l
   <tr><th>Symptom</th><th>Fix</th></tr>
   <tr><td>Port 8787 busy</td><td><code>PORT=8790 npm run testbed</code> — then use that port everywhere, including <code>runner.json</code>.</td></tr>
   <tr><td>Analysis found no signals (Linux)</td><td>Run <b>Check compatibility</b> — expect <i>Reduced</i> with the named fix (Wayland session or missing <code>x11-utils</code>). Use an "Ubuntu on Xorg" session.</td></tr>
-  <tr><td>No <code>browser.url</code> events (Linux)</td><td><b>Check compatibility</b> tells you which: missing <code>python3-pyatspi</code>, or no browser currently exposing accessibility (the Good→Full card above). Page titles + frames still carry the test either way.</td></tr>
+  <tr><td>No <code>browser.url</code> events (Linux)</td><td><b>Check compatibility</b> tells you which, from a real read: missing <code>python3-pyatspi</code>, no browser running with accessibility on, or a snap browser whose reads AppArmor blocks (the card above — use a non-snap Firefox or Chromium for URLs). Page titles + frames still carry the test either way.</td></tr>
   <tr><td>Skill run fails with HTTP 401</td><td><code>runner.json</code> missing or wrong key/path — it must sit beside the installed <code>SKILL.md</code>.</td></tr>
   <tr><td>Skill run fails with "could not reach…"</td><td>The testbed isn't running, or <code>apiBase</code> doesn't match its port.</td></tr>
   <tr><td>Order totals look wrong</td><td>Remember the seed: NW-1140 is $18, NW-2207 is $22 — 12×18 + 3×22 = $282.</td></tr>

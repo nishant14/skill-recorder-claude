@@ -151,12 +151,13 @@ export function registerIpc(
   ipcMain.handle(IPC.doctor, () => runDoctor());
 
   // The graded check: the doctor's static answers plus one live look at the machine.
-  // The probe is best-effort by contract — a report that couldn't ask grades down.
+  // The probe is best-effort by contract — a report that couldn't ask grades down. On
+  // Linux it owns and disposes its own URL provider, so nothing here outlives the call.
   ipcMain.handle(IPC.compatibilityCheck, async (): Promise<CompatibilityReport> => {
     const doctor = runDoctor();
     const browserA11y = shouldProbeBrowserA11y(doctor)
       ? await probeAccessibleBrowsers()
-      : { checked: false, accessibleBrowsers: [] };
+      : { checked: false, accessibleBrowsers: [], presentButUnreadable: [] };
     return gradeCompatibility(
       doctor,
       { browserA11y, microphonePermission: microphones.settings().permission },
