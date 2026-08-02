@@ -110,9 +110,13 @@ Log in to an **Ubuntu on Xorg** session and run the packaged AppImage.
    `StartupWMClass` in the installed `.desktop` entry.
 2. Open the doctor rows in the HUD. Window tracking must read `x11` with no warning
    row; browser URLs must read `atspi`.
-3. Set the capture level to **Full** and follow the eight-step live smoke in
+3. With a browser open **on a real page**, click **Check compatibility** in the
+   readiness panel. On a machine set up for URLs it must report **Full capture** with
+   "URLs verified by a live read ✓" — the check reads an actual URL, so a Full here is
+   evidence, not an inventory of installed packages. See pass 3 for the other outcomes.
+4. Set the capture level to **Full** and follow the eight-step live smoke in
    [`docs/linux-capture.md`](docs/linux-capture.md).
-4. Analyze the session. It must produce a real intent with app switches, window
+5. Analyze the session. It must produce a real intent with app switches, window
    titles, browser URLs, and frames — not an empty recording.
 
 ### 2. Wayland honest-degradation run
@@ -127,25 +131,52 @@ Log in to the default Ubuntu (Wayland) session and start the same build.
 3. Recording must still start and produce video; only window tracking degrades.
 4. If the global shortcut fails to register, confirm the warning text names Wayland.
 
-### 3. Snap Firefox AT-SPI caveat check
+### 3. Browser URL capture, and the snap-Firefox limit
 
-Ubuntu ships Firefox as a snap, which does not enable accessibility by default.
+Ubuntu ships Firefox as a snap. Its enforced AppArmor profile
+(`snap.firefox.firefox (enforce)`) lets the browser publish its name on the AT-SPI bus
+while **denying the tree reads URL capture needs** (`org.a11y.atspi.Cache GetItems` →
+"An AppArmor policy prevents this sender…"). That is an OS-level confinement, not a
+launch-flag problem: `GNOME_ACCESSIBILITY=1` is necessary for Firefox but is **not
+sufficient on a snap**, so **no step in this pass can ever produce URLs from snap
+Firefox**. Verified live, 2026-08-02.
 
 1. With a stock snap Firefox, confirm `browser.url` events are simply absent — no
    crash, no bogus events, and the doctor row is honest.
-2. Relaunch Firefox with accessibility on:
+2. Fully quit Firefox (every window — snap Firefox is single-instance, so a second
+   launch just joins the running process and drops the environment) and relaunch it
+   with accessibility on:
 
    ```sh
-   GNOME_ACCESSIBILITY=1 firefox
+   GNOME_ACCESSIBILITY=1 firefox &
    ```
 
-   Confirm `browser.url` events now appear for at least three different sites.
-3. Repeat with Chromium started as `chromium --force-renderer-accessibility` and
-   confirm URLs appear; without the flag, confirm they are silently absent rather than
-   wrong.
+   Confirm that `browser.url` events are **still absent** and that **Check
+   compatibility** reports **Good capture** with "Firefox is running and accessibility
+   is enabled, but its snap confinement blocks accessibility reads". That reading is a
+   **pass**: the check proved the limitation instead of guessing at it. A **Full** here,
+   or a snap message pinned on a browser that is not a snap, is a failure.
+3. The working path — take at least one of these, and use it for pass 1's recording:
+   - **Chromium family (verified):** a deb/repo Google Chrome, Chromium, or Edge
+     started as `google-chrome --force-renderer-accessibility &`, with a real page
+     loaded. Confirm `browser.url` events for at least three different sites, and
+     **Check compatibility** → **Full capture**, "… — URLs verified by a live read ✓".
+   - **Non-snap Firefox:** Mozilla's own deb or tar build launched with
+     `GNOME_ACCESSIBILITY=1`. This is the documented Firefox path; the flag works once
+     the snap confinement is out of the way.
+4. Point that same unconfined browser at its new-tab page and re-run the check.
+   Expect **Good capture** with "… is running and accessible, but no web page was open
+   to verify a URL read" — the address bar really is empty, so this must **not** be
+   reported as blocked or confined. Opening any website and re-checking must return
+   **Full**.
+5. Without the flag, confirm URLs are silently absent rather than wrong, and that the
+   check says "accessibility reads found no address bar" (the unconfined remedy: quit
+   the browser completely, relaunch with the flag) rather than blaming confinement.
 
 Record which browsers produced URLs; the AT-SPI heuristics vary by browser and locale
-and the contract is best-effort null.
+and the contract is best-effort null. Recordings made without URLs are still fully
+usable — window titles and frames identify pages, which is exactly what **Good capture**
+promises.
 
 ### 4. Non-Ubuntu AppImage run (non-blocking)
 
@@ -161,11 +192,15 @@ Ubuntu.
 - **The recording controls HUD is visible in recordings.** Electron's
   `setContentProtection` is a no-op on Linux, so the floating bar appears in captured
   video and frames. On Windows and macOS it is excluded.
-- **Snap Firefox needs accessibility enabled at launch** for URL capture. Start it with
-  `GNOME_ACCESSIBILITY=1` — a running Firefox cannot be switched over.
+- **Snap Firefox cannot supply browser URLs at all.** Its AppArmor profile publishes the
+  app on the a11y bus and blocks the tree reads, so `GNOME_ACCESSIBILITY=1` — necessary
+  as it is for Firefox generally — does not help a snap. For URL capture use a non-snap
+  Firefox (Mozilla deb/tar) or a Chromium-family browser; the compatibility check names
+  the confinement explicitly and grades **Good**, which still records well.
 - **Chromium needs `--force-renderer-accessibility`** for its omnibox to appear in the
-  AT-SPI tree. The app does not force this flag on other people's browsers; the doctor
-  and these docs name it instead.
+  AT-SPI tree, and a running instance must be quit completely first (a second launch
+  joins the existing process and drops the flag). The app does not force this flag on
+  other people's browsers; the compatibility check and these docs name it instead.
 - **Global shortcuts may fail to register on Wayland.** The compositor owns keyboard
   grabs. Use the HUD buttons.
 - **ARM64 Linux is not packaged.** No `dist:linux:arm64` script and no verifier arch

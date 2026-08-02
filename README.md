@@ -112,12 +112,15 @@ Recording, storage, and frame extraction all happen **on your computer**; nothin
 while you record. Only when you choose **Analyze** does Skill Recorder send the event
 timeline (window/document titles, URLs, and clipboard previews), extracted screen images,
 and narration text to **your Azure AI Foundry deployment** for the model to process.
-Narration audio is sent to that same resource to be transcribed.
+If you narrated, the recorded **audio itself** is sent to that same resource to be
+transcribed — right after you stop, or when you analyze, whichever comes first.
 
 The in-app "Records your screen and activity" panel spells out exactly what's collected:
 
 - **Window tracking:** active-app / window switches.
-- **Browser URLs:** the page you're on (macOS).
+- **Browser URLs:** the page you're on (macOS, Windows, and Ubuntu/X11 — on Linux this
+  needs a browser that exposes its address bar over accessibility; see
+  [`docs/linux-capture.md`](docs/linux-capture.md)).
 - **Screen video:** recorded by Chromium; low-rate snapshots are kept only when the
   screen changes or a heartbeat is due.
 - **Clipboard:** short previews of copied text that tie steps together.

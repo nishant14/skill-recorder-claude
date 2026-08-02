@@ -137,11 +137,23 @@ Business, repeatable knowledge-work patterns (`evals/scenarios/`):
 | `release-notes` | Compile release notes from merged PRs, then version + deploy (Terminal + GitHub + editor) |
 | `lead-to-crm` | Qualify inbound leads and enter them into the CRM (Mail + LinkedIn + Salesforce) |
 | `windows-deploy` | Deploy a web app to Azure and log the live URL, on Windows (Edge + Windows Terminal/pwsh + Excel) |
+| `linux-deploy` | The same shape on Linux: raw X11 `WM_CLASS` app tokens, AT-SPI `browser.url`, bash |
+| `form-submit-frames` | Create a sales order by filling and submitting a web form — the **vision path**: the fill emits no events, so the only evidence is in the frames |
 
-The last three are longer, multi-app **business processes** — they loop over several
-records, mix a native app with the browser and/or terminal, and end in a submit /
-deploy / commit step — stress-testing segmentation and app attribution beyond the
-simple copy→paste flows.
+`expense-report`, `release-notes` and `lead-to-crm` are longer, multi-app **business
+processes** — they loop over several records, mix a native app with the browser and/or
+terminal, and end in a submit / deploy / commit step — stress-testing segmentation and
+app attribution beyond the simple copy→paste flows. `windows-deploy` and `linux-deploy`
+additionally pin platform-shaped capture (native app names, shells, URL providers).
+
+`form-submit-frames` is the only scenario that exercises the **vision path**. Its event
+stream is deliberately indistinguishable from "opened an existing order" (a
+POST/redirect/GET produces the same `/orders` → `/orders/<id>` pair, and typing into a
+form emits nothing), so the describer can only get it right by calling `get_frames`
+across the sparse transition. Its fixture frames are near-duplicates on purpose: an
+explicitly requested probe window is **never perceptually deduped**, so the incremental
+form states the model asked to see are the ones it gets. Event-anchored seeding keeps its
+perceptual dedupe.
 
 `irrelevant-detour` guards a different judgment: a **confident intent must exclude
 off-task activity**. Its stream is a clean habit-research flow with a brief hop to a
@@ -160,7 +172,9 @@ Create `evals/scenarios/<id>.ts` exporting a `Scenario`, and add it to
 `evals/scenarios/index.ts`. Build the event stream with the helpers in
 `scenario.ts` (`recorder`, `visit`, `appActivate`, `clipboard`, `terminal`,
 `marker`), and describe a good result in `rubric`. Keep `truth` accurate — it's
-what the `--judge` grades against.
+what the `--judge` grades against. A scenario whose evidence is only *on screen* can
+also declare `frames` (`FrameFixture[]`, rendered by `evals/lib/frame-fixtures.ts`);
+see `form-submit-frames`.
 
 ```ts
 export const myScenario: Scenario = {

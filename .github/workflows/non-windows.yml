@@ -3,7 +3,7 @@ name: Non-Windows
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
 
 permissions:
@@ -42,7 +42,7 @@ jobs:
         run: |
           bash -n install.sh
           set +e
-          output="$(SKILL_RECORDER_COMMIT=master bash install.sh 2>&1)"
+          output="$(SKILL_RECORDER_COMMIT=main bash install.sh 2>&1)"
           status=$?
           set -e
           if [ "$status" -eq 0 ]; then

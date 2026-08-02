@@ -219,6 +219,15 @@ bindings, which are **optional** — `install.sh` only warns when they are missi
 sudo apt-get install --yes python3-pyatspi at-spi2-core
 ```
 
+The bindings are only half of URL capture: the browser must also expose its address
+bar over accessibility. Ubuntu's default **snap** Firefox cannot — its enforced AppArmor
+profile allows the accessibility bus name and denies the tree reads, and no launch flag
+changes that. Use a Chromium-family browser started with
+`--force-renderer-accessibility`, or a non-snap Firefox started with
+`GNOME_ACCESSIBILITY=1`. Without URLs, recordings still identify pages by window title
+and screen frames. The app's **Check compatibility** button performs a real URL read and
+tells you which case you are in.
+
 Ubuntu capture is validated on an **X11** session only. See
 [`LINUX-VALIDATION.md`](LINUX-VALIDATION.md) and
 [`docs/linux-capture.md`](docs/linux-capture.md).

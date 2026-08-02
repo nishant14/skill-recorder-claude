@@ -65,8 +65,14 @@ Notes:
    `install.sh` warns rather than failing.
 3. **An X11 session.** Log out and choose **Ubuntu on Xorg** at the login screen if the
    doctor reports a Wayland session.
-4. **Browser accessibility.** Snap Firefox needs `GNOME_ACCESSIBILITY=1` set *at
-   launch*; Chromium needs `--force-renderer-accessibility`.
+4. **Browser accessibility.** Firefox needs `GNOME_ACCESSIBILITY=1` set *at launch*;
+   Chromium-family browsers need `--force-renderer-accessibility`. In both cases quit
+   the browser completely first — a second launch joins the running instance and drops
+   the flag. **Ubuntu's snap Firefox is a special case**: its AppArmor profile
+   (`snap.firefox.firefox (enforce)`) allows the a11y bus name but denies the tree reads
+   (`org.a11y.atspi.Cache GetItems` is refused), so the flag cannot make URL capture
+   work there. Use a non-snap Firefox (Mozilla deb/tar) or a Chromium-family browser if
+   you want URLs; without them, pages are still identified by window title and frames.
 5. **An Azure AI Foundry connection** (endpoint + API key + deployments) for the
    describer, the builders, and narration transcription. Configured in the app or in
    `~/.skill-recorder/foundry.json`; nothing is installed on `PATH`.
@@ -89,6 +95,16 @@ Linux, confirm:
 Unsupported or degraded sources are rendered as capability rows in the HUD; you should
 never have to read a log to find out a source is dead.
 
+The **Check compatibility** button in the same panel goes further for browser URLs: it
+asks the real AT-SPI provider for an actual URL from every running browser (3 s budget)
+rather than trusting the registry, and grades on the result. That is why it distinguishes
+four outcomes with four different remedies — a verified read (**Full**, "URLs verified by
+a live read ✓"), a reachable browser with **no page open** (open a website and re-check),
+a **snap** whose reads AppArmor denies (use a non-snap browser), and an unconfined browser
+exposing **no address bar** (quit it fully and relaunch it with accessibility on). Merely
+appearing on the AT-SPI registry never counts as evidence: snap Firefox appears there and
+still refuses the read.
+
 ## Live smoke test
 
 Run a real recording on Ubuntu (X11) and verify each source lands in the session's
@@ -100,10 +116,13 @@ Run a real recording on Ubuntu (X11) and verify each source lands in the session
    Expect `app.activate` events whose `owner.name` is the `WM_CLASS` token
    (`firefox_firefox`, `Xfce4-terminal`, `Code`, …) and `app.title-change` as titles
    change. Confirm `owner.path` resolves to something like `/usr/bin/xfce4-terminal`.
-3. **Browser URLs.** In Firefox, navigate to three different sites. Expect
-   `browser.url` events with the address bar URL and `host`. Typing a partial URL or a
-   search term should not emit a bogus event. Repeat in Chromium started with
-   `--force-renderer-accessibility`.
+3. **Browser URLs.** In a browser that can actually be read — Chrome/Chromium/Edge
+   started with `--force-renderer-accessibility`, or a **non-snap** Firefox started with
+   `GNOME_ACCESSIBILITY=1` — navigate to three different sites. Expect `browser.url`
+   events with the address bar URL and `host`. Typing a partial URL or a search term
+   should not emit a bogus event. On Ubuntu's stock **snap** Firefox, expect no
+   `browser.url` events no matter how it was launched; that is the confinement described
+   in the prerequisites, and the rest of the recording is unaffected.
 4. **Host recovery.** `pkill -f atspi` (or kill the `python3` helper) mid-recording,
    then navigate again. A new URL must appear within a few seconds; the recording must
    not stop.
@@ -155,8 +174,12 @@ Linux packaging is deferred.
 - The recording controls HUD appears in captured video and frames: Electron's
   `setContentProtection` is a no-op on Linux.
 - Browser URLs are best-effort accessibility strings, not the exact tab URL, and they
-  depend on browser accessibility being enabled (`GNOME_ACCESSIBILITY=1` for snap
-  Firefox, `--force-renderer-accessibility` for Chromium).
+  depend on browser accessibility being enabled (`GNOME_ACCESSIBILITY=1` for Firefox,
+  `--force-renderer-accessibility` for Chromium-family browsers).
+- **Snap-packaged Firefox never yields URLs.** Its enforced AppArmor profile allows the
+  a11y bus name and denies the tree reads, so the launch flag cannot fix it; a non-snap
+  Firefox or a Chromium-family browser is the only path to URLs on Ubuntu's default
+  install. Analyses stay accurate without URLs — titles and frames carry page identity.
 - `WM_CLASS` tokens are not display names. Events keep the raw value; there is no
   normalization layer.
 - Terminal capture is not currently implemented; a recorded-terminal (PTY) approach is

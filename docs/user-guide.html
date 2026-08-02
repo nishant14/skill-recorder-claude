@@ -138,7 +138,7 @@ each release pins an exact 40-character commit, shown below as
   <tr>
     <td><b>Linux</b></td>
     <td>Ubuntu 22.04 / 24.04 x64 on an <b>X11 session</b> (see <code>LINUX-VALIDATION.md</code>); other distros best-effort</td>
-    <td>Full on X11 (URLs need optional <code>python3-pyatspi</code>); on Wayland: video/clipboard/narration only — window tracking is reported unavailable, honestly, in the app</td>
+    <td>Full on X11 (URLs need optional <code>python3-pyatspi</code> <i>and</i> a browser whose accessibility reads aren't blocked — not Ubuntu's snap Firefox; see below); on Wayland: video/clipboard/narration only — window tracking is reported unavailable, honestly, in the app</td>
   </tr>
 </table>
 
@@ -201,13 +201,14 @@ unavailable on your setup — if everything is healthy, no warnings appear.</p>
 <h3>Check your compatibility level</h3>
 
 <p>Click <b>Check compatibility</b> in the readiness panel. It inspects your platform,
-session type, installed tools, and — on Linux — whether a running browser is <i>currently</i>
-exposing its accessibility tree, then reports the level to expect:</p>
+session type, installed tools, and — on Linux — whether a running browser will
+<i>actually hand over a URL right now</i> (it asks each one for a real read), then reports
+the level to expect:</p>
 
 <table>
   <tr><th>Level</th><th>What it means for your recordings</th></tr>
   <tr><td><b>Full</b></td><td>The richest analyses: app switches, window titles, browser URLs, and screen frames all feed the model.</td></tr>
-  <tr><td><b>Good</b></td><td>Everything except live URLs — pages are identified by window titles and screen frames. Fine for most tasks; the report shows the exact command to reach Full (e.g. restarting your browser in accessibility mode).</td></tr>
+  <tr><td><b>Good</b></td><td>Everything except live URLs — pages are identified by window titles and screen frames. Fine for most tasks, and analyses stay accurate; the report names the remedy for <i>your</i> case (open a page, relaunch the browser with accessibility on, or — for a snap browser whose reads are blocked — use a different browser).</td></tr>
   <tr><td><b>Reduced</b></td><td>No window tracking (e.g. a Wayland session or missing <code>x11-utils</code>) — only video, clipboard and narration are captured, and analyses of app/web work will be weak. The report names the fix.</td></tr>
 </table>
 
@@ -233,7 +234,7 @@ exposing its accessibility tree, then reports the level to expect:</p>
 <ol class="steps">
   <li>Press <b>Record</b> — or <span class="kbd">⌘⇧R</span> (macOS) / <span class="kbd">Ctrl+Shift+R</span> (Windows/Linux) from anywhere.</li>
   <li><b>Just do your task.</b> The app captures app switches, window titles, browser URLs (where supported), clipboard copies, and low-fps screen video with keyframes — locally, in the background.</li>
-  <li><b>Optional — Narrate:</b> toggle the microphone (choose your language) and think aloud. Your spoken intent is the strongest signal the analyzer gets. Audio is transcribed via <i>your</i> Foundry deployment when you analyze; the audio itself never leaves your machine.</li>
+  <li><b>Optional — Narrate:</b> toggle the microphone (choose your language) and think aloud. Your spoken intent is the strongest signal the analyzer gets. To turn speech into text the <b>recorded audio itself is uploaded</b> to <i>your</i> Foundry transcription deployment — right after you stop, or when you analyze, whichever comes first. With no connection configured, the audio stays on your machine and is simply not transcribed.</li>
   <li>The small always-on-top bar shows capture and mic state; mute, switch mics, <b>Finish</b>, or <b>Discard</b> (with confirmation) if the take went wrong.</li>
 </ol>
 
@@ -245,16 +246,18 @@ exposing its accessibility tree, then reports the level to expect:</p>
 
 <div class="card warn">
   <b>Privacy.</b> A recording contains your screen, visited URLs, clipboard text, and any
-  narration. The in-app “What’s recorded” note lists everything. Captured signals are sent
-  to <b>your Azure AI Foundry deployment</b> only when you click Analyze — never before,
-  never elsewhere.
+  narration. The in-app “What’s recorded” note lists everything. Nothing leaves your
+  machine <i>while</i> you record, and captured signals go to <b>your Azure AI Foundry
+  deployment</b> — and nowhere else — when you click Analyze. The one thing that can be
+  sent earlier is <b>narration audio</b>, which is uploaded to your transcription
+  deployment as soon as the recording stops (if a connection is configured).
 </div>
 
 <h2 id="analyze"><span class="num">5.</span>After recording: Analyze &amp; review</h2>
 
 <ol class="steps">
   <li>Open the <b>library</b> (sessions list) and select your recording.</li>
-  <li>Click <b>Analyze</b>. The model reads the timeline and events, looks at screen frames where events are ambiguous, folds in your narration, and produces <b>one intent + ordered steps</b> — typically in 10–20 seconds.</li>
+  <li>Click <b>Analyze</b>. The model reads the timeline and events, looks at screen frames where events are ambiguous, folds in your narration, and produces <b>one intent + ordered steps</b> — typically in 10–20 seconds. When it asks to look at a stretch of the recording it gets <i>every</i> frame captured in that stretch, near-identical ones included, so work that emits no events at all — filling in a form field by field — is still visible to it.</li>
   <li><b>Review it.</b> Edit the title, intent, or any step directly; add, reorder, or remove steps. Or type natural-language feedback (“step 2 was actually about the invoice, not the quote”) and re-analyze — the conversation continues where it left off.</li>
 </ol>
 
@@ -339,7 +342,7 @@ of the rows below without further digging.</p>
   <tr><td>No browser URLs in recordings (Linux)</td><td>Install <code>python3-pyatspi</code>, then run <b>Check compatibility</b> — it attempts a real read and names which of the causes applies: no page open (load a website and re-check), no address bar exposed (quit the browser fully and relaunch it with <code>--force-renderer-accessibility</code>, or <code>GNOME_ACCESSIBILITY=1</code> for Firefox), or a snap browser whose reads AppArmor blocks (flag or no flag — use a non-snap Firefox or a Chromium-family browser). Titles + frames still identify pages without URLs.</td></tr>
   <tr><td>“OpenAPI YAML isn't supported yet”</td><td>Export the spec as JSON from your API portal, or attach the docs as md/txt for best-effort matching.</td></tr>
   <tr><td>Skill run refuses a command</td><td>Working as designed: the command falls outside the skill's <code>allowed-tools</code>. Rebuild the skill with broader tools, or run it and approve individually.</td></tr>
-  <tr><td>Voice wasn't transcribed</td><td>Narration needs the <code>gpt-4o-transcribe</code> deployment (or your name for it in the form). Audio stays on disk — re-analyze after fixing the connection.</td></tr>
+  <tr><td>Voice wasn't transcribed</td><td>Narration needs the <code>gpt-4o-transcribe</code> deployment (or your name for it in the form). The audio is kept in the session folder — fix the connection, then re-analyze and it is transcribed then.</td></tr>
   <tr><td>HUD bar appears in Linux recordings</td><td>Known limitation: window content-protection is a no-op on Linux. Keep the bar over something non-sensitive.</td></tr>
 </table>
 

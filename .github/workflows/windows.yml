@@ -3,7 +3,7 @@ name: Windows
 on:
   push:
     branches:
-      - master
+      - main
   pull_request:
 
 permissions:
@@ -35,7 +35,7 @@ jobs:
           & .\scripts\install-windows.test.ps1 -InstallerPath $path
           $beforeErrorPreference = $ErrorActionPreference
           $beforeProgressPreference = $ProgressPreference
-          $env:SKILL_RECORDER_COMMIT = "master"
+          $env:SKILL_RECORDER_COMMIT = "main"
           try {
             & .\install.ps1
             throw "install.ps1 accepted a mutable source reference"

@@ -101,19 +101,24 @@
 
 <div class="card ok">
   <b>Two-click bonus check — the URL-readability flip (also the GL2 snap-Firefox experiment).</b>
-  With plain-launched Firefox running, the check should report <b>Good</b> and show the
-  <code>GNOME_ACCESSIBILITY=1 firefox &amp;</code> fix. Quit Firefox <i>fully</i> (snap is
-  single-instance — the flag does nothing while any old window survives), relaunch with the
-  flag, and re-run the check. Two outcomes are both <i>correct</i>, because the check now
-  proves the capability by reading a URL rather than by spotting the browser on the
-  accessibility bus:
+  With a plain-launched browser running, the check should report <b>Good</b> and show the
+  relaunch fix. Quit the browser <i>fully</i> (a second launch just joins the running
+  instance and drops the flag), relaunch it with accessibility on
+  (<code>google-chrome --force-renderer-accessibility &amp;</code>, or
+  <code>GNOME_ACCESSIBILITY=1 firefox &amp;</code>), and re-run the check. Read the outcome
+  against the list below — the check now proves the capability by <i>reading a URL</i>
+  rather than by spotting the browser on the accessibility bus, so more than one answer is
+  correct. Note up front: <b>on Ubuntu's snap Firefox the relaunch cannot reach Full</b> —
+  the flag is necessary but the snap blocks the read anyway, so use a Chromium-family
+  browser (or a non-snap Firefox) if you want the Full path:
   <ul>
     <li><b>On Ubuntu's snap Firefox</b> — <span class="pass">expect <b>Good</b></span> with
         “Firefox is running and accessibility is enabled, but its snap confinement blocks
         accessibility reads”. That is the verified truth: AppArmor
         (<code>snap.firefox.firefox (enforce)</code>) permits the bus name and denies the tree
-        reads, so no launch flag can reach Full. Recordings still identify pages by title and
-        frames.</li>
+        reads, so no launch flag can reach Full — this outcome is the <i>ceiling</i> on a
+        stock Ubuntu Firefox, not a step you can fix. Recordings still identify pages by
+        title and frames, and analyses stay accurate.</li>
     <li><b>On a non-snap Firefox (Mozilla deb/tar) or a Chromium-family browser started with
         <code>--force-renderer-accessibility</code></b> — <span class="pass">expect
         <b>Full</b></span> with “… — URLs verified by a live read ✓”, <i>provided a page is
@@ -300,7 +305,7 @@ attach it as docs for best-effort matching."</i></p>
   <tr><td>9</td><td>Transcript exists and contains no credential</td></tr>
   <tr><td>10</td><td>Deny adapts gracefully; Cancel stops cleanly</td></tr>
   <tr><td>11</td><td>(Optional) Copilot Studio bundle complete; import succeeds</td><td>GG ③</td></tr>
-  <tr><td>12</td><td>Compatibility check reports the <i>verified</i> URL result after relaunching Firefox with <code>GNOME_ACCESSIBILITY=1</code>: <b>Full</b> (“URLs verified by a live read ✓”) on a non-snap or Chromium-family browser with a page loaded, <b>Good</b> with “no web page was open to verify a URL read” if it is on a new-tab page, or <b>Good</b> with “snap confinement blocks accessibility reads” on snap Firefox — all three pass; a bare “no browser is accessible”, an unverified <b>Full</b>, or a snap message shown for a non-snap browser fails</td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
+  <tr><td>12</td><td>Compatibility check reports the <i>verified</i> URL result after fully quitting and relaunching the browser with accessibility on (<code>--force-renderer-accessibility</code>, or <code>GNOME_ACCESSIBILITY=1</code> for Firefox): <b>Full</b> (“URLs verified by a live read ✓”) on a non-snap or Chromium-family browser with a page loaded, <b>Good</b> with “no web page was open to verify a URL read” if it is on a new-tab page, or <b>Good</b> with “snap confinement blocks accessibility reads” on snap Firefox — all three pass; a bare “no browser is accessible”, an unverified <b>Full</b>, or a snap message shown for a non-snap browser fails</td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
 </table>
 
 <p>Report each row as pass/fail with any deviating text you saw — verbatim strings are the most

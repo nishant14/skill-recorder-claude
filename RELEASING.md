@@ -14,7 +14,7 @@ assembled by `install.ps1` or `install.sh` to a release.
 
 ## 1. Prepare a release pull request
 
-Start from the latest `master` and choose the next semantic version:
+Start from the latest `main` and choose the next semantic version:
 
 - patch (`0.1.1`) for compatible fixes;
 - minor (`0.2.0`) for compatible functionality;
@@ -93,12 +93,12 @@ publish a release.
 
 ## 3. Merge and freeze the release commit
 
-Merge the release pull request into `master`, then wait for the workflows on
-the resulting `master` commit to pass. Record the exact commit:
+Merge the release pull request into `main`, then wait for the workflows on
+the resulting `main` commit to pass. Record the exact commit:
 
 ```sh
-git fetch origin master
-release_commit="$(git rev-parse origin/master)"
+git fetch origin main
+release_commit="$(git rev-parse origin/main)"
 printf '%s\n' "$release_commit"
 ```
 
