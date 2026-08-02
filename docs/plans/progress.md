@@ -78,6 +78,15 @@ authoritative for *what to build*.
   never commit credentials (they live only in `~/.skill-recorder/foundry.json`) or a
   rewritten `package-lock.json`.
 
+- **Workstream P — production readiness (approved 2026-08-02; plan
+  [`production-phase.md`](./production-phase.md)):** the ship-to-org-users roadmap.
+  Sequenced P4 (enable CI) → **P1 (keep the API key away from the solution — Entra ID +
+  org key-broker option space; opens with its own detailed phase plan before any code)**
+  → P2 (signing/notarization) → P3 (updates) → P5 (execution-surface security review) →
+  P6 (RELEASE-QA from the human gate backlog) → P7 (ops polish). Phase exit: a signed,
+  org-distributed build with **no raw Foundry key on disk**, passing release QA on all
+  three platforms.
+
 ## Workstream status
 
 | WS | Scope | Status | Gate | Evidence |
