@@ -1464,14 +1464,14 @@ function SkillBuilderView({
               {placement === "install"
                 ? "is now in this app's skill library."
                 : architecture === "copilot-studio"
-                  ? "is ready to add to your Copilot Studio agent: paste the body into the agent's Instructions and configure the listed connectors."
+                  ? `is ready to import: open ${builtName}-agent.zip in Copilot Studio (or the Microsoft 365 Agents Toolkit), then configure the actions listed in connectors.md.`
                   : "is exported. Drop the folder into this app's skill library when you want it installed."}
             </p>
             {exportedPath && <p className="sb-path">{exportedPath}</p>}
             {apiOperations.length > 0 && (
               <p className="sb-import-hint">
                 {architecture === "copilot-studio"
-                  ? `Import api/openapi.json from this folder as a custom connector, then configure these actions: ${apiOperations.join(", ")}.`
+                  ? `First import api/openapi.json from this folder as a custom connector, then enable these actions on it: ${apiOperations.join(", ")}.`
                   : `Its API operations (${apiOperations.join(", ")}) will run against the spec stored in api/openapi.json once the runner ships.`}
               </p>
             )}

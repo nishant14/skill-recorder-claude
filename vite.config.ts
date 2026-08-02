@@ -21,6 +21,11 @@ function copyStaticAssets(): void {
   for (const file of readdirSync(iconSrc)) {
     copyFileSync(path.join(iconSrc, file), path.join(icons, file));
   }
+  // The packaging icon doubles as the source for a Copilot Studio bundle's color/outline
+  // icons (see `agentIconSource` in electron/skillbuilder/builder.ts). `build/` is
+  // electron-builder's resources dir and is NOT packed into the app, so it has to be
+  // copied next to the bundled main process to exist at run time.
+  copyFileSync(path.join(rootDir, "build", "icon.png"), path.join(out, "assets", "icon.png"));
   copyFileSync(path.join(rootDir, "electron", "preload.cjs"), path.join(out, "preload.cjs"));
   copyFileSync(
     path.join(rootDir, "electron", "video", "capture.html"),

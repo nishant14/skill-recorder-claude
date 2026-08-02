@@ -100,6 +100,13 @@ Frontmatter fields:
 - \`description\` — one line of trigger phrasing.
 - \`allowed-tools\` — the connectors/actions to configure (see above).
 
+The export renders both of those into an importable declarative-agent bundle
+deterministically, so shape them for the machine as well as the reader: name any web or
+SharePoint/OneDrive knowledge a step needs **explicitly, in the step text** (those phrases
+are what turn into the agent's *capabilities* in the exported manifest), and keep every
+\`allowed-tools\` entry strictly \`Connector.Action\`-shaped — each one becomes a row in the
+maker's actions-to-configure checklist, so a malformed entry is a row they cannot wire.
+
 ${COPILOT_STUDIO_NATIVE_CAPABILITIES}
 
 ## Writing the SKILL.md body

@@ -1,6 +1,10 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { copyFileSync, createWriteStream, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { createRequire } from "node:module";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import archiver from "archiver";
 
 import {
   collectApiRefs,
@@ -9,6 +13,20 @@ import {
   unresolvedApiOperations,
   type ApiOperation,
 } from "../../common/api-reference";
+import {
+  agentZipName,
+  AGENT_COLOR_ICON,
+  AGENT_COLOR_ICON_SIZE,
+  AGENT_OUTLINE_ICON,
+  AGENT_OUTLINE_ICON_SIZE,
+  AGENT_ZIP_ENTRIES,
+  CONNECTORS_DOC_FILE,
+  DECLARATIVE_AGENT_FILE,
+  renderConnectorsMd,
+  renderDeclarativeAgent,
+  renderTeamsManifest,
+  TEAMS_MANIFEST_FILE,
+} from "../../common/declarative-agent";
 import {
   BuiltSkillSchema,
   renderSkillMarkdown,
@@ -35,6 +53,8 @@ import { SKILL_BUILDER_INSTRUCTIONS } from "./instructions";
 import { createSkillBuilderTools } from "./tools";
 
 const log = createLogger("SkillBuilder");
+const require = createRequire(import.meta.url);
+const dirname = path.dirname(fileURLToPath(import.meta.url));
 
 const TURN_TIMEOUT_MS = 180_000;
 
@@ -94,6 +114,73 @@ function isInside(root: string, dir: string): boolean {
  */
 export type SkillTarget = { kind: "install" } | { kind: "export"; dir: string };
 
+/**
+ * Renders one square PNG of `size` from `source` into `dest`. Injected so the export
+ * test can exercise the whole bundle path (including the zip) without loading sharp's
+ * native binding: the seam is the *only* thing tests replace here.
+ */
+export type IconRenderer = (source: string, size: number, dest: string) => Promise<void>;
+
+export interface SkillBuilderOptions {
+  /** Defaults to {@link sharpIconRenderer}. */
+  renderIcon?: IconRenderer;
+}
+
+type Sharp = typeof import("sharp");
+
+/** Default {@link IconRenderer}: sharp, required lazily (native, externalized in vite). */
+const sharpIconRenderer: IconRenderer = async (source, size, dest) => {
+  const sharp = require("sharp") as Sharp;
+  await sharp(source)
+    .resize(size, size, { fit: "contain", background: { r: 0, g: 0, b: 0, alpha: 0 } })
+    .png()
+    .toFile(dest);
+};
+
+/**
+ * The app tile the bundle's icons are derived from. `build/icon.png` is the packaging
+ * source of truth, so vite copies it next to the bundled main process
+ * (`dist-electron/assets/icon.png`) — the same trick `electron/icons.ts` uses. The repo
+ * path is the dev / unit-test fallback.
+ */
+function agentIconSource(): string | null {
+  const candidates = [
+    path.join(dirname, "assets", "icon.png"),
+    path.join(dirname, "..", "..", "build", "icon.png"),
+    path.join(dirname, "..", "build", "icon.png"),
+  ];
+  return candidates.find((c) => existsSync(c)) ?? null;
+}
+
+/**
+ * Zip exactly {@link AGENT_ZIP_ENTRIES} from `dir` into `dest` — flat, no folder prefix,
+ * because that is the layout Copilot Studio / the Agents Toolkit expects on import.
+ * Mirrors `debug-bundle.ts`'s archiver usage (stream + settle-once promise).
+ */
+function writeAgentZip(dir: string, dest: string, entries: readonly string[]): Promise<void> {
+  return new Promise<void>((resolve, reject) => {
+    let settled = false;
+    const done = (err?: Error): void => {
+      if (settled) return;
+      settled = true;
+      if (err) reject(err);
+      else resolve();
+    };
+    const output = createWriteStream(dest);
+    const archive = archiver("zip", { zlib: { level: 6 } });
+    output.on("close", () => done());
+    output.on("error", (err) => done(err));
+    archive.on("error", (err) => done(err));
+    archive.on("warning", (err: NodeJS.ErrnoException) => {
+      if (err.code === "ENOENT") log.warn("agent zip warning:", err.message);
+      else done(err);
+    });
+    archive.pipe(output);
+    for (const name of entries) archive.file(path.join(dir, name), { name });
+    void archive.finalize();
+  });
+}
+
 interface LiveBuild extends BaseLive {
   sessionDir: string;
   architecture: SkillArchitecture;
@@ -130,8 +217,14 @@ export function loadPersistedSkill(sessionId: string): BuiltSkill | null {
  * user-picked export folder.
  */
 export class SkillBuilder extends AgentBuilder<LiveBuild> {
-  constructor(private readonly emitProgress: (p: SkillBuildProgress) => void) {
+  private readonly renderIcon: IconRenderer;
+
+  constructor(
+    private readonly emitProgress: (p: SkillBuildProgress) => void,
+    options: SkillBuilderOptions = {},
+  ) {
     super("SkillBuilder");
+    this.renderIcon = options.renderIcon ?? sharpIconRenderer;
   }
 
   /** Propose a plan (first pass) or refine the current one with NL feedback. */
@@ -233,8 +326,8 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
       // the user takes elsewhere, so an install request degrades to an export.
       const installing = target.kind === "install" && plan.architecture === "app";
       const exportPath = installing
-        ? this.exportSkill(built)
-        : this.exportSkillTo(built, target.kind === "export" ? target.dir : exportsRoot());
+        ? await this.exportSkill(built)
+        : await this.exportSkillTo(built, target.kind === "export" ? target.dir : exportsRoot());
       const finalSkill: BuiltSkill = { ...built, exportedPath: exportPath, exportedAt: Date.now() };
       this.persist(live.sessionDir, finalSkill);
       this.emit(
@@ -334,7 +427,7 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
   }
 
   /** Write the SKILL.md into this app's own skill library; returns its path. */
-  private exportSkill(skill: BuiltSkill): string {
+  private async exportSkill(skill: BuiltSkill): Promise<string> {
     const root = skillsRoot();
     const name = slugifySkillName(skill.name);
     const prior = loadPersistedSkill(skill.sessionId);
@@ -353,12 +446,13 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     const file = path.join(dir, "SKILL.md");
     writeFileSync(file, renderSkillMarkdown(skill));
     this.copyApiReference(skill, dir);
+    await this.writeAgentBundle(skill, dir);
     return file;
   }
 
   /** Export (download) the SKILL.md into a user-picked folder as `<baseDir>/<name>/SKILL.md`;
    *  returns its path. Always picks a fresh, non-colliding subfolder within `baseDir`. */
-  private exportSkillTo(skill: BuiltSkill, baseDir: string): string {
+  private async exportSkillTo(skill: BuiltSkill, baseDir: string): Promise<string> {
     const name = slugifySkillName(skill.name);
     let dir = path.join(baseDir, name);
     if (existsSync(dir)) {
@@ -370,7 +464,47 @@ export class SkillBuilder extends AgentBuilder<LiveBuild> {
     const file = path.join(dir, "SKILL.md");
     writeFileSync(file, renderSkillMarkdown(skill));
     this.copyApiReference(skill, dir);
+    await this.writeAgentBundle(skill, dir);
     return file;
+  }
+
+  /**
+   * For a **copilot-studio** skill only: write the declarative agent bundle beside the
+   * SKILL.md — `declarativeAgent.json`, `manifest.json`, `connectors.md`, the two icons,
+   * and the importable `<slug>-agent.zip`. Everything here is derived from the built
+   * skill (no schema change, no agent turn), so re-exporting reproduces it byte for byte.
+   *
+   * Best effort, like {@link copyApiReference}: a missing sharp binding or an unwritable
+   * zip must not cost the user the SKILL.md they just built. Failures warn and surface
+   * through the progress emitter instead.
+   */
+  private async writeAgentBundle(skill: BuiltSkill, dir: string): Promise<void> {
+    if (skill.architecture !== "copilot-studio") return;
+    try {
+      const { agent, warnings } = renderDeclarativeAgent(skill);
+      writeFileSync(path.join(dir, DECLARATIVE_AGENT_FILE), `${JSON.stringify(agent, null, 2)}\n`);
+      writeFileSync(
+        path.join(dir, TEAMS_MANIFEST_FILE),
+        `${JSON.stringify(renderTeamsManifest(skill), null, 2)}\n`,
+      );
+      writeFileSync(path.join(dir, CONNECTORS_DOC_FILE), renderConnectorsMd(skill, warnings));
+      for (const warning of warnings) {
+        log.warn("declarative agent:", warning);
+        this.emit(skill.sessionId, "working", warning);
+      }
+      const source = agentIconSource();
+      if (!source) throw new Error("the app icon used for the agent's icons is missing");
+      await this.renderIcon(source, AGENT_COLOR_ICON_SIZE, path.join(dir, AGENT_COLOR_ICON));
+      await this.renderIcon(source, AGENT_OUTLINE_ICON_SIZE, path.join(dir, AGENT_OUTLINE_ICON));
+      await writeAgentZip(dir, path.join(dir, agentZipName(skill)), AGENT_ZIP_ENTRIES);
+    } catch (err) {
+      log.warn("could not write the Copilot Studio agent bundle:", msg(err));
+      this.emit(
+        skill.sessionId,
+        "working",
+        "The SKILL.md was written, but the Copilot Studio agent bundle could not be generated.",
+      );
+    }
   }
 
   /**
