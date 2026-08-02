@@ -36,6 +36,17 @@ process.stdin.on("data", (d) => {
   }
 });`;
 
+/**
+ * A protocol-2 host: `READY 2`, then `<kind><SEP><url><SEP><title>`. The reply is fixed
+ * per host, so each read state gets its own one-liner.
+ */
+function replyHost(kind: string, url = "", title = ""): string {
+  const line = [kind, url, title].join(String.fromCharCode(30));
+  return `${PID_LINE}
+process.stdout.write("READY 2\\n");
+process.stdin.on("data", () => process.stdout.write(${JSON.stringify(line)} + "\\n"));`;
+}
+
 /** READY, then a response that is not a URL at all. */
 const GARBAGE_HOST = `${PID_LINE}
 process.stdout.write("READY\\n");
@@ -140,6 +151,88 @@ process.stdin.on("data", () => process.stdout.write("github.com/anthropics" + St
     const result = await fake.provider.get("Google-chrome");
     // Scheme-less omnibox values are normalized, exactly as on Windows.
     assert.deepEqual(result, { url: "https://github.com/anthropics", title: undefined });
+  } finally {
+    fake.cleanup();
+  }
+});
+
+test("getReadState tells a blank address bar from an unreachable one", async () => {
+  // The whole point of protocol 2. Chrome on its new tab page is readable with nothing
+  // to read (`empty`); a confined browser answers nothing at all (`none`). Reporting the
+  // second for the first is what sent a deb-Chrome user chasing snap confinement.
+  const title = "Example Domain - Google Chrome";
+  const readable = fakeHost(replyHost("url", "https://example.com", title));
+  try {
+    assert.deepEqual(await readable.provider.getReadState("google-chrome"), {
+      kind: "url",
+      url: "https://example.com",
+      title,
+    });
+    assert.deepEqual(await readable.provider.get("google-chrome"), {
+      url: "https://example.com",
+      title,
+    });
+  } finally {
+    readable.cleanup();
+  }
+
+  for (const [kind, expected] of [
+    ["empty", { kind: "empty" }],
+    ["none", { kind: "unreachable" }],
+  ] as const) {
+    const fake = fakeHost(replyHost(kind));
+    try {
+      assert.deepEqual(await fake.provider.getReadState("google-chrome"), expected);
+      // The recording path is unchanged by the split: anything but a URL is null.
+      assert.equal(await fake.provider.get("google-chrome"), null);
+    } finally {
+      fake.cleanup();
+    }
+  }
+});
+
+test("getReadState never invents an empty state from a protocol-1 host", async () => {
+  // A host from a build that answered `<url><SEP><title>` announces a bare READY. Its
+  // first field is a URL, not a kind — parsing it as one would read "https://…" as an
+  // unknown kind, or worse, read a title as a URL.
+  const fake = fakeHost(REPLY_HOST);
+  try {
+    assert.deepEqual(await fake.provider.getReadState("firefox"), {
+      kind: "url",
+      url: "https://example.com/get%20firefox",
+      title: "Example Domain",
+    });
+  } finally {
+    fake.cleanup();
+  }
+
+  const silent = fakeHost(`${PID_LINE}
+process.stdout.write("READY\\n");
+process.stdin.on("data", () => process.stdout.write("\\n"));`);
+  try {
+    // Protocol 1 could not say which kind of "no URL" this was, so it claims the least.
+    assert.deepEqual(await silent.provider.getReadState("firefox"), { kind: "unreachable" });
+  } finally {
+    silent.cleanup();
+  }
+});
+
+test("a host that answers with an unknown kind is unreachable, not a URL", async () => {
+  const fake = fakeHost(replyHost("teapot", "https://example.com"));
+  try {
+    assert.deepEqual(await fake.provider.getReadState("firefox"), { kind: "unreachable" });
+    assert.equal(await fake.provider.get("firefox"), null);
+  } finally {
+    fake.cleanup();
+  }
+});
+
+test("a url the normalizer rejects reads as an empty address bar", async () => {
+  // A search phrase typed in the omnibox: the bar is live and there is no page to
+  // verify, which is exactly the "open a website" case, not a blocked read.
+  const fake = fakeHost(replyHost("url", "how tall is the eiffel tower", "Search"));
+  try {
+    assert.deepEqual(await fake.provider.getReadState("firefox"), { kind: "empty" });
   } finally {
     fake.cleanup();
   }

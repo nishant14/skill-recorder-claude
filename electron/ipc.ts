@@ -45,7 +45,11 @@ import {
   removeSource,
 } from "./builders/api-reference-store";
 import { AutomationBuilder, loadPersistedAutomation } from "./automationbuilder/builder";
-import { probeAccessibleBrowsers, shouldProbeBrowserA11y } from "./collectors/linux-a11y-probe";
+import {
+  BROWSER_A11Y_NOT_CHECKED,
+  probeAccessibleBrowsers,
+  shouldProbeBrowserA11y,
+} from "./collectors/linux-a11y-probe";
 import { buildDebugInfo, writeDebugBundle } from "./debug-bundle";
 import { Describer, loadPersistedAnalysis } from "./describer/describer";
 import { runDoctor } from "./doctor";
@@ -157,7 +161,7 @@ export function registerIpc(
     const doctor = runDoctor();
     const browserA11y = shouldProbeBrowserA11y(doctor)
       ? await probeAccessibleBrowsers()
-      : { checked: false, accessibleBrowsers: [], presentButUnreadable: [] };
+      : BROWSER_A11Y_NOT_CHECKED;
     return gradeCompatibility(
       doctor,
       { browserA11y, microphonePermission: microphones.settings().permission },

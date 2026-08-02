@@ -17,10 +17,18 @@ import type { ActiveUrl, UrlProvider } from "./url-provider";
  * (`python3-pyatspi`, an Ubuntu stock package — no npm dependency) take a
  * noticeable moment to import and connect to the accessibility bus. Spawning per
  * read would blow any sane timeout, so this is a **persistent host process**
- * exactly like the Windows provider: `python3 -u <script>` prints `READY` once the
- * bindings are loaded, then answers one request line (`get <wmClassToken>`) with
- * one response line (`<url><SEP><title>`, or empty). The request carries the app
- * hint because AT-SPI hands us the whole desktop, not the focused window.
+ * exactly like the Windows provider: `python3 -u <script>` prints `READY <version>`
+ * once the bindings are loaded, then answers one request line (`get <wmClassToken>`)
+ * with one response line. The request carries the app hint because AT-SPI hands us
+ * the whole desktop, not the focused window.
+ *
+ * The response is **tri-state** (protocol 2, `<kind><SEP><url><SEP><title>`) because
+ * "no URL" has two very different causes, and the compatibility check has to tell the
+ * user which one it hit: a browser sitting on its new-tab page has an address bar with
+ * nothing in it (`empty` — reads work, there is just no page), while a confined browser
+ * has no reachable address bar at all (`none`). Protocol 1 answered `<url><SEP><title>`
+ * and could not distinguish them; the handshake carries the version so a host from an
+ * older build is read with the older rules instead of being mis-parsed.
  *
  * This is deliberately a *structural copy* of `windows-url-provider.ts` rather
  * than a shared base class: the Windows host is validated on real hardware and
@@ -35,6 +43,13 @@ import type { ActiveUrl, UrlProvider } from "./url-provider";
 
 const SEP = String.fromCharCode(30); // ASCII record separator; can't occur in a URL/title
 const READY = "READY";
+/**
+ * Response-shape version, announced as `READY <n>`. 1 = `<url><SEP><title>`;
+ * 2 = `<kind><SEP><url><SEP><title>` with kind in `url` | `empty` | `none`. A host
+ * that announces a bare `READY` is read as 1, so its replies can never be parsed as
+ * if the first field were a kind.
+ */
+const HOST_PROTOCOL = 2;
 const REQUEST_TIMEOUT_MS = 2000;
 /** Long enough for a cold `import pyatspi`, short enough not to stall the doctor. */
 const PROBE_TIMEOUT_MS = 2000;
@@ -57,8 +72,11 @@ export const LINUX_BROWSER_TOKENS = [
 ];
 
 /**
- * The persistent pyatspi reader. Emits `READY` once the bindings are loaded, then
- * for each `get <token>` line writes one line: `<url><SEP><title>` (or empty).
+ * The persistent pyatspi reader. Emits `READY ${HOST_PROTOCOL}` once the bindings are
+ * loaded, then for each `get <token>` line writes one line:
+ * `<kind><SEP><url><SEP><title>`, where kind is `url` (an address bar held one),
+ * `empty` (an address-bar node was found and held no URL — the new-tab case) or
+ * `none` (nothing address-bar-like was reachable — confinement, or not this browser).
  *
  * A missing `python3-pyatspi` exits *before* `READY`, which the host below turns
  * into one honest warning naming the apt package. Every per-request failure is
@@ -200,50 +218,64 @@ def pick_frame(app):
 
 
 def scan_frame(frame):
+    # Returns (kind, url, title). "empty" is not a failure: an address bar that is
+    # reachable and blank means the browser is readable and no page is loaded, which
+    # the compatibility check reports very differently from "nothing was reachable".
     title = name_of(frame)
     queue = [(frame, 0)]
     seen = 0
     best = ""
+    saw_bar = False
     while queue and seen < MAX_NODES:
         node, depth = queue.pop(0)
         seen += 1
         role = role_of(node)
         if role in PRUNED_ROLES:
             continue  # prune the web-page a11y tree
+        bar = is_address_bar(name_of(node))
+        if bar:
+            saw_bar = True
         if role == ROLE_ENTRY:
             value = read_text(node)
             if looks_url(value):
-                if is_address_bar(name_of(node)):
-                    return value.strip() + SEP + title
+                if bar:
+                    return ("url", value.strip(), title)
                 if not best:
                     best = value.strip()
         if depth < MAX_DEPTH:
             for child in children(node):
                 queue.append((child, depth + 1))
     if best:
-        return best + SEP + title
-    return ""
+        return ("url", best, title)
+    if saw_bar:
+        return ("empty", "", title)
+    return ("none", "", title)
 
 
-def read_url(token):
+def read_state(token):
     names = wanted_names(token)
     if not names:
-        return ""
+        return ("none", "", "")
     desktop = pyatspi.Registry.getDesktop(0)
+    # A URL from any matching window wins; a blank address bar is only reported once
+    # every window has been asked, so a second window with a page loaded still counts.
+    blank = None
     for app in children(desktop):
         if not app_matches(name_of(app), names):
             continue
         frame = pick_frame(app)
         if frame is None:
             continue
-        found = scan_frame(frame)
-        if found:
-            return found
-    return ""
+        state = scan_frame(frame)
+        if state[0] == "url":
+            return state
+        if state[0] == "empty" and blank is None:
+            blank = state
+    return blank if blank is not None else ("none", "", "")
 
 
 def serve():
-    sys.stdout.write("${READY}\\n")
+    sys.stdout.write("${READY} ${HOST_PROTOCOL}\\n")
     sys.stdout.flush()
     while True:
         line = sys.stdin.readline()
@@ -252,9 +284,10 @@ def serve():
         request = line.strip()
         token = request[4:].strip() if request.startswith("get ") else ""
         try:
-            out = read_url(token)
+            kind, url, title = read_state(token)
         except Exception:
-            out = ""
+            kind, url, title = ("none", "", "")
+        out = kind + SEP + url + SEP + title
         # One response per request, always: a newline inside a title would desync it.
         sys.stdout.write(out.replace("\\n", " ").replace("\\r", " ") + "\\n")
         sys.stdout.flush()
@@ -286,6 +319,42 @@ export interface LinuxUrlSupport {
 
 const MISSING_PYATSPI =
   "Browser URL capture needs python3-pyatspi (sudo apt install python3-pyatspi).";
+
+/**
+ * What one read of a browser found. The recording path only cares about `url`, but the
+ * compatibility check needs the other two apart: `empty` is a readable browser with no
+ * page open (the user opens a website and re-checks), `unreachable` is a browser whose
+ * address bar never came back (confinement, or accessibility off for this launch).
+ */
+export type LinuxUrlReadState =
+  | { kind: "url"; url: string; title?: string }
+  | { kind: "empty" }
+  | { kind: "unreachable" };
+
+const UNREACHABLE: LinuxUrlReadState = { kind: "unreachable" };
+
+/**
+ * One response line, read with the rules of the protocol the live host announced.
+ * Anything unrecognized — a garbage line, a host killed mid-request, a shape from a
+ * future version — is `unreachable`: the state that claims the least.
+ */
+function parseReadState(line: string, protocol: number): LinuxUrlReadState {
+  const fields = line.split(SEP);
+  if (protocol < HOST_PROTOCOL) {
+    // Protocol 1: `<url><SEP><title>`, and an empty line meant only "no URL".
+    const url = normalizeUrl(fields[0] ?? "");
+    return url ? { kind: "url", url, title: fields[1]?.trim() || undefined } : UNREACHABLE;
+  }
+  const [kind, rawUrl, title] = fields;
+  if (kind === "url") {
+    const url = normalizeUrl(rawUrl ?? "");
+    // A "url" the normalizer rejects (a search phrase in the omnibox) is a live address
+    // bar with nothing to verify against — the same situation as a blank one.
+    return url ? { kind: "url", url, title: title?.trim() || undefined } : { kind: "empty" };
+  }
+  if (kind === "empty") return { kind: "empty" };
+  return UNREACHABLE;
+}
 
 /** Resolves whether this computer can `import pyatspi`. Injected in tests. */
 export type PyatspiProbe = () => boolean;
@@ -329,6 +398,8 @@ export class LinuxUrlProvider implements UrlProvider {
   private rl: Interface | null = null;
   private tmpDir: string | null = null;
   private ready = false;
+  /** Response shape the live host speaks; see {@link HOST_PROTOCOL}. */
+  private hostProtocol = 1;
   private busy = false;
   private disposed = false;
   /** Latched once the host dies before READY: pyatspi isn't going to appear mid-session. */
@@ -347,22 +418,32 @@ export class LinuxUrlProvider implements UrlProvider {
   }
 
   async get(app: string): Promise<ActiveUrl | null> {
-    if (this.disposed || this.unavailable || !isLinuxBrowser(app)) return null;
+    const state = await this.getReadState(app);
+    // The recording path has nothing to do with "readable but nothing open": both
+    // non-url states are simply an absent `browser.url` for this poll.
+    return state.kind === "url" ? { url: state.url, title: state.title } : null;
+  }
+
+  /**
+   * The same read as {@link get}, with the two flavours of "no URL" kept apart. For the
+   * compatibility check, which has to tell the user whether to open a page or to relaunch
+   * the browser — telling them the wrong one sends them round a loop that can't end in URLs.
+   */
+  async getReadState(app: string): Promise<LinuxUrlReadState> {
+    if (this.disposed || this.unavailable || !isLinuxBrowser(app)) return UNREACHABLE;
     this.ensureHost();
-    if (!this.proc || this.busy) return null;
+    if (!this.proc || this.busy) return UNREACHABLE;
     // Unlike the Windows host, the first read waits for the handshake instead of
     // throwing the call away: on Linux a browser can be frontmost for a while
     // before the poll loop asks again, and a wasted first read shows up as a
     // missing `browser.url` for the step the user just performed.
-    if (!this.ready && !(await this.awaitReady())) return null;
-    if (!this.proc || !this.ready || this.busy) return null;
+    if (!this.ready && !(await this.awaitReady())) return UNREACHABLE;
+    if (!this.proc || !this.ready || this.busy) return UNREACHABLE;
 
+    const protocol = this.hostProtocol;
     const line = await this.request(app);
-    if (line == null) return null;
-    const [rawUrl, title] = line.split(SEP);
-    const url = normalizeUrl(rawUrl ?? "");
-    if (!url) return null;
-    return { url, title: title?.trim() || undefined };
+    if (line == null) return UNREACHABLE;
+    return parseReadState(line, protocol);
   }
 
   dispose(): void {
@@ -432,6 +513,7 @@ export class LinuxUrlProvider implements UrlProvider {
       const proc = spawn(command, args, { stdio: ["pipe", "pipe", "ignore"] });
       this.proc = proc;
       this.ready = false;
+      this.hostProtocol = 1;
 
       if (proc.stdout) {
         this.rl = createInterface({ input: proc.stdout });
@@ -446,9 +528,14 @@ export class LinuxUrlProvider implements UrlProvider {
 
   private onLine(line: string): void {
     if (!this.ready) {
-      // First line is the readiness sentinel emitted once pyatspi is loaded.
-      this.ready = line.trim() === READY;
-      if (this.ready) this.settleReady(true);
+      // First line is the readiness sentinel emitted once pyatspi is loaded, followed
+      // by the response-shape version. A bare `READY` is a host from a build that only
+      // spoke protocol 1, and its replies are parsed as such rather than misread.
+      const [word, version] = line.trim().split(" ");
+      if (word !== READY) return;
+      this.ready = true;
+      this.hostProtocol = Number.parseInt(version ?? "", 10) || 1;
+      this.settleReady(true);
       return;
     }
     const w = this.waiter;
@@ -470,6 +557,7 @@ export class LinuxUrlProvider implements UrlProvider {
     this.waiter = null;
     if (w) w(""); // unblock any in-flight request (resolves to no-url)
     this.ready = false;
+    this.hostProtocol = 1;
     this.busy = false;
     this.settleReady(false);
     if (this.rl) {

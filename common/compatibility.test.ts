@@ -5,6 +5,7 @@ import {
   FIXES,
   gradeCompatibility,
   renderCompatibilityText,
+  type BrowserA11yProbeResult,
   type CompatibilityProbes,
   type CompatibilityReport,
   type CompatibilitySignal,
@@ -47,8 +48,24 @@ function signal(report: CompatibilityReport, key: string): CompatibilitySignal {
   return found;
 }
 
+/**
+ * A probe result with every bucket present, so each case fills in only the one it is
+ * about. The buckets are exclusive: a browser lands in exactly one of read / no page
+ * open / unreadable, and `snapBrowsers` tags whichever of those are snaps.
+ */
+function a11y(partial: Partial<BrowserA11yProbeResult> = {}): BrowserA11yProbeResult {
+  return {
+    checked: true,
+    accessibleBrowsers: [],
+    noPageOpen: [],
+    presentButUnreadable: [],
+    snapBrowsers: [],
+    ...partial,
+  };
+}
+
 const LIVE_FIREFOX: CompatibilityProbes = {
-  browserA11y: { checked: true, accessibleBrowsers: ["firefox"], presentButUnreadable: [] },
+  browserA11y: a11y({ accessibleBrowsers: ["firefox"] }),
 };
 
 /* --- Level rubric ---------------------------------------------------------- */
@@ -69,21 +86,24 @@ test("Full needs window tracking plus a browser whose URL was actually read", ()
 });
 
 test("several accessible browsers are named together", () => {
-  const report = grade(
-    {},
-    {
-      browserA11y: {
-        checked: true,
-        accessibleBrowsers: ["firefox", "chromium"],
-        presentButUnreadable: [],
-      },
-    },
-  );
+  const report = grade({}, { browserA11y: a11y({ accessibleBrowsers: ["firefox", "chromium"] }) });
   assert.equal(
     signal(report, "browserUrls").detail,
     "Firefox, Chromium — URLs verified by a live read ✓",
   );
   assert.equal(report.level, "full");
+});
+
+test("a multi-word browser name is title-cased, not sentence-cased", () => {
+  // The probe lowercases AT-SPI's "Google Chrome" so its matching is case-blind; the
+  // user's report then read "Google chrome — URLs verified by a live read ✓".
+  const report = grade({}, { browserA11y: a11y({ accessibleBrowsers: ["google chrome"] }) });
+  assert.equal(
+    signal(report, "browserUrls").detail,
+    "Google Chrome — URLs verified by a live read ✓",
+  );
+  const blocked = grade({}, { browserA11y: a11y({ noPageOpen: ["google chrome"] }) });
+  assert.match(signal(blocked, "browserUrls").detail, /^Google Chrome is running/);
 });
 
 test("URLs unavailable grades Good, never Reduced", () => {
@@ -155,10 +175,7 @@ test("missing pyatspi ships the apt command and grades Good", () => {
 });
 
 test("pyatspi present but no accessible browser grades Good with the restart commands", () => {
-  const report = grade(
-    {},
-    { browserA11y: { checked: true, accessibleBrowsers: [], presentButUnreadable: [] } },
-  );
+  const report = grade({}, { browserA11y: a11y() });
   assert.equal(report.level, "good");
   assert.equal(
     signal(report, "browserUrls").detail,
@@ -167,13 +184,13 @@ test("pyatspi present but no accessible browser grades Good with the restart com
   assert.equal(signal(report, "browserUrls").fix, FIXES.browserAccessibility);
 });
 
-test("a browser that enumerates but can't be read grades Good, and says why", () => {
+test("a confined snap that enumerates but can't be read grades Good, and says why", () => {
   // The snap-Firefox truthfulness bug: AppArmor lets the name onto the AT-SPI registry
   // and denies the tree reads, so a presence-only probe reported Full while the
   // recording captured zero browser.url events. Presence is not readability.
   const report = grade(
     {},
-    { browserA11y: { checked: true, accessibleBrowsers: [], presentButUnreadable: ["firefox"] } },
+    { browserA11y: a11y({ presentButUnreadable: ["firefox"], snapBrowsers: ["firefox"] }) },
   );
   assert.equal(report.level, "good");
   assert.equal(signal(report, "browserUrls").ok, false);
@@ -185,15 +202,14 @@ test("a browser that enumerates but can't be read grades Good, and says why", ()
   assert.equal(signal(report, "browserUrls").fix, FIXES.confinedBrowser);
 });
 
-test("several blocked browsers are named together, in the plural", () => {
+test("several blocked snaps are named together, in the plural", () => {
   const report = grade(
     {},
     {
-      browserA11y: {
-        checked: true,
-        accessibleBrowsers: [],
+      browserA11y: a11y({
         presentButUnreadable: ["firefox", "chromium"],
-      },
+        snapBrowsers: ["firefox", "chromium"],
+      }),
     },
   );
   assert.equal(
@@ -202,30 +218,101 @@ test("several blocked browsers are named together, in the plural", () => {
   );
 });
 
-test("one readable browser carries Full even when another is blocked", () => {
+test("a non-snap browser with no reachable address bar is not blamed on confinement", () => {
+  // The live regression: a deb Chrome (`/opt/google/chrome/chrome`) that reads fine was
+  // told its "snap confinement" was the problem. Nothing here is confined, and unlike a
+  // snap this one *does* have a launch-flag remedy.
+  const report = grade({}, { browserA11y: a11y({ presentButUnreadable: ["google chrome"] }) });
+  assert.equal(report.level, "good");
+  assert.equal(
+    signal(report, "browserUrls").detail,
+    "Google Chrome is running, but accessibility reads found no address bar.",
+  );
+  assert.equal(signal(report, "browserUrls").fix, FIXES.browserAddressBar);
+  assert.ok(!signal(report, "browserUrls").detail.includes("snap"));
+});
+
+test("a blocked snap and a blocked deb build each keep their own sentence and remedy", () => {
+  const report = grade(
+    {},
+    {
+      browserA11y: a11y({
+        presentButUnreadable: ["firefox", "google chrome"],
+        snapBrowsers: ["firefox"],
+      }),
+    },
+  );
+  assert.equal(
+    signal(report, "browserUrls").detail,
+    "Firefox is running and accessibility is enabled, but its snap confinement blocks accessibility reads. " +
+      "Google Chrome is running, but accessibility reads found no address bar.",
+  );
+  assert.equal(
+    signal(report, "browserUrls").fix,
+    `${FIXES.confinedBrowser} · ${FIXES.browserAddressBar}`,
+  );
+});
+
+test("one readable browser carries Full even when another is blocked or idle", () => {
   // Evidence of a working read is what the level is about; the blocked sibling is not
   // a reason to withhold a capability we just watched work.
   const report = grade(
     {},
     {
-      browserA11y: {
-        checked: true,
+      browserA11y: a11y({
         accessibleBrowsers: ["chromium"],
+        noPageOpen: ["google chrome"],
         presentButUnreadable: ["firefox"],
-      },
+        snapBrowsers: ["firefox"],
+      }),
     },
   );
   assert.equal(report.level, "full");
   assert.equal(signal(report, "browserUrls").detail, "Chromium — URLs verified by a live read ✓");
+  assert.equal(signal(report, "browserUrls").fix, undefined);
+});
+
+/* --- Nothing open to read -------------------------------------------------- */
+
+test("an accessible browser with no page open grades Good and asks for a website", () => {
+  // Measured: deb Chrome on the new tab page — 266 a11y nodes, address bar found by
+  // role and name, and genuinely empty. Readable, no page, nothing to fix but the tab.
+  const report = grade({}, { browserA11y: a11y({ noPageOpen: ["google chrome"] }) });
+  assert.equal(report.level, "good");
+  assert.equal(signal(report, "browserUrls").ok, false);
+  assert.equal(
+    signal(report, "browserUrls").detail,
+    "Google Chrome is running and accessible, but no web page was open to verify a URL read.",
+  );
+  assert.equal(signal(report, "browserUrls").fix, FIXES.noPageOpen);
+});
+
+test("no page open leads the detail over a blocked browser, and both are named", () => {
+  // Precedence: the browser that is one page load away from Full is the one to talk to
+  // first — but a user with a confined Firefox still needs to know why it never answers.
+  const report = grade(
+    {},
+    {
+      browserA11y: a11y({
+        noPageOpen: ["google chrome"],
+        presentButUnreadable: ["firefox"],
+        snapBrowsers: ["firefox"],
+      }),
+    },
+  );
+  assert.equal(report.level, "good");
+  assert.equal(
+    signal(report, "browserUrls").detail,
+    "Google Chrome is running and accessible, but no web page was open to verify a URL read. " +
+      "Firefox is running and accessibility is enabled, but its snap confinement blocks accessibility reads.",
+  );
+  assert.equal(signal(report, "browserUrls").fix, FIXES.noPageOpen);
 });
 
 test("an unrun probe never claims Full — it grades from the static signals only", () => {
   // linux + X11 + pyatspi importable, but nothing could be verified live. Whether a
   // browser exposes its address bar is per-launch state, so Full would be a guess.
-  for (const probes of [
-    {},
-    { browserA11y: { checked: false, accessibleBrowsers: [], presentButUnreadable: [] } },
-  ]) {
+  for (const probes of [{}, { browserA11y: a11y({ checked: false }) }]) {
     const report = grade({}, probes);
     assert.equal(report.level, "good");
     assert.match(signal(report, "browserUrls").detail, /could not verify a running browser/);
@@ -237,7 +324,7 @@ test("a probe result is ignored off Linux", () => {
   // A stale or bogus probe must never downgrade a platform that doesn't use it.
   const report = grade(
     { platform: "darwin", browserUrl: { kind: "applescript", supported: true } },
-    { browserA11y: { checked: true, accessibleBrowsers: [], presentButUnreadable: ["firefox"] } },
+    { browserA11y: a11y({ presentButUnreadable: ["firefox"], snapBrowsers: ["firefox"] }) },
   );
   assert.equal(report.level, "full");
   assert.equal(signal(report, "browserUrls").ok, true);
@@ -392,6 +479,10 @@ test("every fix string is pinned exactly as the docs quote it", () => {
       "Firefox: GNOME_ACCESSIBILITY=1 firefox & (quit it fully first — snap is single-instance) · Chrome/Chromium/Edge: google-chrome --force-renderer-accessibility &",
     confinedBrowser:
       "use a non-snap Firefox (Mozilla deb/tar build) or a Chromium-family browser started with --force-renderer-accessibility; titles + frames still identify pages",
+    browserAddressBar:
+      "quit the browser completely (every window), then relaunch it — Chrome/Chromium/Edge: google-chrome --force-renderer-accessibility & · Firefox: GNOME_ACCESSIBILITY=1 firefox & — and run this check again",
+    noPageOpen:
+      "open any website in the browser, then run the compatibility check again — URLs verify only against a live page",
     macAutomation:
       "System Settings → Privacy & Security → Automation → allow Skill Recorder for your browser",
     micMac: "System Settings → Privacy & Security → Microphone → allow Skill Recorder",
@@ -455,11 +546,23 @@ test("a copied report of a confined browser carries the confinement remedy", () 
   const text = renderCompatibilityText(
     grade(
       {},
-      { browserA11y: { checked: true, accessibleBrowsers: [], presentButUnreadable: ["firefox"] } },
+      { browserA11y: a11y({ presentButUnreadable: ["firefox"], snapBrowsers: ["firefox"] }) },
     ),
   );
   assert.match(text, /Level: Good capture/);
   assert.match(text, /\[!!\] Browser URLs: Firefox is running and accessibility is enabled/);
   assert.ok(text.includes(`Fix: ${FIXES.confinedBrowser}`));
   assert.ok(!text.includes(FIXES.browserAccessibility));
+});
+
+test("a copied report of an idle browser carries the open-a-website remedy", () => {
+  const text = renderCompatibilityText(
+    grade({}, { browserA11y: a11y({ noPageOpen: ["google chrome"] }) }),
+  );
+  assert.match(text, /Level: Good capture/);
+  assert.match(text, /\[!!\] Browser URLs: Google Chrome is running and accessible/);
+  assert.ok(text.includes(`Fix: ${FIXES.noPageOpen}`));
+  // Neither of the other two remedies applies, and printing them would be noise.
+  assert.ok(!text.includes(FIXES.confinedBrowser));
+  assert.ok(!text.includes(FIXES.browserAddressBar));
 });

@@ -151,6 +151,17 @@ authoritative for *what to build*.
   outcome*, deb-Firefox/Chromium is the true path to Full). Consequence for the describer:
   snap-Firefox recordings are titles+frames-only by OS design — which iteration 2 above
   makes workable.
+  **Follow-up (same day, user-found):** deb Chrome + flag on the New Tab Page still graded
+  Good with the snap message — the omnibox is genuinely EMPTY on the NTP (live: address-bar
+  node found in 0.1s, no text; with example.com open the provider read the URL in 129ms).
+  Fixed: the AT-SPI host protocol is versioned tri-state (`url`/`empty`/`none`; `get()`
+  unchanged for recording), the probe buckets `accessibleBrowsers` / `noPageOpen` /
+  `presentButUnreadable` + `snapBrowsers` (snap = `/proc/<pid>/exe` under `/snap/`), and
+  grading gives each failure its own remedy: no page open → "open any website and re-run";
+  unreachable snap → confinement message (unchanged); unreachable non-snap → full-quit and
+  relaunch with the flag. Live-verified all three states on this box (Chrome example.com →
+  **Full** "URLs verified by a live read ✓"; Chrome NTP → Good/no-page-open; live snap
+  Firefox pid → snap-tagged confinement message). Tests 388/388.
 
 ## Workstream status
 

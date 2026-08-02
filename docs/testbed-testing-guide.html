@@ -91,9 +91,12 @@
       <li><code>curl -H "X-Api-Key: demo-key-123" http://127.0.0.1:8787/api/v1/customers</code> → JSON with 4 customers.</li>
     </ul>
   </li>
-  <li>In the recorder, with your browser already open, click <b>Check compatibility</b> —
-      proceed when it reports <b>Full</b> (or <b>Good</b> if you're deliberately accepting the
-      no-URL path). Anything degraded comes with the exact command to fix it.</li>
+  <li>In the recorder, with your browser already open <b>on a real page</b> (the testbed home
+      is ideal — a browser sitting on its new-tab page has an empty address bar, and the check
+      reports <b>Good</b> with “no web page was open to verify a URL read”), click
+      <b>Check compatibility</b> — proceed when it reports <b>Full</b> (or <b>Good</b> if
+      you're deliberately accepting the no-URL path). Anything degraded comes with the exact
+      command to fix it.</li>
 </ol>
 
 <div class="card ok">
@@ -113,9 +116,15 @@
         frames.</li>
     <li><b>On a non-snap Firefox (Mozilla deb/tar) or a Chromium-family browser started with
         <code>--force-renderer-accessibility</code></b> — <span class="pass">expect
-        <b>Full</b></span> with “… — URLs verified by a live read ✓”. This is the real path to
-        Full, and the only one that gives your Part A baseline real <code>browser.url</code>
-        events.</li>
+        <b>Full</b></span> with “… — URLs verified by a live read ✓”, <i>provided a page is
+        loaded</i>. This is the real path to Full, and the only one that gives your Part A
+        baseline real <code>browser.url</code> events.</li>
+    <li><b>With that same unconfined browser sitting on its new-tab page</b> —
+        <span class="pass">expect <b>Good</b></span> with “… is running and accessible, but no
+        web page was open to verify a URL read”. Nothing is wrong: open any website and re-run.
+        Only a browser that exposes <i>no address bar at all</i> reports “accessibility reads
+        found no address bar”, and only an actual snap (checked against the running process)
+        is ever blamed on confinement.</li>
   </ul>
   Record both readings — they're checklist row 12.
 </div>
@@ -283,7 +292,7 @@ attach it as docs for best-effort matching."</i></p>
   <tr><td>9</td><td>Transcript exists and contains no credential</td></tr>
   <tr><td>10</td><td>Deny adapts gracefully; Cancel stops cleanly</td></tr>
   <tr><td>11</td><td>(Optional) Copilot Studio bundle complete; import succeeds</td><td>GG ③</td></tr>
-  <tr><td>12</td><td>Compatibility check reports the <i>verified</i> URL result after relaunching Firefox with <code>GNOME_ACCESSIBILITY=1</code>: <b>Full</b> (“URLs verified by a live read ✓”) on a non-snap or Chromium-family browser, or <b>Good</b> with “snap confinement blocks accessibility reads” on snap Firefox — both pass; a bare “no browser is accessible” or an unverified <b>Full</b> fails</td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
+  <tr><td>12</td><td>Compatibility check reports the <i>verified</i> URL result after relaunching Firefox with <code>GNOME_ACCESSIBILITY=1</code>: <b>Full</b> (“URLs verified by a live read ✓”) on a non-snap or Chromium-family browser with a page loaded, <b>Good</b> with “no web page was open to verify a URL read” if it is on a new-tab page, or <b>Good</b> with “snap confinement blocks accessibility reads” on snap Firefox — all three pass; a bare “no browser is accessible”, an unverified <b>Full</b>, or a snap message shown for a non-snap browser fails</td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
 </table>
 
 <p>Report each row as pass/fail with any deviating text you saw — verbatim strings are the most
@@ -295,7 +304,7 @@ useful bug reports. Results land in <code>docs/plans/progress.md</code>'s gate l
   <tr><th>Symptom</th><th>Fix</th></tr>
   <tr><td>Port 8787 busy</td><td><code>PORT=8790 npm run testbed</code> — then use that port everywhere, including <code>runner.json</code>.</td></tr>
   <tr><td>Analysis found no signals (Linux)</td><td>Run <b>Check compatibility</b> — expect <i>Reduced</i> with the named fix (Wayland session or missing <code>x11-utils</code>). Use an "Ubuntu on Xorg" session.</td></tr>
-  <tr><td>No <code>browser.url</code> events (Linux)</td><td><b>Check compatibility</b> tells you which, from a real read: missing <code>python3-pyatspi</code>, no browser running with accessibility on, or a snap browser whose reads AppArmor blocks (the card above — use a non-snap Firefox or Chromium for URLs). Page titles + frames still carry the test either way.</td></tr>
+  <tr><td>No <code>browser.url</code> events (Linux)</td><td><b>Check compatibility</b> tells you which, from a real read: missing <code>python3-pyatspi</code>, no page open (load a website and re-check), no address bar exposed (quit the browser fully and relaunch it with accessibility on), or a snap browser whose reads AppArmor blocks (the card above — use a non-snap Firefox or Chromium for URLs). Page titles + frames still carry the test either way.</td></tr>
   <tr><td>Skill run fails with HTTP 401</td><td><code>runner.json</code> missing or wrong key/path — it must sit beside the installed <code>SKILL.md</code>.</td></tr>
   <tr><td>Skill run fails with "could not reach…"</td><td>The testbed isn't running, or <code>apiBase</code> doesn't match its port.</td></tr>
   <tr><td>Order totals look wrong</td><td>Remember the seed: NW-1140 is $18, NW-2207 is $22 — 12×18 + 3×22 = $282.</td></tr>
