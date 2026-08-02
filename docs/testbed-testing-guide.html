@@ -96,6 +96,16 @@
       no-URL path). Anything degraded comes with the exact command to fix it.</li>
 </ol>
 
+<div class="card ok">
+  <b>Two-click bonus check — the Good→Full flip (also the GL2 snap-Firefox experiment).</b>
+  With plain-launched Firefox running, the check should report <b>Good</b> and show the
+  <code>GNOME_ACCESSIBILITY=1 firefox &amp;</code> fix. Quit Firefox <i>fully</i> (snap is
+  single-instance — the flag does nothing while any old window survives), relaunch with the
+  flag, and re-run the check: <span class="pass">expect <b>Full</b></span> with "Firefox is
+  exposing accessibility". Record both readings — they're checklist row 12. Recording with
+  Full compatibility also gives your Part A baseline real <code>browser.url</code> events.
+</div>
+
 <p>Seeded data you'll reference throughout: customers <b>Contoso Ltd</b> (<code>CUST-1001</code>),
 Fabrikam Inc, Adventure Works, Tailspin Toys; products include <code>NW-1140</code>
 (Chai Tea Chest, $18) and <code>NW-2207</code> (Cajun Seasoning, $22).</p>
@@ -259,6 +269,7 @@ attach it as docs for best-effort matching."</i></p>
   <tr><td>9</td><td>Transcript exists and contains no credential</td></tr>
   <tr><td>10</td><td>Deny adapts gracefully; Cancel stops cleanly</td></tr>
   <tr><td>11</td><td>(Optional) Copilot Studio bundle complete; import succeeds</td><td>GG ③</td></tr>
+  <tr><td>12</td><td>Compatibility check flips <b>Good → Full</b> after relaunching Firefox with <code>GNOME_ACCESSIBILITY=1</code></td><td>GL2 (snap-Firefox experiment) + compat-check verification</td></tr>
 </table>
 
 <p>Report each row as pass/fail with any deviating text you saw — verbatim strings are the most
@@ -269,8 +280,8 @@ useful bug reports. Results land in <code>docs/plans/progress.md</code>'s gate l
 <table>
   <tr><th>Symptom</th><th>Fix</th></tr>
   <tr><td>Port 8787 busy</td><td><code>PORT=8790 npm run testbed</code> — then use that port everywhere, including <code>runner.json</code>.</td></tr>
-  <tr><td>Analysis found no signals (Linux)</td><td>You're on Wayland or missing <code>x11-utils</code> — the recorder's readiness panel names the problem. Use an "Ubuntu on Xorg" session.</td></tr>
-  <tr><td>No <code>browser.url</code> events (Linux)</td><td>Expected without <code>python3-pyatspi</code> (and snap Firefox needs <code>GNOME_ACCESSIBILITY=1</code>). Page titles + frames still carry the test.</td></tr>
+  <tr><td>Analysis found no signals (Linux)</td><td>Run <b>Check compatibility</b> — expect <i>Reduced</i> with the named fix (Wayland session or missing <code>x11-utils</code>). Use an "Ubuntu on Xorg" session.</td></tr>
+  <tr><td>No <code>browser.url</code> events (Linux)</td><td><b>Check compatibility</b> tells you which: missing <code>python3-pyatspi</code>, or no browser currently exposing accessibility (the Good→Full card above). Page titles + frames still carry the test either way.</td></tr>
   <tr><td>Skill run fails with HTTP 401</td><td><code>runner.json</code> missing or wrong key/path — it must sit beside the installed <code>SKILL.md</code>.</td></tr>
   <tr><td>Skill run fails with "could not reach…"</td><td>The testbed isn't running, or <code>apiBase</code> doesn't match its port.</td></tr>
   <tr><td>Order totals look wrong</td><td>Remember the seed: NW-1140 is $18, NW-2207 is $22 — 12×18 + 3×22 = $282.</td></tr>

@@ -191,10 +191,25 @@ google-chrome --force-renderer-accessibility &amp;</code></pre>
 endpoint host once connected) and rows for any capture source that is degraded or
 unavailable on your setup — if everything is healthy, no warnings appear.</p>
 
-<p>Click <b>Check compatibility</b> in that panel to see the capture level to expect
-(<b>Full</b>, <b>Good</b> or <b>Reduced</b>), what each level means for your analyses, and the
-exact command or settings path that fixes anything degraded — plus <b>Copy report</b> for
-support threads.</p>
+<h3>Check your compatibility level</h3>
+
+<p>Click <b>Check compatibility</b> in the readiness panel. It inspects your platform,
+session type, installed tools, and — on Linux — whether a running browser is <i>currently</i>
+exposing its accessibility tree, then reports the level to expect:</p>
+
+<table>
+  <tr><th>Level</th><th>What it means for your recordings</th></tr>
+  <tr><td><b>Full</b></td><td>The richest analyses: app switches, window titles, browser URLs, and screen frames all feed the model.</td></tr>
+  <tr><td><b>Good</b></td><td>Everything except live URLs — pages are identified by window titles and screen frames. Fine for most tasks; the report shows the exact command to reach Full (e.g. restarting your browser in accessibility mode).</td></tr>
+  <tr><td><b>Reduced</b></td><td>No window tracking (e.g. a Wayland session or missing <code>x11-utils</code>) — only video, clipboard and narration are captured, and analyses of app/web work will be weak. The report names the fix.</td></tr>
+</table>
+
+<ul>
+  <li>Every degraded item comes with its <b>copyable fix</b> — a command, a settings path, or a login-screen choice.</li>
+  <li><b>Full is only reported on live evidence</b>: on Linux, having the prerequisites installed isn't enough — a browser must actually be exposing accessibility <i>right now</i>, because that's a per-launch property. Run the check again after restarting your browser with the commands from section&nbsp;2.</li>
+  <li><b>Copy report</b> produces a plain-text version (levels, signals, and fixes) — paste it into a support thread and it doubles as the remediation checklist.</li>
+  <li>The AI connection and narration transcription are reported as separate lines — they gate <i>analysis</i>, not capture.</li>
+</ul>
 
 <h3>Connecting to your Foundry resource</h3>
 <ol class="steps">
@@ -301,9 +316,13 @@ is built from.</p>
 
 <h2 id="trouble"><span class="num">9.</span>Troubleshooting</h2>
 
+<p><b>First stop for anything capture-related:</b> click <b>Check compatibility</b> — it
+grades your setup and hands you the exact fix for every degraded item, which resolves most
+of the rows below without further digging.</p>
+
 <table>
   <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
-  <tr><td>Analysis says “no reconstructable task / no signals”</td><td>The recording captured no events. Linux: check the readiness panel — install <code>x11-utils</code>, and make sure you're on an X11 session (“Ubuntu on Xorg”), not Wayland.</td></tr>
+  <tr><td>Analysis says “no reconstructable task / no signals”</td><td>The recording captured no events. Run <b>Check compatibility</b> — expect <i>Reduced</i> with the fix named (install <code>x11-utils</code>, or log in with “Ubuntu on Xorg” instead of Wayland).</td></tr>
   <tr><td>“Azure AI Foundry rejected the API key (HTTP 401)”</td><td>Wrong or expired key — re-enter it in the connection form and press <i>Test connection</i>.</td></tr>
   <tr><td>“…could not find the ‘X’ deployment (HTTP 404)”</td><td>That deployment doesn't exist on your resource — create it in the Foundry portal, or put your actual deployment name in the form's Deployments section.</td></tr>
   <tr><td>No browser URLs in recordings (Linux)</td><td>Install <code>python3-pyatspi</code>. Chromium browsers additionally need <code>--force-renderer-accessibility</code>; snap Firefox needs <code>GNOME_ACCESSIBILITY=1</code> at launch. Titles + frames still identify pages without it.</td></tr>
