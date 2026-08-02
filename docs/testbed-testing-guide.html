@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Recorder — Testbed Testing Guide</title>
+<style>
+  :root {
+    --bg: #faf9f7; --fg: #1e1c1a; --muted: #6b6560; --accent: #2c5fb5;
+    --card: #ffffff; --border: #e4dfd8; --code-bg: #f1ede7; --ok: #2e7d4f; --warn: #a15c00; --bad: #b03030;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #171819; --fg: #e8eaec; --muted: #9aa2a9; --accent: #6f9fe8;
+      --card: #1f2224; --border: #34383b; --code-bg: #272b2e; --ok: #6fbf8f; --warn: #d9a24a; --bad: #e08484;
+    }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font: 16px/1.65 "Segoe UI", system-ui, sans-serif; }
+  .wrap { max-width: 900px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  header.hero { border-bottom: 2px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 1.6rem; }
+  h1 { font-size: 1.9rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
+  .sub { color: var(--muted); margin: 0; }
+  h2 { font-size: 1.4rem; margin: 2.6rem 0 .7rem; padding-top: 1rem; border-top: 1px solid var(--border); }
+  h2 .num { color: var(--accent); font-weight: 700; margin-right: .4rem; }
+  h3 { font-size: 1.05rem; margin: 1.5rem 0 .4rem; }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .88em; }
+  code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+  pre { background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px; padding: .85rem 1rem; overflow-x: auto; line-height: 1.5; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .92em; }
+  th, td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .card { background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--accent); border-radius: 8px; padding: .85rem 1.1rem; margin: 1rem 0; }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card.bad { border-left-color: var(--bad); }
+  nav.toc { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.4rem; }
+  nav.toc ol { margin: .4rem 0 .2rem; padding-left: 1.3rem; }
+  ol.steps > li { margin: .55rem 0; }
+  .pass { color: var(--ok); font-weight: 700; }
+  .fail { color: var(--bad); font-weight: 700; }
+  .pill { display: inline-block; font-size: .78em; font-weight: 600; border-radius: 99px; padding: .1em .7em; border: 1px solid var(--border); background: var(--code-bg); }
+  footer { margin-top: 3rem; color: var(--muted); font-size: .85em; border-top: 1px solid var(--border); padding-top: 1rem; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Testbed Testing Guide</h1>
+  <p class="sub">Step-by-step manual testing with the mock CRUD sales app (<code>tools/testbed</code>) —
+  from a real recording to an executed API-grounded skill. Closes the human halves of gates
+  <b>GJ</b> (documentation levels), <b>GH&nbsp;③</b> (Skills-panel run), and exercises <b>G3(C)</b> along the way.</p>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#setup">Part 0 — Setup &amp; sanity checks</a></li>
+    <li><a href="#recording">Part A — Make the baseline recording (9 steps)</a></li>
+    <li><a href="#analyze">Part B — Analyze it &amp; what to expect</a></li>
+    <li><a href="#doclevels">Part C — The documentation-level experiment (4 rounds + YAML check)</a></li>
+    <li><a href="#run">Part D — Run a skill against the testbed (gate GH ③)</a></li>
+    <li><a href="#studio">Part E — Optional: the Copilot Studio bundle</a></li>
+    <li><a href="#report">Part F — Results checklist (what to report)</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<div class="card">
+  <b>Why this app is a good test.</b> The testbed's HTML UI <i>never calls its own JSON API</i>
+  — the server mutates state directly from form posts. So your recording contains <b>zero API
+  traffic</b>, and any UI→API mapping the builder produces must come from the attached
+  documentation. If it "knows" an endpoint you didn't document, something leaked — that's a
+  finding, not a success.
+</div>
+
+<h2 id="setup"><span class="num">0.</span>Setup &amp; sanity checks</h2>
+
+<ol class="steps">
+  <li>Skill Recorder installed and <b>connected to Foundry</b> (the connection form saved and
+      <i>Test connection</i> green — this exercises part of G3(C)).</li>
+  <li>Start the testbed in its own terminal: <pre><code>npm run testbed</code></pre>
+      Leave it running. State is <b>in-memory</b>: restarting resets to 4 customers, 6 products,
+      2 orders — and order numbering back to <code>SO-10003</code>.</li>
+  <li>Sanity-check both surfaces:
+    <ul>
+      <li>Browser → <code>http://127.0.0.1:8787/</code> shows <b>Home — Northwind Testbed</b>.</li>
+      <li><code>curl http://127.0.0.1:8787/api/v1/orders</code> → <b>401</b> (API is key-gated).</li>
+      <li><code>curl -H "X-Api-Key: demo-key-123" http://127.0.0.1:8787/api/v1/customers</code> → JSON with 4 customers.</li>
+    </ul>
+  </li>
+</ol>
+
+<p>Seeded data you'll reference throughout: customers <b>Contoso Ltd</b> (<code>CUST-1001</code>),
+Fabrikam Inc, Adventure Works, Tailspin Toys; products include <code>NW-1140</code>
+(Chai Tea Chest, $18) and <code>NW-2207</code> (Cajun Seasoning, $22).</p>
+
+<h2 id="recording"><span class="num">A.</span>Make the baseline recording</h2>
+
+<p>One recording backs the whole experiment. Start the recorder
+(<span class="pill">⌘⇧R / Ctrl+Shift+R</span>), then do <b>exactly this</b> in your browser and
+nothing else:</p>
+
+<ol class="steps">
+  <li>Open <code>http://127.0.0.1:8787/</code> (Home).</li>
+  <li>Click <b>Customers</b> — note Contoso Ltd is <code>CUST-1001</code>.</li>
+  <li>Click <b>Products</b> — note <code>NW-1140</code> ($18) and <code>NW-2207</code> ($22).</li>
+  <li>Click <b>Orders</b>, scroll to <b>New order</b>.</li>
+  <li>Choose customer <b>Contoso Ltd (CUST-1001)</b>.</li>
+  <li>Row 1: product <code>NW-1140 · Chai Tea Chest</code>, quantity <b>12</b>.</li>
+  <li>Row 2: product <code>NW-2207 · Cajun Seasoning</code>, quantity <b>3</b>.</li>
+  <li>Leave row 3 empty, press <b>Submit order</b> — you land on <b>Order SO-10003</b>, total <b>$282.00</b>.</li>
+  <li>Stop the recording.</li>
+</ol>
+
+<div class="card warn">
+  <b>Narration (optional but recommended once):</b> repeat with Narrate on, saying things like
+  "I'm creating a sales order for Contoso." — it tests the transcription deployment and gives
+  the analyzer the intent directly.
+</div>
+
+<h2 id="analyze"><span class="num">B.</span>Analyze it &amp; what to expect</h2>
+
+<ol class="steps">
+  <li>Library → select the recording → <b>Analyze</b>.</li>
+  <li><span class="pass">PASS looks like:</span> an intent about <i>creating a sales order for
+      Contoso in the Northwind app</i>, with ordered steps covering browsing customers/products,
+      filling the order form (both line items, quantities 12 and 3), and submitting — page
+      identity via the page titles ("Orders — Northwind Testbed" …).</li>
+  <li><span class="fail">FAIL looks like:</span> "no reconstructable task / no signals" — a capture
+      problem, not an analysis problem. See <a href="#trouble">Troubleshooting</a>.</li>
+  <li>Approve (edit anything that reads wrong first).</li>
+</ol>
+
+<h2 id="doclevels"><span class="num">C.</span>The documentation-level experiment</h2>
+
+<p>Four rounds over the <b>same approved analysis</b>. Each round: on the target picker,
+<b>attach one file</b> from <code>tools/testbed/docs/</code> under <i>API reference (optional)</i>
+→ build an <b>App skill</b> → inspect the proposed plan → note the outcome → <b>remove</b> the
+reference before the next round. (Attaching or removing resets the builder's conversation —
+that's by design; just build again.)</p>
+
+<table>
+  <tr><th>Round</th><th>Attach</th><th class="pass">Expect in the plan</th><th class="fail">Failure signs</th></tr>
+  <tr>
+    <td><b>L1</b> full spec</td><td><code>openapi-full.json</code></td>
+    <td>Action steps grounded as <code>api:listCustomers</code> / <code>api:getCustomer</code> and
+        <code>api:createSalesOrder</code>; no click/browser/navigate language; base URL hoisted into
+        an editable value.</td>
+    <td>UI-replay steps; an operationId that isn't in the spec.</td>
+  </tr>
+  <tr>
+    <td><b>L2</b> minimal spec</td><td><code>openapi-minimal.json</code></td>
+    <td>Same grounding via <b>synthesized ids</b> — expect <code>api:getCustomers</code> and
+        <code>api:postOrders</code> (or the <code>api:POST /orders</code> route form).</td>
+    <td>Ids copied from L1 (e.g. <code>createSalesOrder</code> — that name doesn't exist in this spec).</td>
+  </tr>
+  <tr>
+    <td><b>L3</b> prose docs</td><td><code>api-guide.md</code></td>
+    <td><b>No <code>api:</code> refs at all</b> (docs can't be machine-verified) — but steps written
+        against the documented HTTP endpoints in prose ("POST {{base}}/orders with customerId and
+        items[].sku/quantity", tool <code>web_fetch</code>), not UI replay.</td>
+    <td>Fabricated <code>api:</code> refs (fake grounding), or pure UI-replay that ignores the docs.</td>
+  </tr>
+  <tr>
+    <td><b>L4</b> partial spec</td><td><code>openapi-partial.json</code></td>
+    <td>Customer/product lookups grounded (<code>api:listCustomers</code>…) while the order-create
+        step <b>honestly falls back</b> to the web UI/form — orders aren't in this spec.</td>
+    <td>A hallucinated <code>api:createSalesOrder</code>; or refusing to plan at all.</td>
+  </tr>
+</table>
+
+<div class="card bad">
+  <b>The universal red line — credentials.</b> In every round, the plan, values, and SKILL.md may
+  name the <i>scheme</i> ("requires the X-Api-Key header / apiKeyAuth") but must <b>never contain
+  <code>demo-key-123</code></b>. If the literal key appears anywhere, record it and stop — that's a leak.
+</div>
+
+<h3>Quick extra: the YAML refusal</h3>
+<p>Try attaching any <code>.yaml</code> file. <span class="pass">Expect</span> the exact message:
+<i>"OpenAPI YAML isn't supported yet — export the spec as JSON (most API portals offer both), or
+attach it as docs for best-effort matching."</i></p>
+
+<h2 id="run"><span class="num">D.</span>Run a skill against the testbed (gate GH ③)</h2>
+
+<p>Two ways to get a runnable skill — do at least one:</p>
+<ul>
+  <li><b>Full loop (best):</b> in round L1, continue past the plan — <b>Create</b> the App skill
+      and install it to your library.</li>
+  <li><b>Fixture shortcut:</b> copy the committed fixture
+      <code>evals/fixtures/runner-sales-skill/</code> into <code>~/.skill-recorder/skills/</code>
+      (its name is <code>runner-sales-order-demo</code>).</li>
+</ul>
+
+<ol class="steps">
+  <li>In the installed skill's folder, create/edit <code>runner.json</code>:
+<pre><code>{ "apiBase": "http://127.0.0.1:8787/api/v1",
+  "headers": { "X-Api-Key": "demo-key-123" } }</code></pre></li>
+  <li>Library → <b>Skills</b> tab. <span class="pass">Expect</span> the skill listed with an
+      <span class="pill">API</span> badge (and <i>no</i> "unrestricted" badge — it declares its
+      allowed operations).</li>
+  <li>Input: <code>Create an order for Fabrikam: 5x NW-1140 and 2x NW-2207</code> → <b>Run skill</b>.</li>
+  <li><span class="pass">Expect, in order:</span>
+    <ul>
+      <li>a transcript entry calling <code>api:listCustomers</code> and resolving Fabrikam's id;</li>
+      <li>a <b>confirmation card</b> — "Call createSalesOrder (POST /api/v1/orders)" with a
+          collapsible detail view. <b>Approve</b> it;</li>
+      <li>HTTP 201 in the transcript and a final summary naming the new order id;</li>
+      <li>the footer shows <code>Transcript: &lt;path&gt;</code>.</li>
+    </ul></li>
+  <li><b>Verify the side effect is real:</b> open <code>http://127.0.0.1:8787/orders</code> — the
+      new order exists for Fabrikam with those quantities.</li>
+  <li><b>Verify redaction:</b> open the transcript file and search for <code>demo-key-123</code> —
+      <span class="pass">zero occurrences</span>.</li>
+</ol>
+
+<h3>Negative tests (do both)</h3>
+<ol class="steps">
+  <li><b>Deny path:</b> run again, and this time <b>Deny</b> the create-order card.
+      <span class="pass">Expect</span> the model to adapt gracefully (report it couldn't complete,
+      no order created — check <code>/orders</code>) rather than error out.</li>
+  <li><b>Cancel:</b> start a run and press <b>Cancel run</b> mid-flight. <span class="pass">Expect</span>
+      a clean stop; starting another run afterwards works. (While one run is active, a second
+      start is refused with "A skill is already running.")</li>
+</ol>
+
+<h2 id="studio"><span class="num">E.</span>Optional: the Copilot Studio bundle</h2>
+
+<ol class="steps">
+  <li>From the same analysis, with <code>openapi-full.json</code> attached, build a
+      <b>Copilot Studio skill</b> and export it to a folder.</li>
+  <li><span class="pass">Inspect the folder:</span> <code>SKILL.md</code>,
+      <code>declarativeAgent.json</code>, <code>manifest.json</code>, <code>color.png</code> +
+      <code>outline.png</code>, <code>connectors.md</code> (with a <b>Custom connector</b> section
+      pointing at the spec), <code>&lt;slug&gt;-agent.zip</code>, and <code>api/openapi.json</code>.</li>
+  <li>If you have a Copilot Studio environment (gate <b>GG ③</b>): import
+      <code>api/openapi.json</code> as a custom connector, then import the zip, wire the actions
+      per <code>connectors.md</code>, and test in the Studio chat. A schema-version rejection is a
+      <i>finding to report</i> — the fix is bumping two pinned constants.</li>
+</ol>
+
+<h2 id="report"><span class="num">F.</span>Results checklist — what to report</h2>
+
+<table>
+  <tr><th>#</th><th>Check</th><th>Gate it closes</th></tr>
+  <tr><td>1</td><td>Connection form save + Test green</td><td>part of G3(C)</td></tr>
+  <tr><td>2</td><td>Baseline recording analyzed into a correct sales-order intent + steps</td><td>capture/analyze sanity</td></tr>
+  <tr><td>3</td><td>L1 plan grounded in real operationIds</td><td rowspan="5">GJ (manual half)</td></tr>
+  <tr><td>4</td><td>L2 plan uses synthesized ids, not L1 names</td></tr>
+  <tr><td>5</td><td>L3 plan: endpoints in prose, zero <code>api:</code> refs</td></tr>
+  <tr><td>6</td><td>L4 plan: grounded lookups + honest order-step fallback</td></tr>
+  <tr><td>7</td><td>No round leaked <code>demo-key-123</code>; YAML refusal message exact</td></tr>
+  <tr><td>8</td><td>Skill run: confirm card → approve → real order visible in the UI</td><td rowspan="3"><b>GH ③</b></td></tr>
+  <tr><td>9</td><td>Transcript exists and contains no credential</td></tr>
+  <tr><td>10</td><td>Deny adapts gracefully; Cancel stops cleanly</td></tr>
+  <tr><td>11</td><td>(Optional) Copilot Studio bundle complete; import succeeds</td><td>GG ③</td></tr>
+</table>
+
+<p>Report each row as pass/fail with any deviating text you saw — verbatim strings are the most
+useful bug reports. Results land in <code>docs/plans/progress.md</code>'s gate ledger.</p>
+
+<h2 id="trouble">Troubleshooting</h2>
+
+<table>
+  <tr><th>Symptom</th><th>Fix</th></tr>
+  <tr><td>Port 8787 busy</td><td><code>PORT=8790 npm run testbed</code> — then use that port everywhere, including <code>runner.json</code>.</td></tr>
+  <tr><td>Analysis found no signals (Linux)</td><td>You're on Wayland or missing <code>x11-utils</code> — the recorder's readiness panel names the problem. Use an "Ubuntu on Xorg" session.</td></tr>
+  <tr><td>No <code>browser.url</code> events (Linux)</td><td>Expected without <code>python3-pyatspi</code> (and snap Firefox needs <code>GNOME_ACCESSIBILITY=1</code>). Page titles + frames still carry the test.</td></tr>
+  <tr><td>Skill run fails with HTTP 401</td><td><code>runner.json</code> missing or wrong key/path — it must sit beside the installed <code>SKILL.md</code>.</td></tr>
+  <tr><td>Skill run fails with "could not reach…"</td><td>The testbed isn't running, or <code>apiBase</code> doesn't match its port.</td></tr>
+  <tr><td>Order totals look wrong</td><td>Remember the seed: NW-1140 is $18, NW-2207 is $22 — 12×18 + 3×22 = $282.</td></tr>
+  <tr><td>Order id isn't SO-10003</td><td>Fine — numbering continues while the testbed stays up; restart it to reset state.</td></tr>
+</table>
+
+<footer>
+  Companion docs: <code>tools/testbed/README.md</code> (protocol source of truth),
+  <code>docs/user-guide.html</code> (general usage), <code>docs/plans/progress.md</code> (gate ledger).
+  The scored, automated versions of Part C run via <code>npm run eval:skill</code>
+  (<code>api-sales-order*</code> scenarios); the automated version of Part D is
+  <code>scripts/runner-smoke.ts</code>.
+</footer>
+
+</div>
+</body>
+</html>
