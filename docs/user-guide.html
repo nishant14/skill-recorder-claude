@@ -164,6 +164,15 @@ each release pins an exact 40-character commit, shown below as
   <li>The installer is <b>Ubuntu-gated</b> (it checks <code>/etc/os-release</code>) and adds an application-menu entry with the app icon.</li>
   <li><b>Required:</b> <code>x11-utils</code> (provides <code>xprop</code>/<code>xwininfo</code> for window tracking) — the installer checks and tells you: <code>sudo apt install x11-utils</code>.</li>
   <li><b>Recommended:</b> <code>python3-pyatspi</code> for browser-URL capture: <code>sudo apt install python3-pyatspi</code> (without it, page identity comes from window titles and screen frames — still workable).</li>
+  <li><b>Start your browser in accessibility mode</b> so URL capture can read its address bar
+      (X11 sessions only — on Wayland, window tracking is unavailable, so URL capture never
+      engages and these flags change nothing):
+<pre><code># Firefox (required for the snap build; harmless otherwise)
+GNOME_ACCESSIBILITY=1 firefox &amp;
+
+# Chrome / Chromium / Edge
+google-chrome --force-renderer-accessibility &amp;</code></pre>
+      Launch the browser this way <i>before</i> recording sessions that involve web pages.</li>
   <li><b>Session type matters:</b> log in with <b>“Ubuntu on Xorg”</b> for full capture. On Wayland the app still records video, clipboard and narration, and shows exactly which sources are unavailable instead of failing silently.</li>
   <li>Other distros: not validated; a packaged AppImage can be built from source (<code>npm run dist:linux:x64</code>) and may work, with the same X11 requirements.</li>
 </ul>
@@ -175,7 +184,7 @@ each release pins an exact 40-character commit, shown below as
   <tr><th>Platform</th><th>What to grant</th></tr>
   <tr><td>macOS</td><td><b>Screen Recording</b> (System Settings → Privacy &amp; Security) on first launch; <b>Microphone</b> only if you use Narrate; per-browser <b>Automation</b> prompts the first time URLs are read.</td></tr>
   <tr><td>Windows</td><td>No OS prompt for screen or window capture; allow <b>Microphone</b> in Privacy settings if you use Narrate.</td></tr>
-  <tr><td>Linux</td><td>No prompts on X11. On Wayland, the desktop portal asks you to pick a screen when video capture starts. Chromium-family browsers expose their address bar to URL capture only when started with <code>--force-renderer-accessibility</code>; snap Firefox needs accessibility enabled at launch (<code>GNOME_ACCESSIBILITY=1 firefox</code>).</td></tr>
+  <tr><td>Linux</td><td>No prompts on X11. On Wayland, the desktop portal asks you to pick a screen when video capture starts. For browser-URL capture, start the browser in accessibility mode — the exact commands are in the Linux install section above (X11 only).</td></tr>
 </table>
 
 <p>The recorder window shows a <b>readiness panel</b>: an <i>Azure AI Foundry</i> row (your
