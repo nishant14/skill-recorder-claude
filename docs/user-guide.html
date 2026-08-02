@@ -1,0 +1,311 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Skill Recorder — Installation &amp; User Guide</title>
+<style>
+  :root {
+    --bg: #faf9f7; --fg: #1e1c1a; --muted: #6b6560; --accent: #b5442c;
+    --card: #ffffff; --border: #e4dfd8; --code-bg: #f1ede7; --ok: #2e7d4f; --warn: #a15c00;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #191715; --fg: #ece8e3; --muted: #a29a92; --accent: #e8825f;
+      --card: #221f1c; --border: #383330; --code-bg: #2a2622; --ok: #6fbf8f; --warn: #d9a24a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--fg);
+    font: 16px/1.65 "Segoe UI", system-ui, -apple-system, sans-serif;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 2.5rem 1.5rem 5rem; }
+  header.hero { border-bottom: 2px solid var(--accent); padding-bottom: 1.2rem; margin-bottom: 2rem; }
+  h1 { font-size: 2rem; margin: 0 0 .3rem; letter-spacing: -.02em; }
+  .sub { color: var(--muted); margin: 0; }
+  h2 { font-size: 1.45rem; margin: 2.8rem 0 .8rem; padding-top: 1rem; border-top: 1px solid var(--border); letter-spacing: -.01em; }
+  h3 { font-size: 1.1rem; margin: 1.6rem 0 .5rem; }
+  h2 .num { color: var(--accent); font-weight: 700; margin-right: .4rem; }
+  p { margin: .6rem 0; }
+  a { color: var(--accent); }
+  code, pre { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; font-size: .88em; }
+  code { background: var(--code-bg); padding: .1em .35em; border-radius: 4px; }
+  pre {
+    background: var(--code-bg); border: 1px solid var(--border); border-radius: 8px;
+    padding: .85rem 1rem; overflow-x: auto; line-height: 1.5;
+  }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 1rem 0; font-size: .93em; }
+  th, td { border: 1px solid var(--border); padding: .5rem .7rem; text-align: left; vertical-align: top; }
+  th { background: var(--code-bg); }
+  .card {
+    background: var(--card); border: 1px solid var(--border); border-left: 4px solid var(--accent);
+    border-radius: 8px; padding: .9rem 1.1rem; margin: 1.1rem 0;
+  }
+  .card.ok { border-left-color: var(--ok); }
+  .card.warn { border-left-color: var(--warn); }
+  .card b:first-child { display: inline-block; margin-bottom: .15rem; }
+  nav.toc { background: var(--card); border: 1px solid var(--border); border-radius: 8px; padding: 1rem 1.4rem; }
+  nav.toc ol { margin: .4rem 0 .2rem; padding-left: 1.3rem; }
+  nav.toc li { margin: .22rem 0; }
+  ol.steps > li { margin: .55rem 0; }
+  ul { margin: .5rem 0; }
+  li { margin: .25rem 0; }
+  .kbd {
+    border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+    background: var(--card); padding: .05em .45em; font-family: inherit; font-size: .85em;
+  }
+  .pill {
+    display: inline-block; font-size: .78em; font-weight: 600; border-radius: 99px;
+    padding: .1em .7em; border: 1px solid var(--border); background: var(--code-bg); margin-right: .3rem;
+  }
+  footer { margin-top: 3.5rem; color: var(--muted); font-size: .85em; border-top: 1px solid var(--border); padding-top: 1rem; }
+  @media (max-width: 640px) { .wrap { padding: 1.5rem 1rem 3rem; } h1 { font-size: 1.6rem; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<header class="hero">
+  <h1>Skill Recorder</h1>
+  <p class="sub">Installation &amp; user guide — record yourself doing a task once, then turn it into a skill your AI agent can repeat.</p>
+</header>
+
+<nav class="toc">
+  <b>Contents</b>
+  <ol>
+    <li><a href="#prereq">Before you install — the Azure AI Foundry prerequisite</a></li>
+    <li><a href="#install">Installing on a fresh machine (macOS · Windows · Linux)</a></li>
+    <li><a href="#firstrun">First launch: permissions &amp; connecting to Foundry</a></li>
+    <li><a href="#record">Recording a session</a></li>
+    <li><a href="#analyze">After recording: Analyze &amp; review</a></li>
+    <li><a href="#build">Building a skill or automation</a></li>
+    <li><a href="#run">Running skills inside the app</a></li>
+    <li><a href="#studio">Importing into Copilot Studio</a></li>
+    <li><a href="#trouble">Troubleshooting</a></li>
+  </ol>
+</nav>
+
+<h2 id="prereq"><span class="num">1.</span>Before you install — the Azure AI Foundry prerequisite</h2>
+
+<p>Skill Recorder runs every AI feature on <b>your own Azure AI Foundry resource</b>. Nothing
+is sent to any other cloud, and the app ships no models of its own. Before (or right after)
+installing, you need one Foundry resource with <b>three model deployments</b>:</p>
+
+<table>
+  <tr><th>Deployment (default name)</th><th>Used for</th></tr>
+  <tr><td><code>gpt-5.3-codex</code></td><td>Building skills &amp; automations, and executing skills in the app's runner</td></tr>
+  <tr><td><code>gpt-5.2</code></td><td>Analyzing recordings (the "what did I do" reconstruction — needs vision)</td></tr>
+  <tr><td><code>gpt-4o-transcribe</code></td><td>Transcribing spoken narration (only if you use the Narrate toggle)</td></tr>
+</table>
+
+<ol class="steps">
+  <li>In the Azure portal / Azure AI Foundry portal, create (or reuse) an <b>Azure AI Foundry</b> resource.</li>
+  <li>Deploy the three models above. If you pick different deployment names, you'll enter them in the app's connection form later.</li>
+  <li>Note the resource's <b>endpoint</b> and an <b>API key</b> (portal → your resource → <i>Keys and Endpoint</i>). Pasting the full "target URI" works — the app trims it automatically.</li>
+</ol>
+
+<div class="card">
+  <b>Where credentials live.</b> The key is entered once in the app (or written to
+  <code>~/.skill-recorder/foundry.json</code>, permissions 0600). It never enters a recording,
+  a skill, or a repository. Advanced/CI setups can use environment variables instead
+  (<code>AZURE_OPENAI_ENDPOINT</code>, <code>AZURE_OPENAI_API_KEY</code>).
+</div>
+
+<h2 id="install"><span class="num">2.</span>Installing on a fresh machine</h2>
+
+<p>Skill Recorder is published as a <b>source release</b>: one command downloads a pinned
+Node.js runtime, builds the exact release commit on your machine, and adds a
+<b>Skill Recorder (Source)</b> app you can relaunch anytime. Nothing is installed globally.
+Open the project's <b>latest GitHub release</b> and copy the command for your platform —
+each release pins an exact 40-character commit, shown below as
+<code>&lt;release-commit&gt;</code>.</p>
+
+<h3>Platform support at a glance</h3>
+<table>
+  <tr><th>Platform</th><th>Validated versions</th><th>Capture completeness</th></tr>
+  <tr>
+    <td><b>macOS</b> (primary target)</td>
+    <td>Recent macOS; Apple Silicon &amp; Intel</td>
+    <td>Full: app switches, window titles, browser URLs (Safari + Chromium browsers), clipboard, screen video, narration</td>
+  </tr>
+  <tr>
+    <td><b>Windows</b></td>
+    <td>Windows 11, x64 &amp; ARM64 (see <code>WINDOWS-VALIDATION.md</code>)</td>
+    <td>Full: window tracking via native APIs, browser URLs via UI Automation, clipboard, video, narration</td>
+  </tr>
+  <tr>
+    <td><b>Linux</b></td>
+    <td>Ubuntu 22.04 / 24.04 x64 on an <b>X11 session</b> (see <code>LINUX-VALIDATION.md</code>); other distros best-effort</td>
+    <td>Full on X11 (URLs need optional <code>python3-pyatspi</code>); on Wayland: video/clipboard/narration only — window tracking is reported unavailable, honestly, in the app</td>
+  </tr>
+</table>
+
+<h3>macOS</h3>
+<pre><code>commit="&lt;release-commit&gt;"; curl -fsSL "https://raw.githubusercontent.com/microsoft/skill-recorder/$commit/install.sh" | SKILL_RECORDER_COMMIT="$commit" bash</code></pre>
+<ul>
+  <li>Adds <b>Skill Recorder (Source)</b> to <code>~/Applications</code> — relaunch from Spotlight, Launchpad, or the Dock.</li>
+  <li>To keep the app running after the terminal closes, add <code>SKILL_RECORDER_DETACHED=1</code> before <code>bash</code>.</li>
+  <li>Works on both Apple Silicon and Intel; the installer verifies every downloaded artifact against pinned hashes.</li>
+</ul>
+
+<h3>Windows 11 (x64 and ARM64)</h3>
+<pre><code>$commit="&lt;release-commit&gt;"; $env:SKILL_RECORDER_COMMIT=$commit; irm "https://raw.githubusercontent.com/microsoft/skill-recorder/$commit/install.ps1" | iex</code></pre>
+<ul>
+  <li>Run in <b>PowerShell</b>. Adds Start Menu and desktop shortcuts.</li>
+  <li>The installer detects your native architecture (x64 vs ARM64) and verifies signatures on downloaded executables.</li>
+  <li>Windows 10 is untested; Windows 11 is the validated target.</li>
+</ul>
+
+<h3>Linux (Ubuntu)</h3>
+<pre><code>commit="&lt;release-commit&gt;"; curl -fsSL "https://raw.githubusercontent.com/microsoft/skill-recorder/$commit/install.sh" | SKILL_RECORDER_COMMIT="$commit" bash</code></pre>
+<ul>
+  <li>The installer is <b>Ubuntu-gated</b> (it checks <code>/etc/os-release</code>) and adds an application-menu entry with the app icon.</li>
+  <li><b>Required:</b> <code>x11-utils</code> (provides <code>xprop</code>/<code>xwininfo</code> for window tracking) — the installer checks and tells you: <code>sudo apt install x11-utils</code>.</li>
+  <li><b>Recommended:</b> <code>python3-pyatspi</code> for browser-URL capture: <code>sudo apt install python3-pyatspi</code> (without it, page identity comes from window titles and screen frames — still workable).</li>
+  <li><b>Session type matters:</b> log in with <b>“Ubuntu on Xorg”</b> for full capture. On Wayland the app still records video, clipboard and narration, and shows exactly which sources are unavailable instead of failing silently.</li>
+  <li>Other distros: not validated; a packaged AppImage can be built from source (<code>npm run dist:linux:x64</code>) and may work, with the same X11 requirements.</li>
+</ul>
+
+<h2 id="firstrun"><span class="num">3.</span>First launch: permissions &amp; connecting to Foundry</h2>
+
+<h3>OS permissions (asked once)</h3>
+<table>
+  <tr><th>Platform</th><th>What to grant</th></tr>
+  <tr><td>macOS</td><td><b>Screen Recording</b> (System Settings → Privacy &amp; Security) on first launch; <b>Microphone</b> only if you use Narrate; per-browser <b>Automation</b> prompts the first time URLs are read.</td></tr>
+  <tr><td>Windows</td><td>No OS prompt for screen or window capture; allow <b>Microphone</b> in Privacy settings if you use Narrate.</td></tr>
+  <tr><td>Linux</td><td>No prompts on X11. On Wayland, the desktop portal asks you to pick a screen when video capture starts. Chromium-family browsers expose their address bar to URL capture only when started with <code>--force-renderer-accessibility</code>; snap Firefox needs accessibility enabled at launch (<code>GNOME_ACCESSIBILITY=1 firefox</code>).</td></tr>
+</table>
+
+<p>The recorder window shows a <b>readiness panel</b>: an <i>Azure AI Foundry</i> row (your
+endpoint host once connected) and rows for any capture source that is degraded or
+unavailable on your setup — if everything is healthy, no warnings appear.</p>
+
+<h3>Connecting to your Foundry resource</h3>
+<ol class="steps">
+  <li>Record anything short (next section), open the library, and click <b>Analyze</b>.</li>
+  <li>The <b>connection form</b> appears: paste your endpoint and API key. The three deployment names are pre-filled — change them only if you named yours differently.</li>
+  <li><b>Save</b>, then <b>Test connection</b> — expect “Connected — gpt-5.3-codex answered in N.Ns”. A wrong key or missing deployment produces a plain-language error telling you what to fix.</li>
+</ol>
+
+<h2 id="record"><span class="num">4.</span>Recording a session</h2>
+
+<ol class="steps">
+  <li>Press <b>Record</b> — or <span class="kbd">⌘⇧R</span> (macOS) / <span class="kbd">Ctrl+Shift+R</span> (Windows/Linux) from anywhere.</li>
+  <li><b>Just do your task.</b> The app captures app switches, window titles, browser URLs (where supported), clipboard copies, and low-fps screen video with keyframes — locally, in the background.</li>
+  <li><b>Optional — Narrate:</b> toggle the microphone (choose your language) and think aloud. Your spoken intent is the strongest signal the analyzer gets. Audio is transcribed via <i>your</i> Foundry deployment when you analyze; the audio itself never leaves your machine.</li>
+  <li>The small always-on-top bar shows capture and mic state; mute, switch mics, <b>Finish</b>, or <b>Discard</b> (with confirmation) if the take went wrong.</li>
+</ol>
+
+<div class="card">
+  <b>Recording tips.</b> One task per recording. 30 seconds to a few minutes is plenty.
+  Do the task the way you actually do it — the generalization happens later. If you narrate,
+  say <i>why</i> (“I’m creating a sales order for this customer”), not just what.
+</div>
+
+<div class="card warn">
+  <b>Privacy.</b> A recording contains your screen, visited URLs, clipboard text, and any
+  narration. The in-app “What’s recorded” note lists everything. Captured signals are sent
+  to <b>your Azure AI Foundry deployment</b> only when you click Analyze — never before,
+  never elsewhere.
+</div>
+
+<h2 id="analyze"><span class="num">5.</span>After recording: Analyze &amp; review</h2>
+
+<ol class="steps">
+  <li>Open the <b>library</b> (sessions list) and select your recording.</li>
+  <li>Click <b>Analyze</b>. The model reads the timeline and events, looks at screen frames where events are ambiguous, folds in your narration, and produces <b>one intent + ordered steps</b> — typically in 10–20 seconds.</li>
+  <li><b>Review it.</b> Edit the title, intent, or any step directly; add, reorder, or remove steps. Or type natural-language feedback (“step 2 was actually about the invoice, not the quote”) and re-analyze — the conversation continues where it left off.</li>
+</ol>
+
+<p>Approve the analysis when it reads right — it is the single input everything downstream
+is built from.</p>
+
+<h2 id="build"><span class="num">6.</span>Building a skill or automation</h2>
+
+<h3>Pick a target</h3>
+<table>
+  <tr><th>Target</th><th>What you get</th><th>Where it goes</th></tr>
+  <tr><td><b>App skill</b></td><td>An on-demand <code>SKILL.md</code> the app itself can execute (next section)</td><td>Installed into your skill library (<code>~/.skill-recorder/skills</code>) or exported</td></tr>
+  <tr><td><b>App automation</b></td><td>A scheduled procedure (schedule + step prompts)</td><td>Saved to your automation library; the in-app scheduler ships in a later release</td></tr>
+  <tr><td><b>Copilot Studio skill</b></td><td><code>SKILL.md</code> <b>plus a declarative agent bundle</b> — <code>&lt;name&gt;-agent.zip</code>, <code>connectors.md</code>, and the API spec when grounded</td><td>Exported to a folder you pick — then imported into Copilot Studio (<a href="#studio">section 8</a>)</td></tr>
+  <tr><td><b>Copilot Studio automation</b></td><td><code>automation.json</code> (trigger + steps) + <code>connectors.md</code></td><td>Exported — recreate as a scheduled trigger in Copilot Studio</td></tr>
+</table>
+
+<h3 id="apiref">Optional but powerful: attach an API reference</h3>
+<div class="card ok">
+  <b>Turn UI clicks into API calls.</b> On the target picker, attach the application's
+  <b>OpenAPI spec (JSON)</b> — or any docs (md/txt/html) as a best-effort fallback. The
+  builder then grounds action steps in <b>real API operations</b> (“<code>api:createSalesOrder</code>”)
+  instead of describing clicks. Grounded skills carry their spec with them: the app's runner
+  executes the calls, and Copilot Studio imports the spec as a custom connector.
+  YAML specs aren't supported yet — export as JSON (most portals offer both).
+</div>
+
+<h3>Plan → refine → create</h3>
+<ol class="steps">
+  <li>The builder proposes a <b>plan</b>: how it generalizes your one example (“one form → all pending forms”), the fixed <b>values</b> it hard-codes (shown as editable pills — URLs, paths, names), the ordered steps with the native tool or API operation each uses, and the allowed tools.</li>
+  <li>Edit the pills and steps directly, or refine in natural language (“also filter to open items only”).</li>
+  <li><b>Create.</b> The final artifact is built from <i>exactly</i> the plan you approved — then installed or exported per the table above.</li>
+</ol>
+
+<h2 id="run"><span class="num">7.</span>Running skills inside the app</h2>
+
+<ol class="steps">
+  <li>Library → <b>Skills</b> tab. Installed skills are listed with badges: <span class="pill">API</span> (carries an API spec) and <span class="pill">unrestricted</span> (declared no allowed-tools — every side effect will ask you individually).</li>
+  <li>Pick a skill, optionally type an input (“Create an order for Contoso: 2× NW-1140”), and <b>Run</b>.</li>
+  <li>Watch the live transcript. <b>Every side effect pauses for you</b>: shell commands, file writes, and non-GET API calls show a confirmation card — <b>Approve</b>, <b>Deny</b> (the model adapts), or <i>Always allow this kind for this run</i>. The skill's <code>allowed-tools</code> are <i>enforced</i>: commands outside its declared patterns are refused outright.</li>
+  <li>If the skill asks a question, answer in the inline prompt. Cancel anytime. Every run writes a full transcript to <code>~/.skill-recorder/runs/</code> — with credentials redacted.</li>
+</ol>
+
+<div class="card">
+  <b>API credentials for grounded skills.</b> Create a <code>runner.json</code> next to the
+  installed <code>SKILL.md</code>:
+  <pre><code>{ "apiBase": "https://your-app.example/api/v1",
+  "headers": { "X-Api-Key": "your-key" } }</code></pre>
+  Credentials stay in this file — never in the skill, never shown to the model, redacted
+  from transcripts.
+</div>
+
+<h2 id="studio"><span class="num">8.</span>Importing into Copilot Studio</h2>
+
+<p>A Copilot Studio skill export contains everything a maker needs:</p>
+
+<ol class="steps">
+  <li><b>API-grounded skills first:</b> import <code>api/openapi.json</code> as a <b>custom connector</b> in your environment.</li>
+  <li>Import <code>&lt;name&gt;-agent.zip</code> in <b>Copilot Studio</b> (or via the Microsoft 365 Agents Toolkit) — it carries the declarative agent manifest, instructions, conversation starters, and detected capabilities (web search / SharePoint knowledge).</li>
+  <li>Open <code>connectors.md</code> and wire each listed action (e.g. <code>Outlook.SendEmail</code>, or the custom connector's operations) — instructions alone can't grant tools, so this checklist is the manual step.</li>
+  <li>Test in the Studio chat; the skill's description doubles as its trigger phrasing.</li>
+</ol>
+
+<div class="card warn">
+  <b>Copilot Studio has no local machine.</b> Skills that need a shell, local files, or a
+  browser on your device belong to the <b>App</b> target. Copilot Studio targets shine for
+  M365/connector/API work — the builder's plans already respect this split.
+</div>
+
+<h2 id="trouble"><span class="num">9.</span>Troubleshooting</h2>
+
+<table>
+  <tr><th>Symptom</th><th>Cause &amp; fix</th></tr>
+  <tr><td>Analysis says “no reconstructable task / no signals”</td><td>The recording captured no events. Linux: check the readiness panel — install <code>x11-utils</code>, and make sure you're on an X11 session (“Ubuntu on Xorg”), not Wayland.</td></tr>
+  <tr><td>“Azure AI Foundry rejected the API key (HTTP 401)”</td><td>Wrong or expired key — re-enter it in the connection form and press <i>Test connection</i>.</td></tr>
+  <tr><td>“…could not find the ‘X’ deployment (HTTP 404)”</td><td>That deployment doesn't exist on your resource — create it in the Foundry portal, or put your actual deployment name in the form's Deployments section.</td></tr>
+  <tr><td>No browser URLs in recordings (Linux)</td><td>Install <code>python3-pyatspi</code>. Chromium browsers additionally need <code>--force-renderer-accessibility</code>; snap Firefox needs <code>GNOME_ACCESSIBILITY=1</code> at launch. Titles + frames still identify pages without it.</td></tr>
+  <tr><td>“OpenAPI YAML isn't supported yet”</td><td>Export the spec as JSON from your API portal, or attach the docs as md/txt for best-effort matching.</td></tr>
+  <tr><td>Skill run refuses a command</td><td>Working as designed: the command falls outside the skill's <code>allowed-tools</code>. Rebuild the skill with broader tools, or run it and approve individually.</td></tr>
+  <tr><td>Voice wasn't transcribed</td><td>Narration needs the <code>gpt-4o-transcribe</code> deployment (or your name for it in the form). Audio stays on disk — re-analyze after fixing the connection.</td></tr>
+  <tr><td>HUD bar appears in Linux recordings</td><td>Known limitation: window content-protection is a no-op on Linux. Keep the bar over something non-sensitive.</td></tr>
+</table>
+
+<footer>
+  Skill Recorder · This guide reflects the Azure AI Foundry backend (three deployments), the
+  in-app skill runner, API-grounded skills, and Copilot Studio declarative-agent export.
+  Deep dives: <code>INSTALL.md</code>, <code>WINDOWS-VALIDATION.md</code>, <code>LINUX-VALIDATION.md</code>,
+  <code>docs/linux-capture.md</code>, <code>docs/windows-capture.md</code>, <code>tools/testbed/README.md</code>.
+</footer>
+
+</div>
+</body>
+</html>
