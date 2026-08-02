@@ -68,7 +68,9 @@ authoritative for *what to build*.
   provider, packaging/CI/validation parity). Live on this X11 box: `readLinuxActiveWindow`
   returns real windows, and the AT-SPI host reports READY in 92 ms. Known limitation,
   documented rather than worked around: snap Firefox does not export AT-SPI unless
-  accessibility is enabled at launch. Human-pending: GL1/GL2 live checklist on a
+  accessibility is enabled at launch — and (2026-08-02 finding, see the AppArmor entry
+  above) even then the snap's confinement blocks URL reads; the compat check now grades
+  this honestly as Good via a live read. Human-pending: GL1/GL2 live checklist on a
   desktop (X11 recording run, Wayland degradation check, snap-Firefox
   `GNOME_ACCESSIBILITY=1` experiment) and GL3's clean-VM install test. The automated half
   was proven **locally** (G4: AppImage + `verify-linux-package` end to end); the
@@ -101,6 +103,54 @@ authoritative for *what to build*.
   scenarios at 100%, offline suite 365/365. Fixture lesson pinned in code: the frame
   extractor's dHash dedupe nearly ate the decisive frame — fixture renderers must derive
   layout from content.
+
+- **2026-08-02 — describer fix ITERATION 2 (user reproduced a THIRD time, recording
+  `20260802-132458-cd74061c`): the bug moved from the prompt to the pipeline.** Two
+  measurements re-aimed it. ① The fixture was upgraded to reality (12 frames at the real
+  5s-heartbeat offsets, a decoy order matching the created one on customer/lines/total,
+  two dropdown-open mid-pick frames, 38s event silence) and the CURRENT prompt passed it
+  at 100% — the prompt is adequate when frames are served; the two extra prompt rules
+  drafted for this iteration were dropped as unmeasured. ② The extractor was deleting the
+  evidence: `keepOrDrop` ran its 9x8-dHash Hamming ≤8 dedupe on **probe frames the
+  describer explicitly requested** via `get_frames`, and over the real session's 12
+  frames only 6 survived — the deleted included the decisive dropdown-open frame (d=6)
+  and two frames at **d=0** (a form gaining one field is invisible at that hash size; no
+  threshold fixes d=0). **Fix: `extractWindow` never perceptually dedupes** — probe
+  outputs are named deterministically from the captured source frame and deduped by
+  source-file identity only (repeat probes add nothing); event-anchored seeding keeps its
+  perceptual dedupe. Measured: real-session replay probe over the form gap recovered
+  **0 → 2** frames (`get_frames` in-window 1 → 3, incl. the ~39s decisive frame); a new
+  extractor unit test pins the mechanism with a measured-≤8 near-identical pair (FAILs on
+  the old code); the eval fixture's form states now collide under dHash like reality
+  (min off-diagonal 10 → 2, layout-group support in `frame-fixtures.ts` with a guard
+  test). Sweep: 10/11 + `irrelevant-detour` (no code path from these changes reaches it)
+  re-measured **3/3 at 100%** — green; `form-submit-frames` 100% every run; offline
+  **376/376**, typecheck/typecheck:evals 0. NOTE: an eval FAIL-before was NOT reproducible
+  (old extractor still passed — the fixture's dropdown frames survive dedupe and one
+  filled-form frame suffices); the fail-before evidence is the real-session replay plus
+  the unit test, recorded here instead of overclaiming.
+
+- **2026-08-02 — Linux URL capture: snap Firefox's AppArmor confinement blocks AT-SPI
+  reads, and the compatibility check now verifies URLs by a LIVE read.** User-found (they
+  correctly rejected my relaunch-without-flag theory with a timestamped compat report):
+  with `GNOME_ACCESSIBILITY=1` snap Firefox, the compat check said "Firefox is exposing
+  accessibility ✓" yet the recording had **zero `browser.url` events**. Root cause,
+  reproduced live: the snap's enforced AppArmor profile lets Firefox's *presence* be
+  enumerated on the a11y bus but denies deep tree traversal
+  (`org.a11y.atspi.Cache GetItems` → "An AppArmor policy prevents this sender…",
+  destination `snap.firefox.firefox (enforce)`) — presence ≠ readability, so the probe
+  overclaimed Full. **Fix: the browser probe is end-to-end** — it instantiates a real
+  `LinuxUrlProvider` and asks for an actual URL per running browser (3s budget);
+  `accessibleBrowsers` now means "URL actually read", new `presentButUnreadable` grades
+  **Good** with an honest fix string (non-snap Firefox deb/tar, or Chromium-family with
+  `--force-renderer-accessibility`; titles + frames still identify pages). Second live
+  finding: the snap denies even the app **name** on the bus, so browser matching falls
+  back to `/proc/<pid>/comm`. Live-verified on this box:
+  `{checked:true, accessibleBrowsers:[], presentButUnreadable:["firefox"]}` → Good with
+  the confinement message. Both HTML guides updated (Good-on-snap is a *correct verified
+  outcome*, deb-Firefox/Chromium is the true path to Full). Consequence for the describer:
+  snap-Firefox recordings are titles+frames-only by OS design — which iteration 2 above
+  makes workable.
 
 ## Workstream status
 

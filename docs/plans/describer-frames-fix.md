@@ -1,5 +1,48 @@
 # Describer fix: form interactions invisible between page transitions
 
+## Iteration 2 (2026-08-02) — root cause moved from the prompt to the extractor
+
+The user reproduced the miss a THIRD time after Fix 1 landed (recording
+`20260802-132458-cd74061c`, titles-only, 12 frames). Two measurements re-aimed
+the fix:
+
+1. **Fixture upgraded to reality and the current prompt PASSED it at 100%**
+   (baseline `2026-08-02T13-40-30`, single run). The scenario now mirrors the
+   failing recording — 12 frames at the real 5s-heartbeat offsets, a decoy order
+   (`SO-4401 Contoso Ltd 2 lines $282.00`, same profile as the created
+   `SO-4471`, exactly like the seeded SO-10001 vs SO-10003), two dropdown-open
+   mid-pick frames, incremental untidy form states, a 38s event-silent gap. The
+   model probed the middle of the gap, was served the mid-fill frames, and
+   correctly produced "Create and submit a new order". **The prompt is adequate
+   when the frames are actually served.** The two extra prompt rules drafted for
+   this iteration ("identity is in the id", "interaction frames are the action")
+   are ON HOLD — unmeasured additions.
+
+2. **The extractor deletes the evidence in the real recording.** Running the
+   extractor's exact 9x8 dHash over the real session's 12 frames: only 6
+   survive the Hamming ≤8 dedupe. Deleted: the dropdown-open mid-pick frame
+   (d=6 — the single decisive screen) and two frames at **d=0** (a form gaining
+   one filled field is invisible at 9x8 grayscale). `keepOrDrop` applies this
+   dedupe to **probe frames the describer explicitly requested** via
+   `get_frames`, so the model looks in exactly the right place and the pipeline
+   silently withholds what the camera saw. No prompt rule recovers a deleted
+   frame; no threshold recovers d=0.
+
+**Fix 3 (the real one): probe-path frames are never perceptually deduped.** An
+explicit `get_frames` window returns the captured source frames, deduped only by
+source-file identity (no duplicate records on repeated probes). Event-anchored
+opportunistic seeding keeps its perceptual dedupe. Measured by: (a) an extractor
+unit test with a near-identical frame pair, (b) re-running the real session's
+frames through the fixed probe path, (c) the eval fixture re-hardened so its
+incremental form states collide under dHash like the real ones do — old
+extractor FAILs the scenario, fixed extractor PASSes, full sweep green.
+
+Sibling findings tracked separately: zero `browser.url` events despite
+"accessibility ✓" is snap Firefox's AppArmor confinement blocking AT-SPI tree
+reads (presence enumerable, `GetItems` denied) — the compatibility probe is
+being upgraded to attempt a real end-to-end URL read so Full is never
+overclaimed (see the compatibility-check plan).
+
 ## Context
 
 Reproduced twice by the user on the testbed, once at **Good** capture and now at **Full**

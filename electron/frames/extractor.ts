@@ -231,6 +231,21 @@ export class FrameExtractor {
     return added;
   }
 
+  /**
+   * Serve every captured snapshot inside an explicitly requested window.
+   *
+   * A probe is a look-request, so it returns what the camera saw: **no perceptual
+   * dedupe runs here**. An explicitly requested window returns near-duplicate frames by
+   * design — incremental form states are sub-threshold changes (a form gaining one
+   * filled field is invisible at 9x8 grayscale, Hamming 0) and are exactly the evidence
+   * probes exist to recover. Withholding them is how the describer came to report
+   * "selected an existing order" for a recording of one being created.
+   *
+   * Duplicates are avoided by *source-frame identity* instead: a snapshot already
+   * retained under any stage's name is left alone, because `get_frames` composes its
+   * reply from the in-window slice of `manifest` and so still shows it. `maxFrames`
+   * stays a hard cap.
+   */
   async extractWindow(req: WindowRequest): Promise<FrameRecord[]> {
     if (this.sourceFrames.length === 0) {
       return this.usesCapturedFramePipeline ? [] : this.extractLegacyWindow(req);
@@ -246,14 +261,22 @@ export class FrameExtractor {
       req.fps ?? DEFAULT_WINDOW_FPS,
       cap,
     );
-    const stamp = randomUUID();
     const added: FrameRecord[] = [];
-    for (let index = 0; index < samples.length; index++) {
-      const sample = samples[index];
-      const file = path.join(
-        this.opts.framesDir,
-        `probe_${stamp}_${String(index + 1).padStart(4, "0")}.jpg`,
-      );
+    let reused = 0;
+    for (const sample of samples) {
+      // Any stage's retained copy of this snapshot counts, so an event-seeded frame is
+      // reused rather than written a second time under a probe name.
+      const names = retainedNamesFor(sample.frame, req.crop);
+      const file = path.join(this.opts.framesDir, probeRetainedName(sample.frame, req.crop));
+      const existingIndex = this.frames.findIndex((frame) => names.includes(frame.file));
+      if (existingIndex >= 0) {
+        const retained = path.join(this.opts.framesDir, this.frames[existingIndex].file);
+        if (existsSync(retained)) {
+          reused++;
+          continue;
+        }
+        this.frames.splice(existingIndex, 1);
+      }
       try {
         const rendered = await this.renderCaptured(sample.frame, file, req.crop);
         if (!rendered) continue;
@@ -262,6 +285,7 @@ export class FrameExtractor {
           this.offsetForEpoch(sample.frame.tMs),
           "probe",
           req.reason ?? "probe:window",
+          false,
         );
         if (record) added.push(record);
       } catch (err) {
@@ -271,7 +295,7 @@ export class FrameExtractor {
     this.persist();
     log.info(
       `probe [${this.offsetForEpoch(startMs).toFixed(1)}–${this.offsetForEpoch(endMs).toFixed(1)}s]: ` +
-        `${added.length} new frames`,
+        `${added.length} new frames, ${reused} already retained`,
     );
     return added;
   }
@@ -441,18 +465,31 @@ export class FrameExtractor {
     return resolved;
   }
 
+  /**
+   * Retain a rendered JPEG, or delete it and report nothing.
+   *
+   * `perceptualDedupe` is the whole judgement call. Event and scene extraction is
+   * opportunistic seeding — it fires on anchors nobody asked about, so throwing away a
+   * frame that looks like one already held costs nothing. An explicitly requested window
+   * is the opposite: it returns near-duplicate frames by design, because incremental
+   * form states are sub-threshold changes under a 9x8 dHash and are exactly the evidence
+   * probes exist to recover. Callers on that path pass `false` and dedupe by source-frame
+   * identity instead. The phash is still computed and stored either way — downstream
+   * readers treat it as informational.
+   */
   private async keepOrDrop(
     file: string,
     offsetSec: number,
     source: FrameSource,
     reason?: string,
+    perceptualDedupe = true,
   ): Promise<FrameRecord | null> {
     if (this.frames.length >= this.opts.maxFrames) {
       await unlink(file).catch(() => undefined);
       return null;
     }
     const phash = await dhash(file);
-    if (phash) {
+    if (phash && perceptualDedupe) {
       for (const existing of this.frames) {
         if (hamming(existing.phash, phash) <= this.opts.dedupeThreshold) {
           await unlink(file).catch(() => undefined);
@@ -518,6 +555,36 @@ function retainedCapturedName(frame: CapturedVideoFrame, source: FrameSource): s
       .replace(/[^a-zA-Z0-9_-]/g, "_")
       .slice(0, 80) || "frame";
   return `${source}_${Math.max(0, Math.round(frame.offsetMs))}_${stem}.jpg`;
+}
+
+/** Every stage that can already hold a retained copy of one captured snapshot. */
+const RETAINING_SOURCES: readonly FrameSource[] = ["event", "scene", "probe"];
+
+/**
+ * Probe outputs are named from the captured source frame rather than a fresh UUID, so
+ * repeating a window reuses the file it already wrote instead of piling up copies. A
+ * crop belongs to that identity: two regions of one snapshot are two different images.
+ */
+function probeRetainedName(frame: CapturedVideoFrame, crop?: WindowRequest["crop"]): string {
+  const base = retainedCapturedName(frame, "probe");
+  if (!crop) return base;
+  const box = [crop.x, crop.y, crop.w, crop.h].map((value) => Math.round(value)).join("-");
+  return `${base.slice(0, -".jpg".length)}_crop${box}.jpg`;
+}
+
+/**
+ * Every filename under which one captured snapshot may already be retained. Probe files
+ * written before this naming scheme carried a UUID and cannot be recognised; they are
+ * harmless, just invisible to the identity check.
+ */
+function retainedNamesFor(
+  frame: CapturedVideoFrame,
+  crop?: WindowRequest["crop"],
+): string[] {
+  // A cropped probe can only ever match another identical crop; the full-frame copies
+  // event/scene extraction leaves behind are a different picture.
+  if (crop) return [probeRetainedName(frame, crop)];
+  return RETAINING_SOURCES.map((source) => retainedCapturedName(frame, source));
 }
 
 function loadRetainedFrames(manifestPath: string): FrameRecord[] {

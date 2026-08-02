@@ -6,6 +6,7 @@ import path from "node:path";
 import test from "node:test";
 
 import { CAPTURED_FRAME_MANIFEST_VERSION } from "../../common/frames";
+import { formSubmitFrames } from "../scenarios/form-submit-frames";
 import { escapeXml, renderFrameFixtures } from "./frame-fixtures";
 
 /**
@@ -120,6 +121,68 @@ test(
     assert.equal(meta.format, "jpeg");
     assert.equal(meta.width, 96);
     assert.equal(meta.height, 54);
+  }),
+);
+
+/** The extractor's 9x8 dHash, restated here so the fixture's premise can be measured. */
+async function dhash(file: string): Promise<string> {
+  const sharp = createRequire(import.meta.url)("sharp") as typeof import("sharp");
+  const buffer = await sharp(file).grayscale().resize(9, 8, { fit: "fill" }).raw().toBuffer();
+  let bits = "";
+  for (let row = 0; row < 8; row++) {
+    for (let column = 0; column < 8; column++) {
+      bits += buffer[row * 9 + column] < buffer[row * 9 + column + 1] ? "1" : "0";
+    }
+  }
+  let hex = "";
+  for (let index = 0; index < 64; index += 4) {
+    hex += parseInt(bits.slice(index, index + 4), 2).toString(16);
+  }
+  return hex;
+}
+
+function hamming(a: string, b: string): number {
+  let distance = 0;
+  for (let index = 0; index < a.length; index++) {
+    let value = parseInt(a[index], 16) ^ parseInt(b[index], 16);
+    while (value) {
+      distance += value & 1;
+      value >>= 1;
+    }
+  }
+  return distance;
+}
+
+// form-submit-frames is the one scenario whose realism depends on its frames *colliding*:
+// its first cut passed while the real recording kept failing, because every fixture frame
+// was pairwise-distinct and the extractor's retention pass never fired. This pins the
+// property down, since it is invisible in the scenario source.
+test(
+  "a layout group renders states that collide under the extractor's dedupe threshold",
+  withTempDir(async (dir) => {
+    const frames = formSubmitFrames.frames ?? [];
+    const manifest = await renderFrameFixtures(dir, frames, {
+      startEpoch: START_EPOCH,
+      durationMs: 47_000,
+    });
+    const sorted = [...frames].sort((a, b) => a.atMs - b.atMs);
+    const hashes = new Map<number, string>();
+    for (let index = 0; index < sorted.length; index++) {
+      hashes.set(sorted[index].atMs, await dhash(path.join(dir, manifest.frames[index].file)));
+    }
+
+    const at = (atMs: number): string => {
+      const hash = hashes.get(atMs);
+      assert.ok(hash, `no frame at ${atMs}ms`);
+      return hash;
+    };
+    // "Customer picked" against the empty form, and "one line entered" against it: both
+    // are one filled field apart, and both must land under the threshold of 8.
+    assert.ok(hamming(at(11058), at(14934)) <= 8, "customer picked must collide");
+    assert.ok(hamming(at(14934), at(24934)) <= 8, "one line entered must collide");
+    // The dropdown-open frames are the fixture's distinctive evidence and stay distinct.
+    assert.ok(hamming(at(14934), at(19934)) > 8, "dropdown 1 must stay distinct");
+    assert.ok(hamming(at(24934), at(29934)) > 8, "dropdown 2 must stay distinct");
   }),
 );
 

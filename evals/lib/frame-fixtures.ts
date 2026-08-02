@@ -42,6 +42,19 @@ export interface FrameFixture {
   title: string;
   /** Body text; the first line is drawn as the page heading. */
   lines: string[];
+  /**
+   * Optional layout group. Frames sharing a key are drawn on one silhouette — same row
+   * count, same band widths, same accent rule, all taken from the group's largest member
+   * — so the only thing that varies between them is the text.
+   *
+   * That is what a form being typed into actually looks like, and reproducing it is the
+   * point: at the 9x8 grayscale reduction `FrameExtractor` hashes, two states of one form
+   * are indistinguishable (the real failing recording had consecutive states at Hamming 0
+   * and 6, under the dedupe threshold of 8). Without this, every fixture frame is
+   * pairwise-distinct and the scenario cannot exercise the retention path that the real
+   * recording died on.
+   */
+  layout?: string;
 }
 
 export interface FrameFixtureOptions {
@@ -82,13 +95,15 @@ export async function renderFrameFixtures(
   mkdirSync(path.join(dir, "frames"), { recursive: true });
 
   const sorted = [...frames].sort((a, b) => a.atMs - b.atMs);
+  const silhouettes = layoutSilhouettes(sorted);
   const image = require("sharp") as Sharp;
   const entries: CapturedFrameManifest["frames"] = [];
 
   for (let index = 0; index < sorted.length; index++) {
     const fixture = sorted[index];
     const name = `frame_${String(index + 1).padStart(6, "0")}.jpg`;
-    await image(Buffer.from(renderSvg(fixture, width, height)))
+    const silhouette = fixture.layout ? silhouettes.get(fixture.layout) : undefined;
+    await image(Buffer.from(renderSvg(fixture, width, height, silhouette)))
       .jpeg({ quality: 82 })
       .toFile(path.join(framesDir, name));
     entries.push({
@@ -130,6 +145,25 @@ export async function renderFrameFixtures(
   return manifest;
 }
 
+/**
+ * The body rows whose count and lengths fix each layout group's geometry: the member
+ * with the most rows, ties broken by the most text, so no member's copy outruns its band.
+ */
+function layoutSilhouettes(frames: readonly FrameFixture[]): Map<string, string[]> {
+  const silhouettes = new Map<string, string[]>();
+  for (const fixture of frames) {
+    if (!fixture.layout) continue;
+    const rows = fixture.lines.slice(1);
+    const current = silhouettes.get(fixture.layout);
+    if (!current || weight(rows) > weight(current)) silhouettes.set(fixture.layout, rows);
+  }
+  return silhouettes;
+}
+
+function weight(rows: readonly string[]): number {
+  return rows.length * 1000 + rows.reduce((total, row) => total + row.length, 0);
+}
+
 /** XML text escaping — fixture copy contains ampersands, quotes and angle brackets. */
 export function escapeXml(text: string): string {
   return text
@@ -142,7 +176,10 @@ export function escapeXml(text: string): string {
 
 /**
  * A deliberately blocky page mock-up: dark window bar, heading, one banded row per
- * line, `[bracketed]` lines drawn as buttons.
+ * line. Two line prefixes carry meaning, because real captures of a form mid-edit do:
+ * `[bracketed]` draws a button, and a leading `>` draws a *highlighted* row — the
+ * selected entry of an open dropdown, which is what a 5-second heartbeat actually
+ * catches a user doing.
  *
  * The blockiness is load-bearing, not decoration. `FrameExtractor` drops near-duplicate
  * frames by 64-bit dHash — a 9x8 grayscale reduction — and two states of the same form
@@ -152,8 +189,17 @@ export function escapeXml(text: string): string {
  * height, so a half-filled form and a completed one put their bands at entirely
  * different heights; band width tracks the line's length; and buttons are solid fills.
  * Different page states then differ at the coarse scale the hash actually samples.
+ *
+ * `silhouette` deliberately suspends that: a frame in a layout group borrows the group's
+ * geometry, so its text is the only thing that moves and the hash *does* collide. Both
+ * behaviours are needed — most scenarios want distinct frames, one wants the real thing.
  */
-function renderSvg(fixture: FrameFixture, width: number, height: number): string {
+function renderSvg(
+  fixture: FrameFixture,
+  width: number,
+  height: number,
+  silhouette?: readonly string[],
+): string {
   const s = width / BASE_WIDTH;
   const barH = 84 * s;
   const titleSize = 32 * s;
@@ -164,10 +210,13 @@ function renderSvg(fixture: FrameFixture, width: number, height: number): string
   const rowsTop = headingY + 46 * s;
 
   const [heading = "", ...rows] = fixture.lines;
+  const geometry = silhouette ?? rows;
   // Clamped so an absurdly short page (or a very long one) still yields drawable rects.
-  const rowH = Math.max(4 * s, (height - rowsTop - 28 * s) / Math.max(1, rows.length));
+  const rowH = Math.max(4 * s, (height - rowsTop - 28 * s) / Math.max(1, geometry.length));
   const bandH = Math.max(1, rowH - 10 * s);
-  const bodySize = Math.min(30 * s, rowH * 0.4);
+  // Floored: a dense page (an open dropdown listing every product) must stay readable
+  // to a vision model, so rows overlap their bands before the text shrinks out of sight.
+  const bodySize = Math.max(Math.min(19 * s, rowH * 0.9), Math.min(30 * s, rowH * 0.4));
   const parts: string[] = [
     `<rect width="${width}" height="${height}" fill="#f6f7f9"/>`,
     `<rect width="${width}" height="${barH}" fill="#1f2937"/>`,
@@ -175,22 +224,27 @@ function renderSvg(fixture: FrameFixture, width: number, height: number): string
     // Accent rule; its length tracks the row count so the *top* of the page carries a
     // signal too — the dHash samples only eight vertical bands and two states of one
     // form would otherwise be identical across the upper half.
-    `<rect x="${left}" y="${barH + 28 * s}" width="${contentW * Math.min(1, 0.3 + rows.length * 0.11)}" height="${8 * s}" fill="#2563eb"/>`,
+    `<rect x="${left}" y="${barH + 28 * s}" width="${contentW * Math.min(1, 0.3 + geometry.length * 0.11)}" height="${8 * s}" fill="#2563eb"/>`,
     `<text x="${left}" y="${headingY}" font-size="${headingSize}" font-weight="bold" fill="#111827" font-family="${FONTS}">${escapeXml(heading)}</text>`,
   ];
 
-  rows.forEach((line, index) => {
+  geometry.forEach((geometryLine, index) => {
+    const line = rows[index] ?? "";
     const y = rowsTop + index * rowH;
-    const isButton = line.trim().startsWith("[");
+    // Every block — position, width, fill — comes from the geometry row, so a layout
+    // group differs in drawn text and nothing else. Ungrouped frames pass their own row
+    // here and are unaffected.
+    const trimmed = geometryLine.trim();
+    const isButton = trimmed.startsWith("[");
+    const isHighlighted = trimmed.startsWith(">");
     // Band width tracks how much text the row carries, so a half-filled form and a
-    // completed one have visibly different silhouettes — and a button's fill stays
-    // under its own (white) label.
-    const bandW = contentW * Math.min(1, Math.max(0.3, line.length / 52));
+    // completed one have visibly different silhouettes — and a filled row's block stays
+    // under its own (white) label. In a layout group the group's row supplies that width.
+    const bandW = contentW * Math.min(1, Math.max(0.3, geometryLine.length / 52));
+    const fill = isButton || isHighlighted ? "#1d4ed8" : index % 2 === 0 ? "#ffffff" : "#d8dee7";
     parts.push(
-      isButton
-        ? `<rect x="${left}" y="${y}" width="${bandW}" height="${bandH}" rx="${6 * s}" fill="#1d4ed8"/>`
-        : `<rect x="${left}" y="${y}" width="${bandW}" height="${bandH}" fill="${index % 2 === 0 ? "#ffffff" : "#d8dee7"}"/>`,
-      `<text x="${left + 20 * s}" y="${y + rowH * 0.6}" font-size="${bodySize}" fill="${isButton ? "#ffffff" : "#111827"}" font-family="${FONTS}">${escapeXml(line)}</text>`,
+      `<rect x="${left}" y="${y}" width="${bandW}" height="${bandH}"${isButton ? ` rx="${6 * s}"` : ""} fill="${fill}"/>`,
+      `<text x="${left + 20 * s}" y="${y + rowH * 0.6}" font-size="${bodySize}" fill="${isButton || isHighlighted ? "#ffffff" : "#111827"}" font-family="${FONTS}">${escapeXml(line)}</text>`,
     );
   });
 
