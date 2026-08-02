@@ -30,7 +30,9 @@ const MAX_LIVE_SESSIONS = 4;
 
 const KICKOFF_PROMPT =
   "Reconstruct what the user did in this recording. Start with get_timeline, then read events " +
-  "where anything is unclear, and look at frames only where the events are ambiguous. When " +
+  "where anything is unclear, and look at frames only where the events are ambiguous — a long " +
+  "event-free gap between two page changes counts as ambiguous: sample frames from inside that " +
+  "gap before describing the transition. When " +
   "confident, call submit_analysis with the overall intent and the ordered list of steps.";
 
 const NUDGE_PROMPT =

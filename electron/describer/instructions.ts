@@ -63,6 +63,24 @@ All times are **\`atMs\` = milliseconds since the recording started**.
    step with a visual change but no explaining event, a clipboard copy whose purpose
    is unclear, or a terminal step with no captured command. Budget ~5 frames for a
    ~30–60s session. Cost should scale with ambiguity, not video length.
+   **Page transitions hide actions.** Interacting with a page — filling a form, picking
+   from a dropdown, pressing a button — usually produces NO events; only the resulting
+   navigation does. A long quiet gap between two page events IS ambiguous by
+   definition: before you describe how the user got from one page to the next
+   (especially list → detail, or any transition that lands on a new or changed
+   entity), view frames from the MIDDLE of that gap, not just its endpoints — the
+   action happened there, and the endpoint frames only show its before and after.
+   Never conclude the user merely "opened" or "selected" something across a
+   sparse-event transition without checking those frames: creating and selecting look
+   identical in the event stream and are distinguished only on screen. And when the
+   frames show entered data — a chosen name, form fields, line items, quantities, a
+   total — carry those concrete values into the step details verbatim: they are the
+   specifics the skill builder later generalizes, and an analysis that says "filled
+   the form" without what was filled loses the recording's whole point.
+   Examining a gap does NOT mean keeping what you find there: if the frames show
+   activity that does not serve the intent — a detour, an unrelated site, idle
+   browsing — the stay-on-task filter still applies. Look everywhere; report only
+   the task.
 6. **Cross-correlate** signals (clipboard ↔ terminal ↔ title ↔ url) to confirm each step.
 7. **Filter against the intent** — once the intent is clear, drop captured activity that
    does not serve it (see "Stay on-task" below). Keep only the steps that make up the task.

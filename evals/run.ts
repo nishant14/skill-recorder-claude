@@ -29,6 +29,7 @@ import { processSession } from "../electron/pipeline";
 import { Describer } from "../electron/describer/describer";
 import { summarize, type Means, type RunRow } from "./compare-lib";
 import { judgeAnalysis, type JudgeResult } from "./judge";
+import { renderFrameFixtures } from "./lib/frame-fixtures";
 import { makeSessionMeta, materializeEvents, type Scenario } from "./scenario";
 import { scenarios } from "./scenarios/index";
 import { scoreAnalysis, type ScoreResult } from "./scoring";
@@ -97,10 +98,13 @@ interface ScenarioResult {
   means: Means;
 }
 
-function materialize(root: string, scenario: Scenario, sessionId: string): string {
+async function materialize(root: string, scenario: Scenario, sessionId: string): Promise<string> {
   const startedAt = Date.now();
   const raw = scenario.build();
-  const durationMs = Math.max(0, ...raw.map((e) => e.atMs)) + 1000;
+  // Frames can legitimately outlast the last event — a form being filled is exactly
+  // that — so the recording length has to cover both.
+  const durationMs =
+    Math.max(0, ...raw.map((e) => e.atMs), ...(scenario.frames ?? []).map((f) => f.atMs)) + 1000;
   const events = materializeEvents(raw, startedAt);
   const meta = makeSessionMeta(sessionId, startedAt, durationMs, scenario.platform ?? "darwin");
 
@@ -111,6 +115,9 @@ function materialize(root: string, scenario: Scenario, sessionId: string): strin
     path.join(dir, "events.jsonl"),
     events.map((e) => JSON.stringify(e)).join("\n") + "\n",
   );
+  if (scenario.frames?.length) {
+    await renderFrameFixtures(dir, scenario.frames, { startEpoch: startedAt, durationMs });
+  }
   return dir;
 }
 
@@ -144,7 +151,7 @@ async function runOnce(
     requests: 0,
   };
   try {
-    const dir = materialize(root, scenario, sessionId);
+    const dir = await materialize(root, scenario, sessionId);
     await processSession(dir);
     const analysis: Analysis = await describer.analyze(sessionId);
     run.stepCount = analysis.steps.length;

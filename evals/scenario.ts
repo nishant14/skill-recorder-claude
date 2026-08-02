@@ -2,14 +2,19 @@
 //
 // A scenario is a fixed, synthetic recording (a list of captured OS events) plus
 // a rubric describing what a good analysis of it looks like. Fixtures are
-// deterministic and video-less on purpose: they isolate the part of the system
-// with real variance — the multi-turn Copilot describer — from flaky live
-// capture, so the eval is repeatable. The events are authored to mirror what the
-// real collectors would emit for the same task (see evals/mocks/*.html for the
-// pages these flows reference).
+// deterministic on purpose: they isolate the part of the system with real
+// variance — the multi-turn Copilot describer — from flaky live capture, so the
+// eval is repeatable. The events are authored to mirror what the real collectors
+// would emit for the same task (see evals/mocks/*.html for the pages these flows
+// reference).
+//
+// Most scenarios are video-less; a scenario whose evidence only exists on screen
+// can additionally declare `frames`, which materialize as rendered captured-frame
+// artifacts (see evals/lib/frame-fixtures.ts).
 
 import { EventType } from "../common/events";
 import type { RecEvent, SessionMeta } from "../common/types";
+import type { FrameFixture } from "./lib/frame-fixtures";
 
 /** An event as authored in a scenario: just a time offset + type + payload. */
 export interface RawEvent {
@@ -51,6 +56,13 @@ export interface Scenario {
   truth: string;
   /** Produce the ordered raw events for this recording. */
   build: () => RawEvent[];
+  /**
+   * Optional captured screen frames. Only scenarios whose evidence is *on screen*
+   * rather than in the event stream need these — a form being filled emits no events,
+   * so the frames are the only way to tell creating from selecting. Omitted, the
+   * session materializes video-less exactly as before.
+   */
+  frames?: FrameFixture[];
   rubric: Rubric;
 }
 

@@ -87,6 +87,21 @@ authoritative for *what to build*.
   org-distributed build with **no raw Foundry key on disk**, passing release QA on all
   three platforms.
 
+- **2026-08-02 — describer fix: form interactions hidden by page transitions (user-found,
+  twice-reproduced).** The testbed order-creation recording analyzed as pure browsing at
+  both Good and Full capture: form filling emits zero events, the PRG redirect makes
+  select-vs-create identical in the URL trail, and the model sampled only a quiet gap's
+  endpoint frames (even citing a frame captioned "submitted" while writing "review").
+  Fix, measured fail-before/pass-after: the suite's first vision-forcing eval scenario
+  (`form-submit-frames`, sharp-rendered frame fixtures; uncalibrated baseline scored the
+  blind reading at exactly the 80% threshold — calibrated to fail at 76%) + three prompt
+  rules (page transitions hide actions → sample the MIDDLE of quiet gaps; carry on-screen
+  values into step details verbatim; examining a gap ≠ keeping it — first attempt
+  regressed `irrelevant-detour` to 77% by dignifying the detour). Final: 11/11 describer
+  scenarios at 100%, offline suite 365/365. Fixture lesson pinned in code: the frame
+  extractor's dHash dedupe nearly ate the decisive frame — fixture renderers must derive
+  layout from content.
+
 ## Workstream status
 
 | WS | Scope | Status | Gate | Evidence |

@@ -1,6 +1,7 @@
 import type { Scenario } from "../scenario";
 import { directoryLookup } from "./directory-lookup";
 import { expenseReport } from "./expense-report";
+import { formSubmitFrames } from "./form-submit-frames";
 import { invoiceExtract } from "./invoice-extract";
 import { irrelevantDetour } from "./irrelevant-detour";
 import { leadToCrm } from "./lead-to-crm";
@@ -26,4 +27,6 @@ export const scenarios: Scenario[] = [
   windowsDeploy,
   // Linux-shaped capture (raw X11 WM_CLASS tokens + AT-SPI browser.url + bash):
   linuxDeploy,
+  // Vision path: a sparse-event page transition whose meaning is only on screen.
+  formSubmitFrames,
 ];
