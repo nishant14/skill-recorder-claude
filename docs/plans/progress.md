@@ -27,9 +27,14 @@ authoritative for *what to build*.
   unverified** post-purge), and the lockfile guards have never executed. ② G3(C) manual UI
   checklist. ③ Linux GL1/GL2 live checklist + snap-Firefox `GNOME_ACCESSIBILITY=1`
   experiment; GL3 clean-VM install.
-- **NEXT: the Phase 2 decision** — **H** (in-app runner; executes app-architecture and
-  API-grounded skills against stored specs — recommended first) vs **G** (Copilot Studio
-  declarative agent bundles).
+- **EVERY WORKSTREAM IS IMPLEMENTED (2026-08-02): A–E, I, J, H, G, plus Linux L1–L3.**
+  The app records, analyzes, and builds on Foundry; runs its own skills with enforced
+  allowlists and confirmation-gated side effects (GH live: order SO-10003 created through
+  `api:` calls); and exports ready-to-import Copilot Studio declarative agent bundles.
+  Nothing is left to build on the current board — the remaining items are exclusively
+  **user-run gates**: enable GitHub Actions; G3(C) UI checklist; GH ③ (Skills-panel run
+  of the fixture skill); GG ③ (import `<slug>-agent.zip` into Copilot Studio); Linux
+  GL1/GL2 (+ snap-Firefox experiment) and GL3 clean-VM install.
 - **Workstream J (added after the original plan, sequenced between D and E; own plan
   [`workstream-j`](./foundry-codex-migration-workstream-j.md)):** a recording can carry an
   attached API reference — OpenAPI JSON first-class, unstructured docs a fallback — and the
@@ -84,7 +89,7 @@ authoritative for *what to build*.
 | E | Packaging, install scripts, compliance, privacy copy | **done** (`5d89ecc` + G4-preview fixes `939def1`/`e713a4d`; spec [`phase1e`](./foundry-codex-migration-phase1e.md)); carried I4's `@huggingface/transformers` + `onnxruntime-node` removals | G4 — **passed locally**; CI authoritative on push | lockfile removals-only (0 resolved-URL rewrites); compliance tests 12/12; first-ever Linux AppImage built + `verify-linux-package` passed end to end after three real findings (per-platform Electron notices pins at two check sites; AppImage `x86_64` arch naming) |
 | F | The gate ladder itself (verification strategy) | **complete for Phase 1** — every automated gate exercised; CI legs latent until Actions is enabled | G0–G5, G6, GJ | see gate ledger below |
 | I | Cloud transcription on Foundry (retires local Whisper) — Phase 1, parallelizable after A | **done** (`0b38fab` + audio-route fix; spec [`phase1i`](./foundry-codex-migration-phase1i.md)) | G6 — **passed 4/4** | smoke 4/4 on 2026-08-01 vs `gpt-4o-transcribe`: known phrase round-tripped exactly ("Skill recorder test phrase."), `verbose_json→json` downgrade fired as designed; tests 124/124 |
-| G | Phase 2 — Copilot Studio declarative agent export | not started | G-phase gate TBD (real Copilot Studio import) | — |
+| G | Phase 2 — Copilot Studio declarative agent bundles (spec [`phase2g`](./foundry-codex-migration-phase2g.md)) | **done** (`84c24c3`) | GG — ①② **passed** (unit + local bundle validation incl. real-sharp icons and zip listing); ③ real Copilot Studio import **pending (user)** — a schema rejection is fixed by bumping the two pinned version constants in `common/declarative-agent.ts` | tests 334/334; exports now carry declarativeAgent.json (v1.2 pin), Teams manifest (1.19 pin), icons, connectors.md, <slug>-agent.zip |
 | H | Phase 2 — in-app skill runner on the Foundry deployment (spec [`phase2h`](./foundry-codex-migration-phase2h.md)) | **H-a + H-b + H-c done** (`8c06716`, `a3f7e76`, H-c uncommitted): IPC wire shapes in `common/ipc.ts`, one `SkillRunner` in `main.ts` with the confirm/ask gates bridged over IPC (`electron/runner/ipc-bridge.ts`), Skills panel + run view in `src/Library.tsx` | GH — ② live smoke **PASSED**; ③ manual UI run **pending (user)** | tests 319/319 (H-c adds `electron/runner/ipc-bridge.test.ts`, 9); typecheck + typecheck:evals exit 0; live 2026-08-01: fixture skill on `gpt-5.3-codex` resolved Contoso via `api:listCustomers`, confirmation-gated `api:createSalesOrder` → HTTP 201, order SO-10003 verified in the testbed API state; credentials redacted (zero `demo-key-123` occurrences in the transcript) |
 | J | API-grounded skills (attach an OpenAPI spec / docs → plan steps name `api:` operations) — plan [`workstream-j`](./foundry-codex-migration-workstream-j.md) | **done (J1+J2+J3)** + `tools/testbed` (`c8416f0`) and the docs-only brief fix (`5090f44`) | GJ — **passed (both halves)** | tests 248/248; live 2026-08-01: `api-sales-order` PASS 100%, 15.0s — plan grounded in `api:listCustomers` → `api:createSalesOrder` with input validation and ambiguity handling, zero UI-replay steps; the full documentation-level matrix (full / minimal / prose / partial) then passed **4/4 at 100%** |
 
