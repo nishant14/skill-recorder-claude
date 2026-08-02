@@ -1,6 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 
 import type {
+  CompatibilityReport,
+  CompatibilitySignal,
+} from "../common/compatibility";
+import { renderCompatibilityText } from "../common/compatibility";
+import type {
   DoctorReport,
   MicrophoneSettingsStatus,
   NarrationStatus,
@@ -37,6 +42,9 @@ export function Recorder() {
     useState<NarrationLanguage>(DEFAULT_NARRATION_LANGUAGE);
   const [microphonePending, setMicrophonePending] = useState(false);
   const [microphoneActionError, setMicrophoneActionError] = useState<string | null>(null);
+  const [compatibility, setCompatibility] = useState<CompatibilityReport | null>(null);
+  const [compatibilityBusy, setCompatibilityBusy] = useState(false);
+  const [compatibilityCopied, setCompatibilityCopied] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [sessionCount, setSessionCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
@@ -229,6 +237,27 @@ export function Recorder() {
   const openLibrary = useCallback(() => {
     void window.skillRecorder.openLibrary();
   }, []);
+
+  const checkCompatibility = useCallback(async () => {
+    setCompatibilityBusy(true);
+    setCompatibilityCopied(false);
+    try {
+      setCompatibility(await window.skillRecorder.checkCompatibility());
+    } finally {
+      setCompatibilityBusy(false);
+    }
+  }, []);
+
+  const copyCompatibility = useCallback(async () => {
+    if (!compatibility) return;
+    try {
+      await navigator.clipboard.writeText(renderCompatibilityText(compatibility));
+      setCompatibilityCopied(true);
+    } catch {
+      // A denied clipboard is not worth an alert: the report is still on screen.
+      setCompatibilityCopied(false);
+    }
+  }, [compatibility]);
 
   return (
     <div className="hud">
@@ -520,6 +549,25 @@ export function Recorder() {
           />
           {narrationStatus && <VoiceTranscriptionRow status={narrationStatus} />}
           <CaptureHealthRows doctor={doctor} />
+          <button
+            className="compat-run"
+            onClick={() => void checkCompatibility()}
+            disabled={compatibilityBusy}
+            aria-busy={compatibilityBusy}
+          >
+            {compatibilityBusy
+              ? "Checking…"
+              : compatibility
+                ? "Check compatibility again"
+                : "Check compatibility"}
+          </button>
+          {compatibility && (
+            <CompatibilityPanel
+              report={compatibility}
+              copied={compatibilityCopied}
+              onCopy={() => void copyCompatibility()}
+            />
+          )}
         </div>
       )}
 
@@ -626,6 +674,57 @@ function CaptureHealthRows({ doctor }: { doctor: DoctorReport }) {
         <Row key={row.label} label={row.label} status="warn" note={row.note} />
       ))}
     </>
+  );
+}
+
+/**
+ * The graded compatibility report: what this machine will actually capture, and the
+ * exact command to repair each degraded signal.
+ *
+ * Every string shown here — level phrasing, per-signal detail, fixes — comes from
+ * `common/compatibility.ts`, so the panel, the copied text and the docs can't drift
+ * apart. Fixes render as `code` because they are meant to be selected and pasted.
+ */
+function CompatibilityPanel({
+  report,
+  copied,
+  onCopy,
+}: {
+  report: CompatibilityReport;
+  copied: boolean;
+  onCopy: () => void;
+}) {
+  return (
+    <section className="compat" aria-label="Compatibility report">
+      <div className="compat-head">
+        <span className={`compat-level ${report.level}`}>{report.headline}</span>
+        <span className="compat-checked">
+          checked {new Date(report.checkedAt).toLocaleTimeString()}
+        </span>
+      </div>
+      <p className="compat-expect">{report.expectation}</p>
+      <div className="compat-signals">
+        {report.signals.map((signal) => (
+          <CompatibilitySignalRow key={signal.key} signal={signal} />
+        ))}
+      </div>
+      <button className="compat-copy" onClick={onCopy}>
+        {copied ? "Report copied ✓" : "Copy report"}
+      </button>
+    </section>
+  );
+}
+
+function CompatibilitySignalRow({ signal }: { signal: CompatibilitySignal }) {
+  return (
+    <div className="compat-signal">
+      <span className={`badge ${signal.ok ? "good" : "warn"}`}>{signal.ok ? "✓" : "!"}</span>
+      <div className="compat-signal-body">
+        <span className="compat-signal-label">{signal.label}</span>
+        <span className="compat-signal-detail">{signal.detail}</span>
+        {signal.fix && <code className="compat-fix">{signal.fix}</code>}
+      </div>
+    </div>
   );
 }
 

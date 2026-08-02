@@ -1,6 +1,7 @@
 import type { Analysis, AnalysisFeedback, AnalysisStep, Confidence } from "./analysis";
 import type { ApiReferenceSummary } from "./api-reference";
 import type { AutomationPlan, BuiltAutomation } from "./automation";
+import type { CompatibilityReport } from "./compatibility";
 import type { FoundryConnectionInfo } from "./foundry";
 import type { MicrophoneDevice } from "./microphone";
 import type { NarrationLanguage } from "./narration";
@@ -516,6 +517,7 @@ export const IPC = {
   status: "recorder:status",
   marker: "recorder:marker",
   doctor: "doctor:check",
+  compatibilityCheck: "compatibility:check",
   foundryGetConnection: "foundry:get-connection",
   foundrySaveConnection: "foundry:save-connection",
   foundryTestConnection: "foundry:test-connection",
@@ -583,6 +585,13 @@ export interface SkillRecorderApi {
   status(): Promise<RecorderStatus>;
   marker(note: string): Promise<MarkerResult>;
   doctor(): Promise<DoctorReport>;
+  /**
+   * The graded "what to expect from recordings here" report, on demand. Unlike
+   * {@link doctor} this runs live local probes (which browsers currently expose
+   * accessibility), so it is user-initiated rather than read on every HUD paint. It
+   * still never touches the network.
+   */
+  checkCompatibility(): Promise<CompatibilityReport>;
   /** The stored Azure AI Foundry connection, minus the key (which never comes back). */
   getFoundryConnection(): Promise<FoundryConnectionInfo>;
   /** Validate + persist a connection from the in-app form. */

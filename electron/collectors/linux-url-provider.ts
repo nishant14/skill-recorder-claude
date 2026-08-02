@@ -45,7 +45,7 @@ const PROBE_TIMEOUT_MS = 2000;
  * product name. Match loosely on the recognizable family token; the host does the
  * second, fuzzier match against the AT-SPI application names.
  */
-const LINUX_BROWSER_TOKENS = [
+export const LINUX_BROWSER_TOKENS = [
   "firefox",
   "navigator",
   "chrome",

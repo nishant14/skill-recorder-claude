@@ -34,6 +34,8 @@ import type {
 } from "../common/ipc";
 import { IPC } from "../common/ipc";
 import type { AutomationPlan } from "../common/automation";
+import type { CompatibilityReport } from "../common/compatibility";
+import { gradeCompatibility } from "../common/compatibility";
 import type { NarrationLanguage } from "../common/narration";
 import type { SkillPlan } from "../common/skill";
 import {
@@ -43,6 +45,7 @@ import {
   removeSource,
 } from "./builders/api-reference-store";
 import { AutomationBuilder, loadPersistedAutomation } from "./automationbuilder/builder";
+import { probeAccessibleBrowsers, shouldProbeBrowserA11y } from "./collectors/linux-a11y-probe";
 import { buildDebugInfo, writeDebugBundle } from "./debug-bundle";
 import { Describer, loadPersistedAnalysis } from "./describer/describer";
 import { runDoctor } from "./doctor";
@@ -146,6 +149,20 @@ export function registerIpc(
   ipcMain.handle(IPC.status, () => recorder.status());
   ipcMain.handle(IPC.marker, (_event, note: string) => recorder.marker(note));
   ipcMain.handle(IPC.doctor, () => runDoctor());
+
+  // The graded check: the doctor's static answers plus one live look at the machine.
+  // The probe is best-effort by contract — a report that couldn't ask grades down.
+  ipcMain.handle(IPC.compatibilityCheck, async (): Promise<CompatibilityReport> => {
+    const doctor = runDoctor();
+    const browserA11y = shouldProbeBrowserA11y(doctor)
+      ? await probeAccessibleBrowsers()
+      : { checked: false, accessibleBrowsers: [] };
+    return gradeCompatibility(
+      doctor,
+      { browserA11y, microphonePermission: microphones.settings().permission },
+      Date.now(),
+    );
+  });
 
   ipcMain.handle(IPC.foundryGetConnection, () => foundryConnectionInfo());
 
