@@ -1,4 +1,4 @@
-import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, rmSync, statSync } from "node:fs";
 import path from "node:path";
 
 import type { SkillListEntry } from "../../common/ipc";
@@ -32,6 +32,13 @@ const log = createLogger("Runner/library");
 
 /** Folder inside a skill that carries its copied API reference (written by the builder). */
 const API_DIR = "api";
+/**
+ * The only folder names {@link deleteSkill} will remove: a single path segment shaped
+ * like what the installer writes (`slugifySkillName`, plus its `-2` collision suffix),
+ * widened only to the dots and underscores a hand-created folder plausibly carries. A
+ * leading `.` is refused, which also refuses `.` and `..` before they reach a join.
+ */
+const SAFE_SLUG = /^[A-Za-z0-9][A-Za-z0-9._-]{0,79}$/;
 /** User-authored per-skill config. Never written by us — documented for the user. */
 const RUNNER_CONFIG_FILE = "runner.json";
 
@@ -258,6 +265,44 @@ export function findInstalledSkill(name: string): InstalledSkill | null {
     if (entry.name === wanted) return loadSkillFromDir(entry.dir);
   }
   return null;
+}
+
+/**
+ * Uninstall one skill: remove its folder from the library root, recursively.
+ *
+ * `slug` is the **folder** name, not the frontmatter name — the two can differ after a
+ * hand rename, and only the folder is a path. Callers that hold a {@link SkillListEntry}
+ * pass `path.basename(entry.dir)`.
+ *
+ * Deletion deliberately stops at the library: `~/.skill-recorder/runs/<skill>/` is left
+ * alone. Those transcripts record what a skill actually did on this machine — an audit
+ * trail — so uninstalling the skill must not erase the history of having run it.
+ *
+ * Throws a message written for the user; these strings surface verbatim in the Skills
+ * panel's banner.
+ */
+export function deleteSkill(slug: string): void {
+  const wanted = String(slug ?? "").trim();
+  if (!SAFE_SLUG.test(wanted)) throw new Error(`"${wanted}" is not an installed skill.`);
+
+  const root = path.resolve(skillsRoot());
+  const dir = path.resolve(root, wanted);
+  // The shape check already refuses separators and `..`; this second check is what
+  // guarantees the invariant we actually care about — we only ever remove a *direct
+  // child* of the library root, never the root itself and never anything outside it.
+  if (path.dirname(dir) !== root) throw new Error(`"${wanted}" is not an installed skill.`);
+  // Require the SKILL.md, not just the folder: that is what makes a directory a skill,
+  // and it keeps a stray folder under the root from being removed by a typo'd name.
+  if (!existsSync(path.join(dir, "SKILL.md"))) {
+    throw new Error(`"${wanted}" is not installed any more — the Skills list may be out of date.`);
+  }
+
+  try {
+    rmSync(dir, { recursive: true, force: true });
+  } catch (err) {
+    throw new Error(`Could not delete ${dir}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  log.info(`deleted skill ${wanted} (run transcripts kept)`);
 }
 
 export { skillsRoot };

@@ -1,11 +1,11 @@
 import assert from "node:assert/strict";
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import test from "node:test";
 
 import { BuiltSkillSchema, renderSkillMarkdown } from "../../common/skill";
-import { findInstalledSkill, listInstalledSkills, parseSkillMarkdown } from "./library";
+import { deleteSkill, findInstalledSkill, listInstalledSkills, parseSkillMarkdown } from "./library";
 
 /**
  * The runner's view of the skill library. Every case runs against a temp
@@ -194,6 +194,88 @@ test("a name-less SKILL.md falls back to its folder name", () => {
     assert.equal(entry.description, "");
     assert.equal(entry.unrestricted, true);
     assert.equal(findInstalledSkill("hand-written")?.body, "Do the thing, carefully.");
+  });
+});
+
+test("deleteSkill removes the whole skill folder and nothing else in the library", () => {
+  withSkills((ctx) => {
+    ctx.write("create-sales-order", "SKILL.md", rendered("create-sales-order", "Create an order.", ["api:createSalesOrder"], "Steps."));
+    ctx.write("create-sales-order", path.join("api", "openapi.json"), "{}");
+    ctx.write("create-sales-order", path.join("api", "index.json"), "{}");
+    ctx.write("create-sales-order", "runner.json", JSON.stringify({ apiBase: "http://127.0.0.1:8787" }));
+    ctx.write("keep-me", "SKILL.md", rendered("keep-me", "Untouched.", [], "Steps."));
+
+    deleteSkill("create-sales-order");
+
+    assert.equal(existsSync(path.join(ctx.root, "create-sales-order")), false, "the folder, and its api/ + runner.json, are gone");
+    assert.equal(findInstalledSkill("create-sales-order"), null);
+    assert.deepEqual(listInstalledSkills().map((e) => e.name), ["keep-me"]);
+    assert.equal(existsSync(ctx.root), true, "the library root itself survives");
+  });
+});
+
+test("deleting a skill keeps its run transcripts — they are the audit trail", () => {
+  withSkills((ctx) => {
+    const runsRoot = mkdtempSync(path.join(tmpdir(), "sr-runner-runs-"));
+    const previousRuns = process.env.SKILL_RECORDER_RUNS_DIR;
+    process.env.SKILL_RECORDER_RUNS_DIR = runsRoot;
+    const transcript = path.join(runsRoot, "create-sales-order", "2026-08-02T09-00-00-000Z.json");
+    try {
+      ctx.write("create-sales-order", "SKILL.md", rendered("create-sales-order", "d", [], "b"));
+      mkdirSync(path.dirname(transcript), { recursive: true });
+      writeFileSync(transcript, '{"version":1}');
+
+      deleteSkill("create-sales-order");
+
+      assert.equal(existsSync(transcript), true, "uninstalling must not erase what the skill did");
+    } finally {
+      if (previousRuns === undefined) delete process.env.SKILL_RECORDER_RUNS_DIR;
+      else process.env.SKILL_RECORDER_RUNS_DIR = previousRuns;
+      rmSync(runsRoot, { recursive: true, force: true });
+    }
+  });
+});
+
+test("deleteSkill refuses traversal, separators and anything that isn't a plain folder name", () => {
+  withSkills((ctx) => {
+    // A sibling of the library root: the thing a traversal would be reaching for.
+    const outside = path.join(ctx.root, "..", path.basename(ctx.root) + "-outsider");
+    mkdirSync(outside, { recursive: true });
+    ctx.write("real", "SKILL.md", rendered("real", "d", [], "b"));
+
+    try {
+      for (const bad of [
+        "..",
+        ".",
+        "../" + path.basename(outside),
+        "..\\evil",
+        "nested/real",
+        "nested\\real",
+        path.resolve(ctx.root, "real"),
+        "",
+        "   ",
+        ".hidden",
+        "-leading-dash",
+      ]) {
+        assert.throws(() => deleteSkill(bad), /is not an installed skill|is not installed any more/, `expected "${bad}" to be refused`);
+      }
+      assert.equal(existsSync(outside), true, "nothing outside the library root was touched");
+      assert.equal(existsSync(path.join(ctx.root, "real")), true);
+    } finally {
+      rmSync(outside, { recursive: true, force: true });
+    }
+  });
+});
+
+test("deleteSkill errors, in the user's words, when the skill isn't there", () => {
+  withSkills((ctx) => {
+    // A folder under the root with no SKILL.md is not a skill — a typo'd name must not
+    // take it out.
+    mkdirSync(path.join(ctx.root, "not-a-skill"), { recursive: true });
+
+    assert.throws(() => deleteSkill("nope"), /"nope" is not installed any more/);
+    assert.throws(() => deleteSkill("not-a-skill"), /is not installed any more/);
+    assert.equal(existsSync(path.join(ctx.root, "not-a-skill")), true);
   });
 });
 

@@ -232,6 +232,15 @@ export class SkillRunner {
   }
 
   /**
+   * Which skill the in-flight run is executing, or null when idle. Both halves are
+   * reported because the two can disagree after a hand rename: callers matching a list
+   * entry compare `dir`, callers writing a message use `name`.
+   */
+  activeRunSkill(): { name: string; dir: string } | null {
+    return this.active ? { name: this.active.skill.name, dir: this.active.skill.dir } : null;
+  }
+
+  /**
    * Execute one installed skill and resolve with the model's closing report. Rejects
    * with a user-facing message — these strings reach the run panel verbatim.
    */

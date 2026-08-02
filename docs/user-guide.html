@@ -296,6 +296,7 @@ is built from.</p>
   <li>Pick a skill, optionally type an input (“Create an order for Contoso: 2× NW-1140”), and <b>Run</b>.</li>
   <li>Watch the live transcript. <b>Every side effect pauses for you</b>: shell commands, file writes, and non-GET API calls show a confirmation card — <b>Approve</b>, <b>Deny</b> (the model adapts), or <i>Always allow this kind for this run</i>. The skill's <code>allowed-tools</code> are <i>enforced</i>: commands outside its declared patterns are refused outright.</li>
   <li>If the skill asks a question, answer in the inline prompt. Cancel anytime. Every run writes a full transcript to <code>~/.skill-recorder/runs/</code> — with credentials redacted.</li>
+  <li><b>Deleting a skill.</b> Hover a row in the Skills tab and click the trash icon, then <b>Delete</b> to confirm. That removes the installed skill folder from <code>~/.skill-recorder/skills/</code>; <b>past run transcripts are kept</b>, and the recording it was built from is untouched (build it again anytime). A skill can't be deleted while it is running — stop the run first.</li>
 </ol>
 
 <div class="card">

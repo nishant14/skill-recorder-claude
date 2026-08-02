@@ -240,6 +240,12 @@ export interface SkillListEntry {
   mtimeMs: number;
 }
 
+/** Result of uninstalling a skill. `error` is written for the user; render it verbatim. */
+export interface DeleteSkillResult {
+  ok: boolean;
+  error?: string;
+}
+
 /** What the user answered when a side effect asked. `timeout` is the in-band no-answer. */
 export type ConfirmDecision = "approve" | "deny" | "timeout";
 
@@ -553,6 +559,7 @@ export const IPC = {
   revealAutomation: "automation:reveal",
   automationProgress: "automation:progress",
   skillsList: "skills:list",
+  skillsDelete: "skills:delete",
   skillRun: "skill:run",
   skillRunCancel: "skill:run-cancel",
   skillRunRespond: "skill:run-respond",
@@ -675,6 +682,12 @@ export interface SkillRecorderApi {
   onAutomationProgress(cb: (progress: AutomationBuildProgress) => void): () => void;
   /** Every skill installed in this app's own library, by name. */
   listInstalledSkills(): Promise<SkillListEntry[]>;
+  /**
+   * Uninstall a skill: delete its folder from this app's own library. Refused while
+   * that skill is running. Past run transcripts are kept — they are the record of what
+   * the skill did on this machine. Destructive: the renderer confirms first.
+   */
+  deleteSkill(name: string): Promise<DeleteSkillResult>;
   /**
    * Start running an installed skill. Resolves as soon as the run has *started* —
    * the transcript, the confirmations and the final report all arrive on the three

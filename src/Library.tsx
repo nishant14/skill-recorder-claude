@@ -114,6 +114,22 @@ export function Library() {
     });
   }, []);
 
+  const deleteSkill = useCallback(
+    async (name: string) => {
+      setNotice(null);
+      const res = await window.skillRecorder.deleteSkill(name);
+      if (!res.ok) {
+        setNotice(res.error ?? "Could not delete this skill.");
+        return;
+      }
+      // Re-read rather than splice: the folder is gone on disk, and the list is a cheap
+      // scan that also catches anything else that changed underneath us.
+      setSelectedSkill((cur) => (cur === name ? null : cur));
+      await loadSkills();
+    },
+    [loadSkills],
+  );
+
   const selected = sessions.find((s) => s.id === selectedId) ?? null;
   const skill = skills.find((s) => s.name === selectedSkill) ?? null;
 
@@ -156,6 +172,7 @@ export function Library() {
               loaded={skillsLoaded}
               selectedName={selectedSkill}
               onSelect={setSelectedSkill}
+              onDelete={deleteSkill}
             />
           )}
         </div>
@@ -1816,12 +1833,18 @@ function SkillsList({
   loaded,
   selectedName,
   onSelect,
+  onDelete,
 }: {
   skills: SkillListEntry[];
   loaded: boolean;
   selectedName: string | null;
   onSelect: (name: string) => void;
+  onDelete: (name: string) => void | Promise<void>;
 }) {
+  // Which row is asking "are you sure" — the same in-list confirmation the sessions
+  // list uses, so a destructive click is never one click.
+  const [confirmName, setConfirmName] = useState<string | null>(null);
+
   if (skills.length === 0) {
     return (
       <p className="sessions-empty">
@@ -1831,24 +1854,70 @@ function SkillsList({
   }
   return (
     <ul className="sess-list">
-      {skills.map((s) => (
-        <li key={s.dir}>
-          <button
-            className={`sess${s.name === selectedName ? " on" : ""}`}
-            onClick={() => onSelect(s.name)}
-            title={s.dir}
-          >
-            <div className="sess-top">
-              <span className="skill-name">{s.name}</span>
-              <span className="sess-tags">
-                {s.hasApi && <span className="tag ok">API</span>}
-                {s.unrestricted && <span className="tag risk">unrestricted</span>}
-              </span>
+      {skills.map((s) =>
+        confirmName === s.name ? (
+          <li key={s.dir}>
+            <div className="sess-confirm" role="alertdialog" aria-label="Confirm delete">
+              <div className="sess-confirm-text">
+                <span className="sess-confirm-title">Delete “{s.name}”?</span>
+                <span className="sess-confirm-sub">
+                  This removes the installed skill from this device. Past run transcripts
+                  are kept. You can build it again from its recording.
+                </span>
+              </div>
+              <div className="sess-confirm-actions">
+                <button className="linky" onClick={() => setConfirmName(null)}>
+                  Cancel
+                </button>
+                <button
+                  className="danger"
+                  onClick={() => {
+                    setConfirmName(null);
+                    void onDelete(s.name);
+                  }}
+                >
+                  Delete
+                </button>
+              </div>
             </div>
-            {s.description && <div className="sess-intent">{s.description}</div>}
-          </button>
-        </li>
-      ))}
+          </li>
+        ) : (
+          <li key={s.dir}>
+            <div className="sess-row skill-row">
+              <button
+                className={`sess${s.name === selectedName ? " on" : ""}`}
+                onClick={() => onSelect(s.name)}
+                title={s.dir}
+              >
+                <div className="sess-top">
+                  <span className="skill-name">{s.name}</span>
+                  <span className="sess-tags">
+                    {s.hasApi && <span className="tag ok">API</span>}
+                    {s.unrestricted && <span className="tag risk">unrestricted</span>}
+                  </span>
+                </div>
+                {s.description && <div className="sess-intent">{s.description}</div>}
+              </button>
+              <button
+                className="sess-del"
+                aria-label={`Delete skill ${s.name}`}
+                title="Delete skill"
+                onClick={() => setConfirmName(s.name)}
+              >
+                <svg width="15" height="15" viewBox="0 0 16 16" fill="none" aria-hidden>
+                  <path
+                    d="M3 4.5h10M6.4 4.5V3.3c0-.44.36-.8.8-.8h1.6c.44 0 .8.36.8.8v1.2M4.7 4.5l.5 8.2c.02.42.37.75.8.75h4c.42 0 .77-.33.8-.75l.5-8.2"
+                    stroke="currentColor"
+                    strokeWidth="1.2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  />
+                </svg>
+              </button>
+            </div>
+          </li>
+        ),
+      )}
     </ul>
   );
 }

@@ -1912,6 +1912,12 @@ button:focus-visible,
   color: var(--rec);
 }
 
+/* The delete affordance floats over the row's bottom-right corner; a skill's last line
+   is its description, so keep the text from running underneath it. */
+.skill-row .sess-intent {
+  padding-right: 24px;
+}
+
 .sess-confirm {
   display: flex;
   flex-direction: column;

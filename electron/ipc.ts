@@ -20,6 +20,7 @@ import type {
   AutomationPlanResult,
   DebugBundleResult,
   DeleteSessionResult,
+  DeleteSkillResult,
   FoundryConnectionInput,
   FoundryConnectionResult,
   FoundryTestResult,
@@ -61,7 +62,7 @@ import type { NarrationManager } from "./narration/manager";
 import type { RecorderController } from "./recorder/controller";
 import { isValidSessionId, sessionDir } from "./recorder/session-store";
 import type { RunPrompts } from "./runner/ipc-bridge";
-import { listInstalledSkills } from "./runner/library";
+import { deleteSkill, listInstalledSkills } from "./runner/library";
 import type { SkillRunner } from "./runner/runner";
 import { deleteSession, listSessions } from "./sessions";
 import { loadPersistedSkill, SkillBuilder, type SkillTarget } from "./skillbuilder/builder";
@@ -549,6 +550,29 @@ export function registerIpc(
   /* --- Skill runner ------------------------------------------------------- */
 
   ipcMain.handle(IPC.skillsList, () => listInstalledSkills());
+
+  ipcMain.handle(IPC.skillsDelete, (_event, name: string): DeleteSkillResult => {
+    const wanted = typeof name === "string" ? name.trim() : "";
+    // Same discipline as `skillRun`: the renderer's list is a snapshot, so re-resolve
+    // the name against the library on disk. The folder is what gets deleted, and it can
+    // differ from the frontmatter name the UI shows.
+    const entry = listInstalledSkills().find((s) => s.name === wanted);
+    if (!entry) return { ok: false, error: `No installed skill named "${wanted}".` };
+
+    const running = runner.activeRunSkill();
+    if (running && running.dir === entry.dir) {
+      return { ok: false, error: `${entry.name} is currently running — stop the run first.` };
+    }
+
+    try {
+      deleteSkill(path.basename(entry.dir));
+      return { ok: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      log.warn("skill delete failed:", error);
+      return { ok: false, error };
+    }
+  });
 
   ipcMain.handle(IPC.skillRun, async (_event, input: RunSkillInput): Promise<RunStartResult> => {
     const name = typeof input?.name === "string" ? input.name.trim() : "";

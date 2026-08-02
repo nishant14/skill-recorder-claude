@@ -230,6 +230,14 @@ attach it as docs for best-effort matching."</i></p>
       (its name is <code>runner-sales-order-demo</code>).</li>
 </ul>
 
+<div class="card">
+  <b>Re-running this part.</b> Creating an App skill <i>installs</i> it, so a second pass through
+  the full loop leaves you with two copies (the second lands in a <code>-2</code> folder). Clear the
+  first one out from Library → <b>Skills</b> tab: hover the row, click the trash icon, then
+  <b>Delete</b> to confirm. Past run transcripts under <code>~/.skill-recorder/runs/</code> are kept,
+  so nothing you've already verified is lost. Stop any active run before deleting.
+</div>
+
 <ol class="steps">
   <li>In the installed skill's folder, create/edit <code>runner.json</code>:
 <pre><code>{ "apiBase": "http://127.0.0.1:8787/api/v1",

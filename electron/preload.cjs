@@ -52,6 +52,7 @@ const IPC = {
   revealAutomation: "automation:reveal",
   automationProgress: "automation:progress",
   skillsList: "skills:list",
+  skillsDelete: "skills:delete",
   skillRun: "skill:run",
   skillRunCancel: "skill:run-cancel",
   skillRunRespond: "skill:run-respond",
@@ -158,6 +159,7 @@ contextBridge.exposeInMainWorld("skillRecorder", {
     return () => ipcRenderer.removeListener(IPC.automationProgress, listener);
   },
   listInstalledSkills: () => ipcRenderer.invoke(IPC.skillsList),
+  deleteSkill: (name) => ipcRenderer.invoke(IPC.skillsDelete, name),
   runSkill: (input) => ipcRenderer.invoke(IPC.skillRun, input),
   cancelRun: (runId) => ipcRenderer.invoke(IPC.skillRunCancel, runId),
   respondToRun: (input) => ipcRenderer.invoke(IPC.skillRunRespond, input),
