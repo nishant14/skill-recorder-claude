@@ -324,6 +324,19 @@ button:focus-visible,
   gap: 10px;
   padding: 16px 18px 14px;
   height: 100vh;
+  /* The recorder window is a fixed 400x534 and cannot be resized, so the HUD itself
+     must never scroll — a window scrollbar here steals 15px of width and wraps the
+     readiness rows. Only .doctor is allowed to give; see its rule. */
+  overflow: hidden;
+}
+
+/* The transport and the tiles are load-bearing chrome: they keep their measured
+   height no matter how much the readiness cluster below them wants. */
+.transport,
+.privacy-note,
+.sessions-open,
+.hint {
+  flex: none;
 }
 
 /* The signature: a physical record transport. */
@@ -1411,14 +1424,35 @@ button:focus-visible,
   font-weight: 600;
 }
 
+/**
+ * The readiness + compatibility cluster: the ONE region of the HUD that gives.
+ *
+ * Every other child of .hud is flex:none, so this block's used height is exactly
+ * whatever the transport leaves — about 92px in the shipped 400x534 window. It
+ * scrolls inside itself rather than pushing the hint off the bottom or growing a
+ * window scrollbar. The 40vh cap is the ceiling when there IS slack; in practice
+ * flex clamps harder. This is deliberately the only scroller in the cluster —
+ * nesting a second one inside the report would be worse than the overflow it fixes.
+ */
 .doctor {
   display: flex;
   flex-direction: column;
   gap: 6px;
   margin-top: auto;
-  /* Lets the compatibility report scroll inside itself instead of stretching
-     the HUD column past the window. */
+  flex: 0 1 auto;
   min-height: 0;
+  max-height: 40vh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.doctor-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  flex: none;
 }
 
 .row {
@@ -1426,20 +1460,36 @@ button:focus-visible,
   align-items: center;
   gap: 8px;
   font-size: 12.5px;
+  min-width: 0;
 }
 
+/* One line per row. The label never shrinks below its text (capped so a long
+   capability name can't starve the value), and the value takes the remainder and
+   ellipsizes — a 45-character endpoint host wrapping mid-word was what pushed the
+   whole cluster out of the window. Both carry a title attribute. */
 .row-label {
-  flex: 1;
+  flex: 0 0 auto;
+  max-width: 60%;
   color: var(--muted);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .row-note {
+  flex: 1 1 0;
+  min-width: 0;
+  text-align: right;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--faint);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .badge {
+  flex: none;
   width: 16px;
   height: 16px;
   border-radius: 50%;
@@ -1463,6 +1513,7 @@ button:focus-visible,
 }
 
 .row-action {
+  flex: none;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--brand-ink);
@@ -1484,8 +1535,14 @@ button:focus-visible,
 
 /* --- Compatibility check -------------------------------------------------- */
 
+/* Sticky for the same reason as .compat: with several readiness rows the cluster
+   scrolls, and the one control that starts the check must not be the thing below
+   the fold. */
 .compat-run {
   align-self: stretch;
+  flex: none;
+  position: sticky;
+  bottom: 0;
   font-family: var(--mono);
   font-size: 11px;
   color: var(--muted);
@@ -1506,28 +1563,45 @@ button:focus-visible,
   cursor: default;
 }
 
-/* The report can be taller than the HUD leaves room for; it scrolls inside itself
-   rather than pushing the transport off the window. */
+/* The panel itself does not scroll — .doctor does. Keeping the scroll in one place
+   means the summary, the rows above it and the disclosed report share a single
+   scrollbar instead of nesting two inside 92px.
+   Collapsed, the panel is sticky so the grade and its controls stay on screen when a
+   degraded machine pushes four or five readiness rows above them. Open, it must NOT
+   be sticky: the expanded panel is taller than the scrollport, so a sticky box would
+   clamp to the top of the cluster and hide the readiness rows behind it for the whole
+   scroll range. */
 .compat {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  max-height: 46vh;
-  overflow-y: auto;
-  padding: 9px 10px;
+  gap: 6px;
+  flex: none;
+  min-width: 0;
+  padding: 8px 9px;
   background: var(--surface);
   border: 1px solid var(--line);
   border-radius: 9px;
 }
 
-.compat-head {
+.compat.collapsed {
+  position: sticky;
+  bottom: 0;
+}
+
+/* The permanent one-liner: grade, when it ran, the disclosure, and a re-run. */
+.compat-summary {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  gap: 6px;
+  min-width: 0;
 }
 
 .compat-level {
+  flex: 0 1 auto;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   font-family: var(--mono);
   font-size: 10px;
   font-weight: 700;
@@ -1553,9 +1627,64 @@ button:focus-visible,
 }
 
 .compat-checked {
+  flex: none;
   font-family: var(--mono);
   font-size: 10px;
   color: var(--faint);
+}
+
+/* Pushed to the right edge so the grade and the controls read as two groups. */
+.compat-details-toggle {
+  flex: none;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-family: var(--mono);
+  font-size: 10px;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 2px 6px;
+}
+
+.compat-recheck {
+  flex: none;
+  font-size: 12px;
+  line-height: 1;
+  color: var(--muted);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  padding: 3px 6px;
+}
+
+.compat-details-toggle:hover,
+.compat-recheck:hover:not(:disabled) {
+  border-color: var(--line-strong);
+  color: var(--text);
+}
+
+.compat-recheck[aria-busy="true"],
+.compat-recheck:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.compat-caret {
+  transition: transform 0.15s ease;
+}
+
+.compat-caret.open {
+  transform: rotate(180deg);
+}
+
+.compat-details {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
 }
 
 .compat-expect {
@@ -1563,6 +1692,7 @@ button:focus-visible,
   font-size: 12px;
   line-height: 1.4;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
 .compat-signals {
@@ -1588,16 +1718,24 @@ button:focus-visible,
 .compat-signal-label {
   font-size: 12px;
   color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
+/* Details wrap instead of truncating: they live inside the scrolling cluster, where
+   extra height is free, and a half-sentence remedy helps nobody. */
 .compat-signal-detail {
   font-size: 11.5px;
   line-height: 1.4;
   color: var(--muted);
+  overflow-wrap: anywhere;
 }
 
-/* Fixes are meant to be selected and pasted, so they wrap rather than truncate. */
+/* Fixes are meant to be selected and pasted, so they wrap rather than truncate —
+   vertically only. The window is 400px wide and must never scroll sideways. */
 .compat-fix {
+  display: block;
   font-family: var(--mono);
   font-size: 10.5px;
   line-height: 1.45;
@@ -1606,6 +1744,8 @@ button:focus-visible,
   border-radius: 5px;
   padding: 3px 6px;
   user-select: text;
+  white-space: pre-wrap;
+  word-break: break-word;
   overflow-wrap: anywhere;
 }
 

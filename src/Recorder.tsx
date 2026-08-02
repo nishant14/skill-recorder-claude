@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type RefObject } from "react";
 
 import type {
   CompatibilityReport,
@@ -45,10 +45,14 @@ export function Recorder() {
   const [compatibility, setCompatibility] = useState<CompatibilityReport | null>(null);
   const [compatibilityBusy, setCompatibilityBusy] = useState(false);
   const [compatibilityCopied, setCompatibilityCopied] = useState(false);
+  // Collapsed by default. The recorder is a fixed 400x534 window; the full report is
+  // taller than the space the transport leaves, so it opens only when asked for.
+  const [compatibilityDetailsOpen, setCompatibilityDetailsOpen] = useState(false);
   const [elapsed, setElapsed] = useState(0);
   const [sessionCount, setSessionCount] = useState(0);
   const [pendingCount, setPendingCount] = useState(0);
   const narrationSettingsRef = useRef<HTMLElement>(null);
+  const compatPanelRef = useRef<HTMLElement>(null);
 
   const refreshCount = useCallback(async () => {
     const list = await window.skillRecorder.listSessions();
@@ -128,6 +132,14 @@ export function Recorder() {
       window.removeEventListener("mousedown", onMouseDown);
     };
   }, [showNarrationSettings]);
+
+  // The readiness cluster is a ~90px scrollport, so an opened report starts below the
+  // fold: without this, Details looks like it did nothing. Scrolling the panel to the
+  // top of the cluster keeps the rows above it reachable instead of hiding them.
+  useEffect(() => {
+    if (!compatibilityDetailsOpen) return;
+    compatPanelRef.current?.scrollIntoView({ block: "start" });
+  }, [compatibilityDetailsOpen]);
 
   // Refresh the library count whenever a recording finishes.
   useEffect(() => {
@@ -542,31 +554,35 @@ export function Recorder() {
 
       {doctor && (
         <div className="doctor">
-          <Row
-            label="Azure AI Foundry"
-            status={doctor.foundry.configured ? "good" : "bad"}
-            note={doctor.foundry.configured ? endpointHost(doctor.foundry.endpoint) : "not configured"}
-          />
-          {narrationStatus && <VoiceTranscriptionRow status={narrationStatus} />}
-          <CaptureHealthRows doctor={doctor} />
-          <button
-            className="compat-run"
-            onClick={() => void checkCompatibility()}
-            disabled={compatibilityBusy}
-            aria-busy={compatibilityBusy}
-          >
-            {compatibilityBusy
-              ? "Checking…"
-              : compatibility
-                ? "Check compatibility again"
-                : "Check compatibility"}
-          </button>
-          {compatibility && (
+          <div className="doctor-rows">
+            <Row
+              label="Azure AI Foundry"
+              status={doctor.foundry.configured ? "good" : "bad"}
+              note={doctor.foundry.configured ? endpointHost(doctor.foundry.endpoint) : "not configured"}
+            />
+            {narrationStatus && <VoiceTranscriptionRow status={narrationStatus} />}
+            <CaptureHealthRows doctor={doctor} />
+          </div>
+          {compatibility ? (
             <CompatibilityPanel
+              panelRef={compatPanelRef}
               report={compatibility}
+              open={compatibilityDetailsOpen}
+              busy={compatibilityBusy}
               copied={compatibilityCopied}
+              onToggle={() => setCompatibilityDetailsOpen((open) => !open)}
+              onRecheck={() => void checkCompatibility()}
               onCopy={() => void copyCompatibility()}
             />
+          ) : (
+            <button
+              className="compat-run"
+              onClick={() => void checkCompatibility()}
+              disabled={compatibilityBusy}
+              aria-busy={compatibilityBusy}
+            >
+              {compatibilityBusy ? "Checking…" : "Check compatibility"}
+            </button>
           )}
         </div>
       )}
@@ -619,11 +635,17 @@ function Row({
   action?: { label: string; disabled?: boolean; onClick: () => void };
 }) {
   const symbol = status === "good" ? "✓" : status === "warn" ? "!" : "✕";
+  // One line per row inside a 400px window: both cells truncate, and the title
+  // attribute is what makes a clipped endpoint host or fix note recoverable.
   return (
     <div className="row">
       <span className={`badge ${status}`}>{symbol}</span>
-      <span className="row-label">{label}</span>
-      <span className="row-note">{note}</span>
+      <span className="row-label" title={label}>
+        {label}
+      </span>
+      <span className="row-note" title={note}>
+        {note}
+      </span>
       {action && (
         <button className="row-action" disabled={action.disabled} onClick={action.onClick}>
           {action.label}
@@ -684,33 +706,79 @@ function CaptureHealthRows({ doctor }: { doctor: DoctorReport }) {
  * Every string shown here — level phrasing, per-signal detail, fixes — comes from
  * `common/compatibility.ts`, so the panel, the copied text and the docs can't drift
  * apart. Fixes render as `code` because they are meant to be selected and pasted.
+ *
+ * The report is *always* taller than the fixed HUD can spare, so only the one-line
+ * summary is permanent: level, when it ran, a disclosure, and a re-run affordance.
+ * Everything else lives behind `Details` and scrolls inside `.doctor`.
  */
 function CompatibilityPanel({
+  panelRef,
   report,
+  open,
+  busy,
   copied,
+  onToggle,
+  onRecheck,
   onCopy,
 }: {
+  panelRef: RefObject<HTMLElement | null>;
   report: CompatibilityReport;
+  open: boolean;
+  busy: boolean;
   copied: boolean;
+  onToggle: () => void;
+  onRecheck: () => void;
   onCopy: () => void;
 }) {
+  const checkedAt = new Date(report.checkedAt);
   return (
-    <section className="compat" aria-label="Compatibility report">
-      <div className="compat-head">
-        <span className={`compat-level ${report.level}`}>{report.headline}</span>
-        <span className="compat-checked">
-          checked {new Date(report.checkedAt).toLocaleTimeString()}
+    <section
+      ref={panelRef}
+      className={`compat ${open ? "open" : "collapsed"}`}
+      aria-label="Compatibility report"
+    >
+      <div className="compat-summary">
+        <span className={`compat-level ${report.level}`} title={report.headline}>
+          {report.headline}
         </span>
+        <span className="compat-checked" title={`Checked ${checkedAt.toLocaleTimeString()}`}>
+          {checkedAt.toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}
+        </span>
+        <button
+          className="compat-details-toggle"
+          aria-expanded={open}
+          aria-controls="compat-details"
+          onClick={onToggle}
+        >
+          Details
+          <span className={`compat-caret ${open ? "open" : ""}`} aria-hidden>
+            ▾
+          </span>
+        </button>
+        <button
+          className="compat-recheck"
+          onClick={onRecheck}
+          disabled={busy}
+          aria-busy={busy}
+          title="Check compatibility again"
+          aria-label="Check compatibility again"
+        >
+          <span aria-hidden>{busy ? "…" : "↻"}</span>
+        </button>
       </div>
-      <p className="compat-expect">{report.expectation}</p>
-      <div className="compat-signals">
-        {report.signals.map((signal) => (
-          <CompatibilitySignalRow key={signal.key} signal={signal} />
-        ))}
-      </div>
-      <button className="compat-copy" onClick={onCopy}>
-        {copied ? "Report copied ✓" : "Copy report"}
-      </button>
+      {open && (
+        <div id="compat-details" className="compat-details">
+          <p className="compat-expect">{report.expectation}</p>
+          <div className="compat-signals">
+            {report.signals.map((signal) => (
+              <CompatibilitySignalRow key={signal.key} signal={signal} />
+            ))}
+          </div>
+          <button className="compat-copy" onClick={onCopy}>
+            {copied ? "Report copied ✓" : "Copy report"}
+          </button>
+        </div>
+      )}
     </section>
   );
 }
@@ -720,7 +788,9 @@ function CompatibilitySignalRow({ signal }: { signal: CompatibilitySignal }) {
     <div className="compat-signal">
       <span className={`badge ${signal.ok ? "good" : "warn"}`}>{signal.ok ? "✓" : "!"}</span>
       <div className="compat-signal-body">
-        <span className="compat-signal-label">{signal.label}</span>
+        <span className="compat-signal-label" title={signal.label}>
+          {signal.label}
+        </span>
         <span className="compat-signal-detail">{signal.detail}</span>
         {signal.fix && <code className="compat-fix">{signal.fix}</code>}
       </div>
