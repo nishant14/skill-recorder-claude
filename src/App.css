@@ -2211,6 +2211,33 @@ button:focus-visible,
   line-height: 1.45;
 }
 
+.improve-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  border-top: 1px solid var(--line);
+  padding-top: 16px;
+  font-size: 12px;
+}
+
+.improve-input {
+  min-height: 66px;
+  font-size: 13px;
+}
+
+.improve-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 14px;
+}
+
+.improve-confirm {
+  margin-right: auto;
+  color: var(--muted);
+  line-height: 1.4;
+}
+
 .analysis-error {
   background: rgba(var(--rec-rgb), 0.12);
   border: 1px solid rgba(var(--rec-rgb), 0.5);

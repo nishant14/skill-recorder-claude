@@ -172,7 +172,18 @@ nothing else:</p>
       identity via the page titles ("Orders — Northwind Testbed" …).</li>
   <li><span class="fail">FAIL looks like:</span> "no reconstructable task / no signals" — a capture
       problem, not an analysis problem. See <a href="#trouble">Troubleshooting</a>.</li>
-  <li>Approve (edit anything that reads wrong first).</li>
+  <li><b>PARTIAL looks like:</b> the right task, but a step missing or
+      misdescribed — most often the form fill collapsing into "submitted an order" and
+      losing the two line items. <b>Don't re-record.</b> Type the correction into the
+      <b>Improve this analysis</b> box under the steps — e.g. <i>"Between the products page
+      and the order confirmation I filled in the new-order form: Contoso Ltd, NW-1140 ×12
+      and NW-2207 ×3, then submitted it; you missed that step"</i> — and press <b>Send
+      &amp; re-analyze</b>. <span class="pass">Expect</span> a revised analysis replacing
+      the old one on screen, with the revision number bumped. If it is fundamentally wrong
+      (wrong app, wrong task), or you've just recorded a narrated take, use
+      <b>Re-analyze from scratch</b> instead. Re-recording Part A is the last resort.</li>
+  <li>Approve — and edit by hand <i>last</i>: both re-analyze actions <b>replace</b> the
+      analysis, hand-edited intent, title, and steps included.</li>
 </ol>
 
 <h2 id="doclevels"><span class="num">C.</span>The documentation-level experiment</h2>
@@ -317,6 +328,7 @@ useful bug reports. Results land in <code>docs/plans/progress.md</code>'s gate l
   <tr><th>Symptom</th><th>Fix</th></tr>
   <tr><td>Port 8787 busy</td><td><code>PORT=8790 npm run testbed</code> — then use that port everywhere, including <code>runner.json</code>.</td></tr>
   <tr><td>Analysis found no signals (Linux)</td><td>Run <b>Check compatibility</b> — expect <i>Reduced</i> with the named fix (Wayland session or missing <code>x11-utils</code>). Use an "Ubuntu on Xorg" session.</td></tr>
+  <tr><td>Analysis missed the form fill, or names the wrong customer/products</td><td>Fix it in place rather than re-recording: type what was missed into <b>Improve this analysis</b> under the steps and press <b>Send &amp; re-analyze</b> — the model re-reads the frames, events and narration where you pointed and submits a revised analysis. Use <b>Re-analyze from scratch</b> if it's fundamentally off-target or you've since added narration. This works after quitting and reopening the app (the saved analysis re-grounds the conversation), so only re-record Part A if the capture itself was bad. Note both actions replace any edits you made by hand.</td></tr>
   <tr><td>No <code>browser.url</code> events (Linux)</td><td><b>Check compatibility</b> tells you which, from a real read: missing <code>python3-pyatspi</code>, no page open (load a website and re-check), no address bar exposed (quit the browser fully and relaunch it with accessibility on), or a snap browser whose reads AppArmor blocks (the card above — use a non-snap Firefox or Chromium for URLs). Page titles + frames still carry the test either way.</td></tr>
   <tr><td>Skill run fails with HTTP 401</td><td><code>runner.json</code> missing or wrong key/path — it must sit beside the installed <code>SKILL.md</code>.</td></tr>
   <tr><td>Skill run fails with "could not reach…"</td><td>The testbed isn't running, or <code>apiBase</code> doesn't match its port.</td></tr>

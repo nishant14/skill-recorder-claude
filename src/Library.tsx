@@ -678,6 +678,12 @@ function AnalysisWorkspace({
   const [draftTitle, setDraftTitle] = useState("");
   const [draftIntent, setDraftIntent] = useState("");
   const [confirmReanalysis, setConfirmReanalysis] = useState(false);
+  // "Improve this analysis": a free-text correction sent back into the describer's
+  // multi-turn session, plus its own two-step confirm for the from-scratch escape
+  // hatch. Kept separate from `confirmReanalysis` so the voice card's confirm and
+  // this one can't arm each other when both are on screen.
+  const [feedbackText, setFeedbackText] = useState("");
+  const [confirmFromScratch, setConfirmFromScratch] = useState(false);
   // Directly-editable steps (the source of truth downstream); persisted on a short
   // debounce so typing stays instant. `stepsDirty` gates the persist so seeding from
   // a freshly loaded analysis never writes back.
@@ -767,6 +773,33 @@ function AnalysisWorkspace({
     setAnalyzing(false);
     void onChanged();
   }, [sessionId, onChanged]);
+
+  // Same shape as `run`, but the describer keeps (or rebuilds from the persisted
+  // analysis) the multi-turn conversation for this recording, so the revision is a
+  // correction rather than a fresh reconstruction. The result replaces the analysis
+  // and the editable steps exactly as `run` does — there is one set of semantics for
+  // "the analysis was replaced", and pending step edits are dropped either way.
+  const sendFeedback = useCallback(async () => {
+    const note = feedbackText.trim();
+    if (!note) return;
+    canceled.current = false;
+    setConfirmFromScratch(false);
+    setEditing(false);
+    setDraftTitle("");
+    setDraftIntent("");
+    setAnalyzing(true);
+    setError(null);
+    setStatusLine("Sending your feedback…");
+    const res = await window.skillRecorder.analyzeFeedback({ sessionId, overall: note, steps: [] });
+    if (res.ok && res.analysis) {
+      setAnalysis(res.analysis);
+      setSteps(res.analysis.steps);
+      stepsDirty.current = false;
+      setFeedbackText("");
+    } else if (!canceled.current) setError(res.error ?? "Re-analysis failed");
+    setAnalyzing(false);
+    void onChanged();
+  }, [sessionId, feedbackText, onChanged]);
 
   const cancel = useCallback(async () => {
     canceled.current = true;
@@ -1002,6 +1035,63 @@ function AnalysisWorkspace({
               </div>
               <AnalysisStepTiles steps={steps} onChange={onStepsChange} />
             </div>
+          </div>
+        )}
+
+        {summary.processed && analysis && !analyzing && (
+          <div className="improve-card">
+            <div className="summary-head">
+              <span className="eyebrow">Improve this analysis</span>
+            </div>
+            <textarea
+              className="edit-intent improve-input"
+              value={feedbackText}
+              placeholder="Tell it what's wrong or missing — e.g. 'Between the orders page and the detail page I filled in and submitted the new-order form; you missed that step.'"
+              onChange={(e) => setFeedbackText(e.target.value)}
+            />
+            <div className="improve-actions">
+              {confirmFromScratch ? (
+                <>
+                  <span className="improve-confirm">
+                    Start over? This replaces the current analysis and any edits.
+                  </span>
+                  <button className="linky" onClick={() => setConfirmFromScratch(false)}>
+                    Cancel
+                  </button>
+                  <button
+                    className="secondary"
+                    onClick={() => {
+                      setConfirmFromScratch(false);
+                      void run();
+                    }}
+                  >
+                    Replace analysis
+                  </button>
+                </>
+              ) : (
+                <>
+                  <button
+                    className="linky"
+                    onClick={() => setConfirmFromScratch(true)}
+                    title="Throw away this analysis and reconstruct the recording from scratch"
+                  >
+                    Re-analyze from scratch
+                  </button>
+                  <button
+                    className="secondary"
+                    disabled={!feedbackText.trim()}
+                    onClick={() => void sendFeedback()}
+                  >
+                    Send &amp; re-analyze
+                  </button>
+                </>
+              )}
+            </div>
+            <p className="voice-analysis-note">
+              Your feedback is sent to your Azure AI Foundry deployment together with this
+              recording's signals — the same timeline, screen images, and narration text the
+              first analysis used.
+            </p>
           </div>
         )}
       </div>

@@ -258,8 +258,42 @@ the level to expect:</p>
 <ol class="steps">
   <li>Open the <b>library</b> (sessions list) and select your recording.</li>
   <li>Click <b>Analyze</b>. The model reads the timeline and events, looks at screen frames where events are ambiguous, folds in your narration, and produces <b>one intent + ordered steps</b> — typically in 10–20 seconds. When it asks to look at a stretch of the recording it gets <i>every</i> frame captured in that stretch, near-identical ones included, so work that emits no events at all — filling in a form field by field — is still visible to it.</li>
-  <li><b>Review it.</b> Edit the title, intent, or any step directly; add, reorder, or remove steps. Or type natural-language feedback (“step 2 was actually about the invoice, not the quote”) and re-analyze — the conversation continues where it left off.</li>
+  <li><b>Review it.</b> Edit the title, intent, or any step directly; add, reorder, or remove steps — or hand the recording back to the model with the block below.</li>
 </ol>
+
+<h3 id="improve">Improve this analysis</h3>
+
+<p>Once a recording has been analyzed, an <b>Improve this analysis</b> block sits under the
+steps list with two ways to get a better reconstruction:</p>
+
+<ul>
+  <li><b>The feedback box.</b> Say what's wrong or missing in your own words (“Between the
+      orders page and the detail page I filled in and submitted the new-order form; you
+      missed that step”) and press <b>Send &amp; re-analyze</b>. Your correction goes back
+      into the <i>same</i> conversation with the analyzer: it is treated as authoritative,
+      the model re-examines the recording's signals — events, screen frames, narration —
+      where you pointed, and submits a revised analysis that replaces what's on screen with
+      the revision number bumped. This is the right tool when the analysis is <b>mostly
+      right</b> and one step is wrong, missing, or misdescribed.</li>
+  <li><b>Re-analyze from scratch.</b> The secondary link, behind a two-step confirm
+      (“Start over? This replaces the current analysis and any edits.” → <b>Replace
+      analysis</b>). It throws the current analysis away and reconstructs the recording
+      from zero. Use it when the analysis is <b>fundamentally wrong</b> or aimed at the
+      wrong task — and after you've added a voice transcript, so the first pass ran without
+      one.</li>
+</ul>
+
+<p>Feedback works long after the fact: quit the app, reopen it days later, and the saved
+analysis re-grounds the conversation. You never need to re-record a session just to correct
+its analysis.</p>
+
+<div class="card warn">
+  <b>Both actions replace the analysis — your edits included.</b> Feedback does not merge
+  with a hand-edited title, intent, or steps; it replaces them. Get the model broadly right
+  first, then edit by hand. And like the first analysis, your feedback text is sent to
+  <b>your Azure AI Foundry deployment</b> — and nowhere else — together with the recording's
+  signals: the same timeline, screen images, and narration text the first analysis used.
+</div>
 
 <p>Approve the analysis when it reads right — it is the single input everything downstream
 is built from.</p>
